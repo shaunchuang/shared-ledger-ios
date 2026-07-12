@@ -14,17 +14,16 @@ struct GroupsView: View {
     var body: some View {
         Group {
             if groups.isEmpty {
-                ContentUnavailableView(
-                    "建立第一個群組",
-                    systemImage: "person.3",
-                    description: Text("邀請家人、朋友或旅伴一起記帳。"),
-                    actions: {
-                        Button("建立群組", systemImage: "plus") {
-                            isCreatingGroup = true
-                        }
-                        .buttonStyle(.borderedProminent)
+                ContentUnavailableView {
+                    Label("建立第一個群組", systemImage: "person.3")
+                } description: {
+                    Text("邀請家人、朋友或旅伴一起記帳。")
+                } actions: {
+                    Button("建立群組", systemImage: "plus") {
+                        isCreatingGroup = true
                     }
-                )
+                    .buttonStyle(.borderedProminent)
+                }
             } else {
                 List(groups, id: \.objectID) { group in
                     NavigationLink {
