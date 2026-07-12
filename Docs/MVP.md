@@ -46,3 +46,10 @@
 
 OCR、預算、多幣別、Widget、Shortcuts、進階洞察及自動分類。
 
+## 已完成的垂直切片
+
+- 建立群組表單與輸入驗證。
+- 透過系統聯絡人選擇器挑選多位待邀請成員。
+- 建立擁有者、待邀請成員與稽核事件。
+- 使用 CloudKit Share 系統介面寄送私人、可讀寫的群組邀請。
+- App 收到 CloudKit share metadata 後，將共享資料匯入 shared persistent store。

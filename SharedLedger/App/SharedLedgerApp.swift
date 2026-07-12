@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct SharedLedgerApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let persistence = PersistenceController.shared
 
     var body: some Scene {
@@ -11,4 +12,3 @@ struct SharedLedgerApp: App {
         }
     }
 }
-
