@@ -12,33 +12,37 @@ struct GroupsView: View {
     @State private var sharingError: String?
 
     var body: some View {
-        Group {
-            if groups.isEmpty {
-                ContentUnavailableView {
-                    Label("建立第一個群組", systemImage: "person.3")
-                } description: {
-                    Text("邀請家人、朋友或旅伴一起記帳。")
-                } actions: {
-                    Button("建立群組", systemImage: "plus") {
-                        isCreatingGroup = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            } else {
-                List(groups, id: \.objectID) { group in
-                    NavigationLink {
-                        GroupDetailView(group: group, onInvite: prepareShare)
-                    } label: {
-                        Label(group.name ?? "未命名群組", systemImage: "person.3")
+        ZStack {
+            LedgerBackground()
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    if groups.isEmpty {
+                        emptyState
+                    } else {
+                        groupSummary
+                        ForEach(groups, id: \.objectID) { group in
+                            NavigationLink {
+                                GroupDetailView(group: group, onInvite: prepareShare)
+                            } label: {
+                                GroupCard(group: group)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
+                .padding(.horizontal, LedgerTheme.pagePadding)
+                .padding(.bottom, 28)
             }
         }
         .navigationTitle("群組")
         .toolbar {
-            Button("建立群組", systemImage: "plus") {
+            Button {
                 isCreatingGroup = true
+            } label: {
+                Image(systemName: "plus")
+                    .fontWeight(.bold)
             }
+            .accessibilityLabel("建立群組")
         }
         .sheet(isPresented: $isCreatingGroup) {
             NavigationStack {
@@ -55,6 +59,46 @@ struct GroupsView: View {
         } message: {
             Text(sharingError ?? "請確認 iCloud 狀態後再試。")
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 20) {
+            HStack(spacing: 13) {
+                LedgerMark(size: 48)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("一起記帳")
+                        .font(.headline)
+                    Text("共享每一筆，也共享安心")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            LedgerEmptyState(
+                systemImage: "person.3.fill",
+                title: "建立第一個群組",
+                message: "適合家庭、伴侶、室友或旅行。邀請成員後，大家都能看到同一份帳本。",
+                actionTitle: "建立群組"
+            ) {
+                isCreatingGroup = true
+            }
+        }
+    }
+
+    private var groupSummary: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("你的共享空間")
+                    .font(.title3.weight(.bold))
+                Text("共 \(groups.count) 個群組")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            LedgerIconBadge(systemImage: "person.3.fill")
+        }
+        .padding(.bottom, 2)
     }
 
     private var sharingErrorBinding: Binding<Bool> {
@@ -80,6 +124,53 @@ struct GroupsView: View {
     }
 }
 
+private struct GroupCard: View {
+    @ObservedObject var group: LedgerGroup
+
+    private var members: [Member] {
+        Array(group.members as? Set<Member> ?? [])
+    }
+
+    private var pendingCount: Int {
+        members.filter { $0.invitationStatus == InvitationStatus.pending.rawValue }.count
+    }
+
+    var body: some View {
+        LedgerCard {
+            HStack(spacing: 15) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(LedgerTheme.mint.opacity(0.20))
+                    Image(systemName: "person.3.fill")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(LedgerTheme.primary)
+                }
+                .frame(width: 54, height: 54)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(group.name ?? "未命名群組")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    HStack(spacing: 8) {
+                        Label("\(members.count) 位成員", systemImage: "person.2")
+                        if pendingCount > 0 {
+                            Text("·")
+                            Text("\(pendingCount) 位待邀請")
+                                .foregroundStyle(LedgerTheme.amber)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
 #Preview {
     NavigationStack { GroupsView() }
         .environment(
@@ -87,3 +178,4 @@ struct GroupsView: View {
             PersistenceController(inMemory: true).container.viewContext
         )
 }
+

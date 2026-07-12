@@ -9,6 +9,7 @@ struct SharedLedgerApp: App {
         WindowGroup {
             RootTabView()
                 .environment(\.managedObjectContext, persistence.container.viewContext)
+                .tint(LedgerTheme.primary)
         }
     }
 }
