@@ -28,6 +28,7 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_ENTITLEMENTS: SharedLedger/SharedLedger.entitlements
+        INFOPLIST_KEY_UIBackgroundModes: remote-notification
     scheme:
       testTargets:
         - SharedLedgerTests
