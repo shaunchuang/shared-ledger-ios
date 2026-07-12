@@ -61,14 +61,17 @@ final class PersistenceController {
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
     }
-
+    
+    @MainActor
     func prepareShare(for group: LedgerGroup) async throws -> (CKShare, CKContainer) {
-        try await withCheckedThrowingContinuation { continuation in
+        let shareTitle = group.name ?? "Shared Ledger 群組"
+
+        return try await withCheckedThrowingContinuation { continuation in
             container.share([group], to: nil) { _, share, cloudContainer, error in
                 if let error {
                     continuation.resume(throwing: error)
                 } else if let share, let cloudContainer {
-                    share[CKShare.SystemFieldKey.title] = group.name
+                    share[CKShare.SystemFieldKey.title] = shareTitle
                     continuation.resume(returning: (share, cloudContainer))
                 } else {
                     continuation.resume(throwing: SharingError.missingShare)
