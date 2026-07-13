@@ -83,7 +83,7 @@ private struct MemberRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                Text(member.isCurrentUser ? "群組擁有者" : "成員")
+                Text((member.role == MemberRole.owner.rawValue) ? "群組擁有者" : "成員")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
