@@ -15,3 +15,8 @@ enum MemberRole: String, CaseIterable, Codable, Sendable {
     }
 }
 
+enum InvitationStatus: String, CaseIterable, Codable, Sendable {
+    case accepted
+    case pending
+}
+

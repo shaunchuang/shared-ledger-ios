@@ -1,21 +1,181 @@
+import CoreData
 import SwiftUI
 
 struct GroupsView: View {
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \LedgerGroup.updatedAt, ascending: false)],
+        animation: .default
+    ) private var groups: FetchedResults<LedgerGroup>
+
+    @State private var isCreatingGroup = false
+    @State private var sharePayload: CloudSharePayload?
+    @State private var sharingError: String?
+
     var body: some View {
-        ContentUnavailableView(
-            "建立第一個群組",
-            systemImage: "person.3",
-            description: Text("邀請家人、朋友或旅伴一起記帳。"),
-            actions: {
-                Button("建立群組", systemImage: "plus") {}
-                    .buttonStyle(.borderedProminent)
+        ZStack {
+            LedgerBackground()
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    if groups.isEmpty {
+                        emptyState
+                    } else {
+                        groupSummary
+                        ForEach(groups, id: \.objectID) { group in
+                            NavigationLink {
+                                GroupDetailView(group: group, onInvite: prepareShare)
+                            } label: {
+                                GroupCard(group: group)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.horizontal, LedgerTheme.pagePadding)
+                .padding(.bottom, 28)
             }
-        )
+        }
         .navigationTitle("群組")
+        .toolbar {
+            Button {
+                isCreatingGroup = true
+            } label: {
+                Image(systemName: "plus")
+                    .fontWeight(.bold)
+            }
+            .accessibilityLabel("建立群組")
+        }
+        .sheet(isPresented: $isCreatingGroup) {
+            NavigationStack {
+                CreateGroupView { group in
+                    prepareShare(group)
+                }
+            }
+        }
+        .sheet(item: $sharePayload) { payload in
+            CloudSharingView(payload: payload)
+        }
+        .alert("無法建立邀請", isPresented: sharingErrorBinding) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(sharingError ?? "請確認 iCloud 狀態後再試。")
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 20) {
+            HStack(spacing: 13) {
+                LedgerMark(size: 48)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("一起記帳")
+                        .font(.headline)
+                    Text("共享每一筆，也共享安心")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            LedgerEmptyState(
+                systemImage: "person.3.fill",
+                title: "建立第一個群組",
+                message: "適合家庭、伴侶、室友或旅行。邀請成員後，大家都能看到同一份帳本。",
+                actionTitle: "建立群組"
+            ) {
+                isCreatingGroup = true
+            }
+        }
+    }
+
+    private var groupSummary: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("你的共享空間")
+                    .font(.title3.weight(.bold))
+                Text("共 \(groups.count) 個群組")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            LedgerIconBadge(systemImage: "person.3.fill")
+        }
+        .padding(.bottom, 2)
+    }
+
+    private var sharingErrorBinding: Binding<Bool> {
+        Binding(
+            get: { sharingError != nil },
+            set: { if !$0 { sharingError = nil } }
+        )
+    }
+
+    private func prepareShare(_ group: LedgerGroup) {
+        Task {
+            do {
+                let (share, container) = try await PersistenceController.shared.prepareShare(for: group)
+                sharePayload = CloudSharePayload(
+                    share: share,
+                    container: container,
+                    title: group.name ?? "Shared Ledger 群組"
+                )
+            } catch {
+                sharingError = error.localizedDescription
+            }
+        }
+    }
+}
+
+private struct GroupCard: View {
+    @ObservedObject var group: LedgerGroup
+
+    private var members: [Member] {
+        Array(group.members as? Set<Member> ?? [])
+    }
+
+    private var pendingCount: Int {
+        members.filter { $0.invitationStatus == InvitationStatus.pending.rawValue }.count
+    }
+
+    var body: some View {
+        LedgerCard {
+            HStack(spacing: 15) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(LedgerTheme.mint.opacity(0.20))
+                    Image(systemName: "person.3.fill")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(LedgerTheme.primary)
+                }
+                .frame(width: 54, height: 54)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(group.name ?? "未命名群組")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    HStack(spacing: 8) {
+                        Label("\(members.count) 位成員", systemImage: "person.2")
+                        if pendingCount > 0 {
+                            Text("·")
+                            Text("\(pendingCount) 位待邀請")
+                                .foregroundStyle(LedgerTheme.amber)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
     }
 }
 
 #Preview {
     NavigationStack { GroupsView() }
+        .environment(
+            \.managedObjectContext,
+            PersistenceController(inMemory: true).container.viewContext
+        )
 }
 

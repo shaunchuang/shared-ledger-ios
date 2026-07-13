@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22522" systemVersion="23E224" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" userDefinedModelVersionIdentifier="">
     <entity name="AuditEvent" representedClassName="AuditEvent" syncable="YES" codeGenerationType="class">
-        <attribute name="action" optional="NO" attributeType="String"/>
+        <attribute name="action" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="actorDisplayName" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
@@ -61,9 +61,29 @@
     <entity name="Member" representedClassName="Member" syncable="YES" codeGenerationType="class">
         <attribute name="displayName" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="invitationStatus" optional="NO" attributeType="String" defaultValueString="pending"/>
+        <attribute name="isCurrentUser" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="joinedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="role" optional="NO" attributeType="String" defaultValueString="member"/>
         <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="members" inverseEntity="LedgerGroup"/>
         <relationship name="splits" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="EntrySplit" inverseName="member" inverseEntity="EntrySplit"/>
     </entity>
+    <configuration name="Private" usedWithCloudKit="YES">
+        <memberEntity name="AuditEvent"/>
+        <memberEntity name="EntrySplit"/>
+        <memberEntity name="LedgerAccount"/>
+        <memberEntity name="LedgerCategory"/>
+        <memberEntity name="LedgerEntry"/>
+        <memberEntity name="LedgerGroup"/>
+        <memberEntity name="Member"/>
+    </configuration>
+    <configuration name="Shared" usedWithCloudKit="YES">
+        <memberEntity name="AuditEvent"/>
+        <memberEntity name="EntrySplit"/>
+        <memberEntity name="LedgerAccount"/>
+        <memberEntity name="LedgerCategory"/>
+        <memberEntity name="LedgerEntry"/>
+        <memberEntity name="LedgerGroup"/>
+        <memberEntity name="Member"/>
+    </configuration>
 </model>

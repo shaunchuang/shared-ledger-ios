@@ -25,5 +25,6 @@
 
 ## CloudKit 注意事項
 
-正式啟用共享前，需在 Apple Developer Portal 建立 container、部署 schema，並以至少兩個不同 iCloud 帳號驗證邀請、離線修改、衝突及成員退出流程。
+持久層包含 private 與 shared 兩個 store。使用者建立的群組先進入 private store；接受 CloudKit 分享後的群組則進入 shared store。兩者透過同一個 view context 提供給畫面查詢。
 
+正式啟用共享前，需在 Apple Developer Portal 建立 container、部署 schema，並以至少兩個不同 iCloud 帳號驗證邀請、離線修改、衝突及成員退出流程。聯絡人挑選建立的是 App 內的待邀請成員；真正的 iCloud 參與者與權限由 `UICloudSharingController` 管理。

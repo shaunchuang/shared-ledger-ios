@@ -29,3 +29,29 @@ final class CategoryNodeTests: XCTestCase {
     }
 }
 
+final class GroupDraftTests: XCTestCase {
+    func testRequiresGroupAndOwnerNames() {
+        XCTAssertFalse(GroupDraft().canCreate)
+
+        let valid = GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        XCTAssertTrue(valid.canCreate)
+    }
+
+    func testAddingInviteesIgnoresExistingContact() {
+        let contact = InviteeContact(contactIdentifier: "contact-1", displayName: "小美")
+        var draft = GroupDraft(name: "家庭", invitees: [contact])
+
+        draft.addInvitees([contact])
+
+        XCTAssertEqual(draft.invitees, [contact])
+    }
+
+    func testAddingInviteesDeduplicatesWithinSameBatch() {
+        let contact = InviteeContact(contactIdentifier: "contact-1", displayName: "小美")
+        var draft = GroupDraft(name: "家庭")
+
+        draft.addInvitees([contact, contact])
+
+        XCTAssertEqual(draft.invitees, [contact])
+    }
+}

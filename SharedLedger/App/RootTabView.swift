@@ -23,10 +23,12 @@ struct RootTabView: View {
             }
             .tabItem { Label("設定", systemImage: "gearshape") }
         }
+        .tint(LedgerTheme.primary)
+        .toolbarBackground(LedgerTheme.surface.opacity(0.94), for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
     }
 }
 
 #Preview {
     RootTabView()
 }
-

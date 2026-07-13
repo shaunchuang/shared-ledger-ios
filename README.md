@@ -38,7 +38,8 @@ open SharedLedger.xcodeproj
 2. 將 `SharedLedger/SharedLedger.entitlements` 內的 placeholder container identifier 換成實際值。
 3. 在 Xcode 選擇開發團隊並確認 Signing & Capabilities。
 
+群組邀請使用 CloudKit Sharing。開發測試時，邀請者與受邀者必須登入不同的 iCloud 帳號，且 App 的 CloudKit container 與 entitlement 必須一致。
+
 ## 專案狀態
 
 目前是 Sprint 0：專案骨架、導航、Core Data schema 與基礎領域模型。後續工作請參考 [MVP 規格](Docs/MVP.md) 與 [架構說明](Docs/ARCHITECTURE.md)。
-
