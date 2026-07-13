@@ -45,4 +45,13 @@ final class GroupDraftTests: XCTestCase {
 
         XCTAssertEqual(draft.invitees, [contact])
     }
+
+    func testAddingInviteesDeduplicatesWithinSameBatch() {
+        let contact = InviteeContact(contactIdentifier: "contact-1", displayName: "小美")
+        var draft = GroupDraft(name: "家庭")
+
+        draft.addInvitees([contact, contact])
+
+        XCTAssertEqual(draft.invitees, [contact])
+    }
 }
