@@ -12,7 +12,7 @@ final class PersistenceController {
         container = NSPersistentCloudKitContainer(name: "SharedLedger")
 
         if inMemory {
-            let description = NSPersistentStoreDescription()
+            let description = NSPersistentStoreDescription(url: URL(fileURLWithPath: "/dev/null"))
             description.type = NSInMemoryStoreType
             container.persistentStoreDescriptions = [description]
         } else {
