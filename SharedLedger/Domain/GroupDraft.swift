@@ -25,10 +25,10 @@ struct GroupDraft: Equatable, Sendable {
     }
 
     mutating func addInvitees(_ contacts: [InviteeContact]) {
-        let existingIdentifiers = Set(invitees.map(\.contactIdentifier))
-        invitees.append(contentsOf: contacts.filter {
-            !existingIdentifiers.contains($0.contactIdentifier)
-        })
+        var identifiers = Set(invitees.map(\.contactIdentifier))
+        for contact in contacts where identifiers.insert(contact.contactIdentifier).inserted {
+            invitees.append(contact)
+        }
     }
 }
 
