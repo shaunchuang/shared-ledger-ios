@@ -41,9 +41,9 @@ final class PersistenceController {
                 return
             }
 
-            guard let loadedStore = self.container.persistentStoreCoordinator.persistentStore(
-                for: description.url!
-            ) else { return }
+            guard let url = description.url,
+                  let loadedStore = self.container.persistentStoreCoordinator.persistentStore(for: url)
+            else { return }
 
             switch description.cloudKitContainerOptions?.databaseScope {
             case .shared:
