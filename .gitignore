@@ -11,9 +11,6 @@ xcuserdata/
 .swiftpm/
 Package.resolved
 
-# XcodeGen
-SharedLedger.xcodeproj/
-
 # macOS
 .DS_Store
 
