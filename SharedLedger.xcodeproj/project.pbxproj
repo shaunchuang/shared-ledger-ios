@@ -391,8 +391,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SharedLedger/SharedLedger.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XC43HRR4X2;
 				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
 				INFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";
 				INFOPLIST_KEY_NSCONTACTSUSAGEDESCRIPTION = "選擇要邀請加入共享記帳群組的聯絡人。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -517,8 +519,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SharedLedger/SharedLedger.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XC43HRR4X2;
 				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
 				INFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";
 				INFOPLIST_KEY_NSCONTACTSUSAGEDESCRIPTION = "選擇要邀請加入共享記帳群組的聯絡人。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
