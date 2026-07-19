@@ -70,6 +70,8 @@ struct EntryRepository {
             if draft.categoryID != nil, category == nil {
                 throw EntryError.crossBookReference
             }
+        case .balanceAdjustment:
+            throw EntryError.invalidDraft
         }
 
         let context = persistence.container.viewContext
