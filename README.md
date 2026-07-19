@@ -1,43 +1,30 @@
 # Shared Ledger for iOS
 
-Shared Ledger 是一款以群組為中心的共享記帳 App。第一版聚焦於多人共同管理帳號、階層式分類、分帳與結算，並支援離線使用及 iCloud 同步。
+Shared Ledger 是一款以群組為中心的 iOS 共享記帳 App，讓家庭、伴侶、室友與旅行團共同記錄收支、分攤費用並完成結算。
 
-## 技術基線
+## 文件導覽
 
-- Swift 5.9+
-- SwiftUI
-- iOS 17+
-- Core Data + CloudKit
-- XcodeGen 管理專案設定
+每項資訊只由一份文件負責；其他文件應以連結引用，不重複維護同一份規格。
 
-## MVP 功能
+| 文件 | 唯一責任 |
+| --- | --- |
+| [MVP 產品規格](Docs/MVP.md) | 產品目標、功能範圍、完成度、驗收條件與 P0／P1／P2 路線圖 |
+| [架構說明](Docs/ARCHITECTURE.md) | 技術基線、專案設定、資料模型、CloudKit、Concurrency、隱私與建置驗證 |
+| [App Store 與 TestFlight](Docs/AppStore_TestFlight_zh-TW.md) | 商店文案、審查資料、TestFlight 測試資訊與送審清單 |
+| [ChatGPT 專案指令](Docs/SharedLedger_ChatGPT_Project_Instructions_zh-TW.md) | AI 協作方式、GitHub 工作流程與文件維護規則 |
 
-- 從聯絡人或邀請連結加入群組
-- 一個群組可包含多個記帳帳號
-- 任意階層的自訂分類
-- 收入、支出及帳號轉帳
-- 彈性分帳與群組結算
-- 擁有者、管理員、成員及唯讀權限
-- 修改歷史
-- 基本月報表
-- 離線記帳及 iCloud 同步
+若文件內容衝突，以表格中負責該領域的文件為準。`README.md` 只作為專案入口，不保存完整產品或架構規格。
 
 ## 開始開發
 
-需要 macOS、Xcode 15.3 以上版本與 [XcodeGen](https://github.com/yonaskolb/XcodeGen)。
+需要 macOS 與可建置 iOS 17 target 的 Xcode。專案直接維護並提交 `SharedLedger.xcodeproj`，不使用 XcodeGen。
 
-```sh
+```bash
 open SharedLedger.xcodeproj
 ```
 
-第一次執行前：
+第一次在新環境執行時，請在 Xcode 選擇正確的 Apple Developer Team，並確認 Bundle ID、CloudKit container、iCloud、Push Notifications 與 Background Modes 設定符合[架構說明](Docs/ARCHITECTURE.md)。
 
-1. 在 Apple Developer 帳號建立 CloudKit container。
-2. 將 `SharedLedger/SharedLedger.entitlements` 內的 placeholder container identifier 換成實際值。
-3. 在 Xcode 選擇開發團隊並確認 Signing & Capabilities。
+完整建置、測試與 CloudKit 驗收指令集中在[架構說明](Docs/ARCHITECTURE.md)。
 
-群組邀請使用 CloudKit Sharing。開發測試時，邀請者與受邀者必須登入不同的 iCloud 帳號，且 App 的 CloudKit container 與 entitlement 必須一致。
-
-## 專案狀態
-
-目前是 Sprint 0：專案骨架、導航、Core Data schema 與基礎領域模型。後續工作請參考 [MVP 規格](Docs/MVP.md) 與 [架構說明](Docs/ARCHITECTURE.md)。
+目前產品完成度與下一步以 [MVP 產品規格](Docs/MVP.md)為準；開始工作前仍須重新確認 branch、PR、CI 與近期 commit。
