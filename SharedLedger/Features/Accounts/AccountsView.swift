@@ -5,6 +5,7 @@ struct AccountsView: View {
     @ObservedObject var group: LedgerGroup
 
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
+    private let accountRepository = AccountRepository()
 
     @State private var isPresentingNewAccount = false
     @State private var accountPendingArchive: LedgerAccount?
@@ -123,7 +124,7 @@ struct AccountsView: View {
             }
             Button("取消", role: .cancel) {}
         } message: { account in
-            if AccountRepository().hasTransactions(account) {
+            if accountRepository.hasTransactions(account) {
                 Text("這個帳號已有交易，封存後仍會保留所有歷史交易與餘額紀錄。")
             } else {
                 Text("封存後不會再出現在新增交易的帳號選單中。")
@@ -135,7 +136,7 @@ struct AccountsView: View {
             Text(errorMessage ?? "請稍後再試。")
         }
         .onAppear(perform: refreshBalances)
-        .onChange(of: accounts.map(\.objectID)) { _ in
+        .onChange(of: accounts.count) { _ in
             refreshBalances()
         }
         .onReceive(
@@ -143,7 +144,8 @@ struct AccountsView: View {
                 for: .NSManagedObjectContextObjectsDidChange,
                 object: group.managedObjectContext
             )
-        ) { _ in
+        ) { notification in
+            guard shouldRefreshBalances(for: notification) else { return }
             refreshBalances()
         }
     }
@@ -164,7 +166,7 @@ struct AccountsView: View {
 
     private func archive(_ account: LedgerAccount) {
         do {
-            try AccountRepository().archiveAccount(account)
+            try accountRepository.archiveAccount(account)
             accountPendingArchive = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -172,7 +174,21 @@ struct AccountsView: View {
     }
 
     private func refreshBalances() {
-        accountBalances = balances(for: Array(accounts), repository: AccountRepository())
+        accountBalances = balances(for: Array(accounts), repository: accountRepository)
+    }
+
+    private func shouldRefreshBalances(for notification: Notification) -> Bool {
+        let changedObjects = (
+            (notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>) ?? []
+        ).union(
+            (notification.userInfo?[NSUpdatedObjectsKey] as? Set<NSManagedObject>) ?? []
+        ).union(
+            (notification.userInfo?[NSDeletedObjectsKey] as? Set<NSManagedObject>) ?? []
+        )
+
+        return changedObjects.contains { object in
+            object is LedgerAccount || object is LedgerEntry
+        }
     }
 }
 
