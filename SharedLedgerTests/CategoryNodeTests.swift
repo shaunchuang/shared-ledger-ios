@@ -771,7 +771,8 @@ final class BookRepositoryTests: XCTestCase {
             parent: nil
         )
         let owner = try XCTUnwrap(
-            (group.members as? Set<Member> ?? []).first(where: \.isCurrentUser)
+            CurrentMemberIdentityRepository(persistence: persistence)
+                .currentMember(in: group)
         )
         owner.role = MemberRole.viewer.rawValue
 
@@ -803,16 +804,56 @@ final class BookRepositoryTests: XCTestCase {
         }
 
         owner.role = MemberRole.owner.rawValue
-        owner.isCurrentUser = false
+        XCTAssertTrue(repository.canManageCategories(in: group))
+    }
 
-        XCTAssertFalse(repository.canManageCategories(in: group))
-        XCTAssertThrowsError(
-            try repository.archiveCategory(category)
-        ) { error in
-            guard case CategoryRepository.CategoryError.permissionDenied = error else {
-                return XCTFail("Expected permissionDenied, got \(error)")
-            }
-        }
+
+    func testSharedMemberIdentityMappingUsesPrivateStore() throws {
+        let persistence = PersistenceController(
+            inMemory: true,
+            inMemoryConfigurations: ["Private", "Shared"]
+        )
+        let context = persistence.container.viewContext
+        let group = LedgerGroup(context: context)
+        context.assign(group, to: persistence.sharedStore)
+        group.id = UUID()
+        group.name = "共享旅行"
+        group.createdAt = Date()
+        group.updatedAt = group.createdAt
+
+        let pendingMember = Member(context: context)
+        context.assign(pendingMember, to: persistence.sharedStore)
+        pendingMember.id = UUID()
+        pendingMember.displayName = "小華"
+        pendingMember.invitationStatus = InvitationStatus.pending.rawValue
+        pendingMember.role = MemberRole.member.rawValue
+        pendingMember.group = group
+        try context.save()
+
+        let identityRepository = CurrentMemberIdentityRepository(persistence: persistence)
+        XCTAssertNil(identityRepository.currentMember(in: group))
+        XCTAssertTrue(identityRepository.needsResolution(for: group))
+
+        let claimed = try GroupRepository(persistence: persistence)
+            .claimCurrentMember(pendingMember, in: group)
+
+        XCTAssertEqual(identityRepository.currentMember(in: group), claimed)
+        XCTAssertFalse(identityRepository.needsResolution(for: group))
+        XCTAssertEqual(claimed.invitationStatus, InvitationStatus.accepted.rawValue)
+
+        let request = NSFetchRequest<LocalMemberIdentity>(entityName: "LocalMemberIdentity")
+        request.affectedStores = [persistence.privateStore]
+        let identities = try context.fetch(request)
+        XCTAssertEqual(identities.count, 1)
+        XCTAssertEqual(identities.first?.groupID, group.id)
+        XCTAssertEqual(identities.first?.memberID, claimed.id)
+        XCTAssertEqual(identities.first?.objectID.persistentStore, persistence.privateStore)
+
+        claimed.role = MemberRole.administrator.rawValue
+        XCTAssertTrue(
+            CategoryRepository(persistence: persistence)
+                .canManageCategories(in: group)
+        )
     }
 
     func testSharedStoreCategoryAndAssignmentStayWithGroupRoot() throws {
@@ -833,10 +874,11 @@ final class BookRepositoryTests: XCTestCase {
         owner.id = UUID()
         owner.displayName = "小明"
         owner.invitationStatus = InvitationStatus.accepted.rawValue
-        owner.isCurrentUser = true
         owner.joinedAt = Date()
         owner.role = MemberRole.owner.rawValue
         owner.group = group
+        CurrentMemberIdentityRepository(persistence: persistence)
+            .setCurrentMember(owner, in: group)
         try context.save()
 
         let book = try BookRepository(persistence: persistence).createBook(
@@ -860,6 +902,30 @@ final class BookRepositoryTests: XCTestCase {
 }
 
 final class CoreDataModelMigrationTests: XCTestCase {
+    func testV4ToV5LightweightMappingCanBeInferred() throws {
+        let bundle = Bundle(for: PersistenceController.self)
+        let modelDirectory = try XCTUnwrap(
+            bundle.url(forResource: "SharedLedger", withExtension: "momd")
+        )
+        let sourceModel = try XCTUnwrap(
+            NSManagedObjectModel(
+                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV4.mom")
+            )
+        )
+        let destinationModel = try XCTUnwrap(
+            NSManagedObjectModel(
+                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV5.mom")
+            )
+        )
+
+        XCTAssertNoThrow(
+            try NSMappingModel.inferredMappingModel(
+                forSourceModel: sourceModel,
+                destinationModel: destinationModel
+            )
+        )
+    }
+
     func testV3ToV4LightweightMappingCanBeInferred() throws {
         let bundle = Bundle(for: PersistenceController.self)
         let modelDirectory = try XCTUnwrap(
