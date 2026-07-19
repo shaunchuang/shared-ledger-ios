@@ -126,6 +126,7 @@ struct AccountRepository {
             }
             return openingBalance + movementTotal
         } catch {
+            NSLog("Failed to fetch entries for account total balance: \(error.localizedDescription)")
             return openingBalance
         }
     }

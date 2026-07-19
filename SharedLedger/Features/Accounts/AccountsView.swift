@@ -135,7 +135,7 @@ struct AccountsView: View {
         } message: {
             Text(errorMessage ?? "請稍後再試。")
         }
-        .task(id: accounts.count) {
+        .task {
             refreshBalances()
         }
         .onReceive(
@@ -177,6 +177,7 @@ struct AccountsView: View {
     }
 
     private func shouldRefreshBalances(for notification: Notification) -> Bool {
+        let accountIDs = Set(accounts.map(\.objectID))
         let changedObjects = (
             (notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>) ?? []
         ).union(
@@ -186,7 +187,21 @@ struct AccountsView: View {
         )
 
         return changedObjects.contains { object in
-            object is LedgerAccount || object is LedgerEntry
+            if let ledgerAccount = object as? LedgerAccount {
+                return accountIDs.contains(ledgerAccount.objectID)
+            }
+            if let entry = object as? LedgerEntry {
+                if entry.group == group {
+                    return true
+                }
+                if let sourceID = entry.sourceAccount?.objectID, accountIDs.contains(sourceID) {
+                    return true
+                }
+                if let destinationID = entry.destinationAccount?.objectID, accountIDs.contains(destinationID) {
+                    return true
+                }
+            }
+            return false
         }
     }
 }
