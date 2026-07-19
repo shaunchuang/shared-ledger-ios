@@ -301,7 +301,7 @@ private struct AccountDetailView: View {
             LedgerBackground()
             ScrollView {
                 VStack(spacing: 18) {
-                    balanceCard
+                    balanceCard(currentBalance)
                     reconciliationCard
                     transactionHistory
                 }
@@ -369,7 +369,7 @@ private struct AccountDetailView: View {
         }
     }
 
-    private var balanceCard: some View {
+    private func balanceCard(_ currentBalance: Decimal) -> some View {
         LedgerCard {
             VStack(alignment: .leading, spacing: 16) {
                 Label("目前餘額", systemImage: "creditcard.fill")
