@@ -29,6 +29,27 @@ struct GroupDetailView: View {
                         }
                     }
 
+                    VStack(alignment: .leading, spacing: 12) {
+                        LedgerSectionHeader(title: "帳本設定")
+                        LedgerCard(padding: 0) {
+                            VStack(spacing: 0) {
+                                NavigationLink {
+                                    AccountsView(group: group)
+                                } label: {
+                                    LedgerNavRow(title: "帳號", detail: "現金、銀行帳號", icon: "creditcard.fill", tint: .blue)
+                                }
+                                .buttonStyle(.plain)
+                                Divider().padding(.leading, 68)
+                                NavigationLink {
+                                    CategoriesView(group: group)
+                                } label: {
+                                    LedgerNavRow(title: "分類", detail: "整理收支類別", icon: "square.grid.2x2.fill", tint: LedgerTheme.amber)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
                     Button {
                         onInvite(group)
                     } label: {

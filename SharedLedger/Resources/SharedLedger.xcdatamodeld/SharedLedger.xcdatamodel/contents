@@ -15,6 +15,7 @@
         <relationship name="member" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Member" inverseName="splits" inverseEntity="Member"/>
     </entity>
     <entity name="LedgerAccount" representedClassName="LedgerAccount" syncable="YES" codeGenerationType="class">
+        <attribute name="accountType" optional="NO" attributeType="String" defaultValueString="cash"/>
         <attribute name="archivedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
@@ -44,6 +45,7 @@
         <relationship name="category" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerCategory" inverseName="entries" inverseEntity="LedgerCategory"/>
         <relationship name="destinationAccount" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerAccount" inverseName="destinationEntries" inverseEntity="LedgerAccount"/>
         <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="entries" inverseEntity="LedgerGroup"/>
+        <relationship name="payer" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Member" inverseName="paidEntries" inverseEntity="Member"/>
         <relationship name="sourceAccount" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerAccount" inverseName="sourceEntries" inverseEntity="LedgerAccount"/>
         <relationship name="splits" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="EntrySplit" inverseName="entry" inverseEntity="EntrySplit"/>
     </entity>
@@ -66,6 +68,7 @@
         <attribute name="joinedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="role" optional="NO" attributeType="String" defaultValueString="member"/>
         <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="members" inverseEntity="LedgerGroup"/>
+        <relationship name="paidEntries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="payer" inverseEntity="LedgerEntry"/>
         <relationship name="splits" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="EntrySplit" inverseName="member" inverseEntity="EntrySplit"/>
     </entity>
     <configuration name="Private" usedWithCloudKit="YES">
