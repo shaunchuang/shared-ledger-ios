@@ -161,14 +161,16 @@ final class CloudSharingTests: XCTestCase {
         do {
             _ = try await persistence.prepareShare(for: group)
             XCTFail("Expected the missing iCloud account error.")
-        } catch {
-            guard case PersistenceController.SharingError.noICloudAccount = error else {
+        } catch let error as PersistenceController.SharingError {
+            guard case .noICloudAccount = error else {
                 return XCTFail("Expected noICloudAccount, got \(error)")
             }
             XCTAssertEqual(
                 error.localizedDescription,
                 "此裝置尚未登入 iCloud，請先在「設定」登入 Apple 帳號後再邀請成員。"
             )
+        } catch {
+            XCTFail("Expected SharingError, got \(error)")
         }
     }
 }
