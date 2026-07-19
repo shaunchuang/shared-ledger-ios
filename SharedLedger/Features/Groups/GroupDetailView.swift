@@ -16,9 +16,7 @@ struct GroupDetailView: View {
     }
 
     private var totalAccountBalance: Decimal {
-        accounts.reduce(0) { partialResult, account in
-            partialResult + AccountRepository().currentBalance(for: account)
-        }
+        AccountRepository().totalBalance(for: accounts)
     }
 
     var body: some View {

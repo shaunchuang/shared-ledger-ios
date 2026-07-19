@@ -27,7 +27,19 @@ struct AccountsView: View {
         accounts.filter { $0.archivedAt != nil }
     }
 
+    private func balances(for accounts: [LedgerAccount], repository: AccountRepository) -> [NSManagedObjectID: Decimal] {
+        Dictionary(
+            uniqueKeysWithValues: accounts.map { account in
+                (account.objectID, repository.currentBalance(for: account))
+            }
+        )
+    }
+
     var body: some View {
+        let repository = AccountRepository()
+        let activeAccountBalances = balances(for: activeAccounts, repository: repository)
+        let archivedAccountBalances = balances(for: archivedAccounts, repository: repository)
+
         ZStack {
             LedgerBackground()
             ScrollView {
@@ -47,7 +59,7 @@ struct AccountsView: View {
                                 ForEach(Array(activeAccounts.enumerated()), id: \.element.objectID) { index, account in
                                     AccountRow(
                                         account: account,
-                                        balance: AccountRepository().currentBalance(for: account),
+                                        balance: activeAccountBalances[account.objectID] ?? 0,
                                         onArchive: { accountPendingArchive = account }
                                     )
                                     if index < activeAccounts.count - 1 {
@@ -66,7 +78,7 @@ struct AccountsView: View {
                                     ForEach(Array(archivedAccounts.enumerated()), id: \.element.objectID) { index, account in
                                         AccountRow(
                                             account: account,
-                                            balance: AccountRepository().currentBalance(for: account),
+                                            balance: archivedAccountBalances[account.objectID] ?? 0,
                                             onArchive: nil
                                         )
                                         if index < archivedAccounts.count - 1 {
@@ -235,11 +247,9 @@ private struct AccountDetailView: View {
         )
     }
 
-    private var currentBalance: Decimal {
-        AccountRepository().currentBalance(for: account)
-    }
-
     var body: some View {
+        let currentBalance = AccountRepository().currentBalance(for: account)
+
         ZStack {
             LedgerBackground()
             ScrollView {

@@ -89,6 +89,49 @@ struct AccountRepository {
         )
     }
 
+    func totalBalance(for accounts: [LedgerAccount]) -> Decimal {
+        guard !accounts.isEmpty else { return 0 }
+
+        let openingBalance = accounts.reduce(Decimal.zero) { partialResult, account in
+            partialResult + ((account.openingBalance as Decimal?) ?? 0)
+        }
+
+        let context = persistence.container.viewContext
+        let request: NSFetchRequest<LedgerEntry> = LedgerEntry.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "sourceAccount IN %@ OR destinationAccount IN %@",
+            accounts,
+            accounts
+        )
+
+        do {
+            let entries = try context.fetch(request)
+            let accountIDs = Set(accounts.map(\.objectID))
+            let movementTotal = entries.reduce(Decimal.zero) { partialResult, entry in
+                guard let rawKind = entry.kind,
+                      let kind = EntryKind(rawValue: rawKind) else {
+                    return partialResult
+                }
+                let amount = (entry.amount as Decimal?) ?? 0
+                let isSource = entry.sourceAccount.map { accountIDs.contains($0.objectID) } ?? false
+                let isDestination = entry.destinationAccount.map { accountIDs.contains($0.objectID) } ?? false
+                guard isSource || isDestination else { return partialResult }
+                let movement = AccountBalanceMovement(
+                    kind: kind,
+                    amount: amount,
+                    isSourceAccount: isSource,
+                    isDestinationAccount: isDestination
+                )
+                return partialResult + AccountBalanceCalculator.effect(of: movement)
+            }
+            return openingBalance + movementTotal
+        } catch {
+            return accounts.reduce(Decimal.zero) { partialResult, account in
+                partialResult + currentBalance(for: account)
+            }
+        }
+    }
+
     @discardableResult
     func adjustBalance(
         of account: LedgerAccount,
