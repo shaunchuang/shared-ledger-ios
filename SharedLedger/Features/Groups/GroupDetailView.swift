@@ -154,7 +154,7 @@ struct GroupDetailView: View {
         .navigationTitle(group.name ?? "群組")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: normalizeSelectedBook)
-        .onChange(of: activeBooks.count) { _ in
+        .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
         }
     }
