@@ -4,7 +4,7 @@ import SwiftUI
 struct NewTransactionView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let group: LedgerGroup
+    let book: LedgerBook
     let onSaved: () -> Void
 
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
@@ -13,21 +13,21 @@ struct NewTransactionView: View {
     @State private var draft = TransactionDraft()
     @State private var errorMessage: String?
 
-    init(group: LedgerGroup, onSaved: @escaping () -> Void) {
-        self.group = group
+    init(book: LedgerBook, onSaved: @escaping () -> Void) {
+        self.book = book
         self.onSaved = onSaved
         _accounts = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerAccount.createdAt, ascending: true)],
-            predicate: NSPredicate(format: "group == %@ AND archivedAt == nil", group)
+            predicate: NSPredicate(format: "book == %@ AND archivedAt == nil", book)
         )
         _categories = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerCategory.sortOrder, ascending: true)],
-            predicate: NSPredicate(format: "group == %@ AND archivedAt == nil", group)
+            predicate: NSPredicate(format: "book == %@ AND archivedAt == nil", book)
         )
     }
 
     private var members: [Member] {
-        let set = group.members as? Set<Member> ?? []
+        let set = book.group?.members as? Set<Member> ?? []
         return set.sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
     }
 
@@ -199,7 +199,7 @@ struct NewTransactionView: View {
         do {
             try EntryRepository().createEntry(
                 from: draft,
-                in: group,
+                in: book,
                 accounts: Array(accounts),
                 categories: Array(categories),
                 members: members

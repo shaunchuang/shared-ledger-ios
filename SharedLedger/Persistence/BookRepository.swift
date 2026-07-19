@@ -100,6 +100,75 @@ struct BookRepository {
         try saveOrRollback()
     }
 
+    func renameBook(_ book: LedgerBook, using draft: BookDraft) throws {
+        guard draft.canCreate else { throw BookError.invalidDraft }
+        guard let group = book.group else { throw BookError.missingGroup }
+        guard book.archivedAt == nil else { throw BookError.archivedBook }
+
+        let oldName = book.name ?? "未命名帳本"
+        guard oldName != draft.trimmedName else { return }
+
+        let now = Date()
+        book.name = draft.trimmedName
+        book.updatedAt = now
+        group.updatedAt = now
+        insertAudit(
+            action: "book.renamed",
+            summary: "將帳本「\(oldName)」重新命名為「\(draft.trimmedName)」",
+            in: group,
+            store: persistence.store(for: book)
+        )
+        try saveOrRollback()
+    }
+
+    func setDefaultBook(_ book: LedgerBook) throws {
+        guard let group = book.group else { throw BookError.missingGroup }
+        guard book.archivedAt == nil else { throw BookError.archivedBook }
+        guard !book.isDefault else { return }
+
+        let now = Date()
+        for candidate in books(in: group) {
+            candidate.isDefault = candidate == book
+            if candidate == book {
+                candidate.updatedAt = now
+            }
+        }
+        group.updatedAt = now
+        insertAudit(
+            action: "book.default.changed",
+            summary: "將「\(book.name ?? "未命名帳本")」設為預設帳本",
+            in: group,
+            store: persistence.store(for: book)
+        )
+        try saveOrRollback()
+    }
+
+    func reorderBooks(_ orderedBooks: [LedgerBook], in group: LedgerGroup) throws {
+        let activeBooks = books(in: group)
+        guard Set(activeBooks.map(\.objectID)) == Set(orderedBooks.map(\.objectID)) else {
+            throw BookError.invalidOrder
+        }
+
+        let hasChanges = orderedBooks.enumerated().contains { index, book in
+            book.sortOrder != Int32(index)
+        }
+        guard hasChanges else { return }
+
+        let now = Date()
+        for (index, book) in orderedBooks.enumerated() {
+            book.sortOrder = Int32(index)
+            book.updatedAt = now
+        }
+        group.updatedAt = now
+        insertAudit(
+            action: "book.reordered",
+            summary: "調整帳本排序",
+            in: group,
+            store: persistence.store(for: group)
+        )
+        try saveOrRollback()
+    }
+
     /// Idempotent post-migration repair for V1 data and CloudKit records that
     /// arrive without a book relationship.
     func backfillMissingBookRelationships() async throws {
@@ -233,6 +302,8 @@ struct BookRepository {
         case invalidDraft
         case missingGroup
         case cannotArchiveOnlyBook
+        case archivedBook
+        case invalidOrder
 
         var errorDescription: String? {
             switch self {
@@ -242,7 +313,19 @@ struct BookRepository {
                 return "找不到這個帳本所屬的群組。"
             case .cannotArchiveOnlyBook:
                 return "群組至少需要保留一個使用中的帳本。"
+            case .archivedBook:
+                return "已封存的帳本不能再修改。"
+            case .invalidOrder:
+                return "帳本排序資料不完整，請重新整理後再試。"
             }
         }
+    }
+}
+
+@MainActor
+enum BookSelectionStorage {
+    static func key(for group: LedgerGroup) -> String {
+        let identifier = group.id?.uuidString ?? group.objectID.uriRepresentation().absoluteString
+        return "selectedBook.\(identifier)"
     }
 }

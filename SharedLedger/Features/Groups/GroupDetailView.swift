@@ -5,13 +5,35 @@ struct GroupDetailView: View {
     @ObservedObject var group: LedgerGroup
     let onInvite: (LedgerGroup) -> Void
 
+    @AppStorage private var selectedBookID: String
+
+    init(group: LedgerGroup, onInvite: @escaping (LedgerGroup) -> Void) {
+        self.group = group
+        self.onInvite = onInvite
+        _selectedBookID = AppStorage(
+            wrappedValue: "",
+            BookSelectionStorage.key(for: group)
+        )
+    }
+
     private var members: [Member] {
         let set = group.members as? Set<Member> ?? []
         return set.sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
     }
 
+    private var activeBooks: [LedgerBook] {
+        BookRepository().books(in: group)
+    }
+
+    private var selectedBook: LedgerBook? {
+        activeBooks.first { $0.id?.uuidString == selectedBookID }
+            ?? activeBooks.first(where: \.isDefault)
+            ?? activeBooks.first
+    }
+
     private var accounts: [LedgerAccount] {
-        let set = group.accounts as? Set<LedgerAccount> ?? []
+        guard let selectedBook else { return [] }
+        let set = selectedBook.accounts as? Set<LedgerAccount> ?? []
         return Array(set)
     }
 
@@ -25,6 +47,7 @@ struct GroupDetailView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     heroCard
+                    bookSection
                     VStack(alignment: .leading, spacing: 12) {
                         LedgerSectionHeader(title: "成員")
                         LedgerCard(padding: 0) {
@@ -40,22 +63,40 @@ struct GroupDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        LedgerSectionHeader(title: "帳本設定")
+                        LedgerSectionHeader(title: "目前帳本設定")
                         LedgerCard(padding: 0) {
                             VStack(spacing: 0) {
-                                NavigationLink {
-                                    AccountsView(group: group)
-                                } label: {
-                                    LedgerNavRow(title: "帳號", detail: "現金、銀行帳號", icon: "creditcard.fill", tint: .blue)
+                                if let selectedBook {
+                                    NavigationLink {
+                                        AccountsView(book: selectedBook)
+                                    } label: {
+                                        LedgerNavRow(
+                                            title: "帳號",
+                                            detail: "\(selectedBook.name ?? "目前帳本")的現金、銀行帳號",
+                                            icon: "creditcard.fill",
+                                            tint: .blue
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    Divider().padding(.leading, 68)
+                                    NavigationLink {
+                                        CategoriesView(book: selectedBook)
+                                    } label: {
+                                        LedgerNavRow(
+                                            title: "分類",
+                                            detail: "整理\(selectedBook.name ?? "目前帳本")的收支類別",
+                                            icon: "square.grid.2x2.fill",
+                                            tint: LedgerTheme.amber
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    Text("正在準備主要帳本…")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(16)
                                 }
-                                .buttonStyle(.plain)
-                                Divider().padding(.leading, 68)
-                                NavigationLink {
-                                    CategoriesView(group: group)
-                                } label: {
-                                    LedgerNavRow(title: "分類", detail: "整理收支類別", icon: "square.grid.2x2.fill", tint: LedgerTheme.amber)
-                                }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -74,6 +115,69 @@ struct GroupDetailView: View {
         }
         .navigationTitle(group.name ?? "群組")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: normalizeSelectedBook)
+        .onChange(of: activeBooks.count) { _ in
+            normalizeSelectedBook()
+        }
+    }
+
+    private var bookSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LedgerSectionHeader(title: "目前帳本")
+            LedgerCard(padding: 0) {
+                VStack(spacing: 0) {
+                    if let selectedBook {
+                        Menu {
+                            ForEach(activeBooks, id: \.objectID) { book in
+                                Button {
+                                    select(book)
+                                } label: {
+                                    if book == selectedBook {
+                                        Label(book.name ?? "未命名帳本", systemImage: "checkmark")
+                                    } else {
+                                        Text(book.name ?? "未命名帳本")
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 14) {
+                                LedgerIconBadge(systemImage: "book.closed.fill", tint: LedgerTheme.primary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(selectedBook.name ?? "未命名帳本")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                    Text(selectedBook.isDefault ? "目前帳本 · 預設" : "目前帳本")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("切換目前帳本")
+                    }
+
+                    Divider().padding(.leading, 68)
+                    NavigationLink {
+                        BooksView(group: group, selectedBookID: $selectedBookID)
+                    } label: {
+                        LedgerNavRow(
+                            title: "管理帳本",
+                            detail: "新增、排序、設定預設與封存",
+                            icon: "books.vertical.fill",
+                            tint: LedgerTheme.primary
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     private var heroCard: some View {
@@ -92,11 +196,25 @@ struct GroupDetailView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(group.name ?? "未命名群組")
                         .font(.title2.weight(.bold))
-                    Text("\(members.count) 位成員 · 共同餘額 \(ledgerGroupAmount(totalAccountBalance))")
+                    Text("\(members.count) 位成員 · 帳本餘額 \(ledgerGroupAmount(totalAccountBalance))")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    private func select(_ book: LedgerBook) {
+        guard book.archivedAt == nil, let id = book.id else { return }
+        selectedBookID = id.uuidString
+    }
+
+    private func normalizeSelectedBook() {
+        if let selectedBook, selectedBook.id?.uuidString == selectedBookID {
+            return
+        }
+        if let fallback = activeBooks.first(where: \.isDefault) ?? activeBooks.first {
+            select(fallback)
         }
     }
 }

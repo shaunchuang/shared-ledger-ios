@@ -44,6 +44,7 @@
 		EC5F148C8E521294E047D6DD /* EntryKind+Presentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E6F6CD76DCD3D541266091 /* EntryKind+Presentation.swift */; };
 		B00CDAF70000000000000002 /* BookDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00CDAF70000000000000001 /* BookDraft.swift */; };
 		B00CDAF70000000000000004 /* BookRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00CDAF70000000000000003 /* BookRepository.swift */; };
+		B00CDAF70000000000000007 /* BooksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00CDAF70000000000000006 /* BooksView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -98,6 +99,7 @@
 		B00CDAF70000000000000001 /* BookDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDraft.swift; sourceTree = "<group>"; };
 		B00CDAF70000000000000003 /* BookRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookRepository.swift; sourceTree = "<group>"; };
 		B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV2.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF70000000000000006 /* BooksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BooksView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -118,6 +120,7 @@
 		34790F4DC57A5B3E5D19935B /* Groups */ = {
 			isa = PBXGroup;
 			children = (
+				B00CDAF70000000000000006 /* BooksView.swift */,
 				61221ACA806160210D38B952 /* CloudSharingView.swift */,
 				F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */,
 				A4274F215C3BD8A5CE9B33CB /* CreateGroupView.swift */,
@@ -374,6 +377,7 @@
 				B3A5759CBAB1E792D2E0E31D /* AccountRepository.swift in Sources */,
 				B00CDAF70000000000000002 /* BookDraft.swift in Sources */,
 				B00CDAF70000000000000004 /* BookRepository.swift in Sources */,
+				B00CDAF70000000000000007 /* BooksView.swift in Sources */,
 				608CAF6A129AD49F9CA7C13A /* AccountsView.swift in Sources */,
 				7B077DA6C35F4211288E510E /* NewAccountView.swift in Sources */,
 				63831BBF5E64C0539073D693 /* CategoryNode.swift in Sources */,

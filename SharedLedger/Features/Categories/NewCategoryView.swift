@@ -3,7 +3,7 @@ import SwiftUI
 struct NewCategoryView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let group: LedgerGroup
+    let book: LedgerBook
     let parent: LedgerCategory?
     let onCreated: () -> Void
 
@@ -49,7 +49,7 @@ struct NewCategoryView: View {
 
     private func createCategory() {
         do {
-            try CategoryRepository().createCategory(from: draft, in: group, parent: parent)
+            try CategoryRepository().createCategory(from: draft, in: book, parent: parent)
             onCreated()
             dismiss()
         } catch {
