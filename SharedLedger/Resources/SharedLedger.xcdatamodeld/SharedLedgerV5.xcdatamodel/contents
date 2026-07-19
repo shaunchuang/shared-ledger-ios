@@ -86,6 +86,7 @@
     </entity>
     <entity name="LedgerGroup" representedClassName="LedgerGroup" syncable="YES" codeGenerationType="class">
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String" defaultValueString="TWD"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
