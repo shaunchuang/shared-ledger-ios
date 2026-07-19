@@ -7,6 +7,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     profileCard
+                    groupManagementCard
                     settingsCard(title: "資料與同步", rows: [
                         SettingRow(title: "iCloud 同步", detail: "保持最新", icon: "icloud.fill", tint: LedgerTheme.primary),
                         SettingRow(title: "匯出資料", detail: "CSV、PDF", icon: "square.and.arrow.up", tint: .blue)
@@ -25,6 +26,25 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+    }
+
+    private var groupManagementCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LedgerSectionHeader(title: "共同記帳")
+            LedgerCard(padding: 0) {
+                NavigationLink {
+                    GroupsView()
+                } label: {
+                    SettingRow(
+                        title: "群組管理",
+                        detail: "成員、帳本與帳戶",
+                        icon: "person.3.fill",
+                        tint: LedgerTheme.primary
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private var profileCard: some View {
@@ -85,10 +105,10 @@ private struct SettingRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        .foregroundStyle(.primary)
     }
 }
 
 #Preview {
     NavigationStack { SettingsView() }
 }
-

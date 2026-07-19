@@ -286,7 +286,7 @@ final class BookRepositoryTests: XCTestCase {
         XCTAssertEqual(books.first?.isDefault, true)
     }
 
-    func testAccountsAreGroupScopedWhileCategoriesAndEntriesRemainBookScoped() throws {
+    func testAccountsAndCategoriesAreGroupScopedWhileEntriesRemainBookScoped() throws {
         let persistence = PersistenceController(inMemory: true)
         let group = try GroupRepository(persistence: persistence).createGroup(
             from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
@@ -312,29 +312,25 @@ final class BookRepositoryTests: XCTestCase {
             in: travelBook,
             parent: nil
         )
+        let sharedCategory = try CategoryRepository(persistence: persistence).createCategory(
+            from: CategoryDraft(name: "餐飲"),
+            in: group,
+            parent: nil
+        )
+        let categoryRepository = CategoryRepository(persistence: persistence)
+
+        XCTAssertEqual(homeCategory.group, group)
+        XCTAssertEqual(travelCategory.group, group)
+        XCTAssertNil(homeCategory.book)
+        XCTAssertNil(travelCategory.book)
+        XCTAssertTrue(categoryRepository.isCategoryAvailable(homeCategory, in: defaultBook))
+        XCTAssertFalse(categoryRepository.isCategoryAvailable(homeCategory, in: travelBook))
+        XCTAssertTrue(categoryRepository.isCategoryAvailable(travelCategory, in: travelBook))
+        XCTAssertTrue(categoryRepository.isCategoryAvailable(sharedCategory, in: defaultBook))
+        XCTAssertTrue(categoryRepository.isCategoryAvailable(sharedCategory, in: travelBook))
+
         let members = Array(group.members as? Set<Member> ?? [])
         let ownerID = try XCTUnwrap(members.first?.id)
-        let draft = TransactionDraft(
-            kind: .expense,
-            amountText: "500",
-            categoryID: travelCategory.id,
-            sourceAccountID: sharedAccount.id,
-            payerMemberID: ownerID,
-            splitMemberIDs: [ownerID]
-        )
-        let entry = try EntryRepository(persistence: persistence).createEntry(
-            from: draft,
-            in: travelBook,
-            accounts: [sharedAccount],
-            categories: [homeCategory, travelCategory],
-            members: members
-        )
-
-        XCTAssertEqual(sharedAccount.group, group)
-        XCTAssertEqual(travelCategory.book, travelBook)
-        XCTAssertEqual(entry.book, travelBook)
-        XCTAssertEqual(entry.sourceAccount, sharedAccount)
-
         XCTAssertThrowsError(
             try EntryRepository(persistence: persistence).createEntry(
                 from: TransactionDraft(
@@ -347,7 +343,7 @@ final class BookRepositoryTests: XCTestCase {
                 ),
                 in: travelBook,
                 accounts: [sharedAccount],
-                categories: [homeCategory, travelCategory],
+                categories: [homeCategory, travelCategory, sharedCategory],
                 members: members
             )
         ) { error in
@@ -355,6 +351,27 @@ final class BookRepositoryTests: XCTestCase {
                 return XCTFail("Expected crossScopeReference, got \(error)")
             }
         }
+
+        try categoryRepository.setCategory(homeCategory, enabled: true, in: travelBook)
+        let entry = try EntryRepository(persistence: persistence).createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "500",
+                categoryID: homeCategory.id,
+                sourceAccountID: sharedAccount.id,
+                payerMemberID: ownerID,
+                splitMemberIDs: [ownerID]
+            ),
+            in: travelBook,
+            accounts: [sharedAccount],
+            categories: [homeCategory, travelCategory, sharedCategory],
+            members: members
+        )
+
+        XCTAssertEqual(sharedAccount.group, group)
+        XCTAssertEqual(entry.book, travelBook)
+        XCTAssertEqual(entry.category, homeCategory)
+        XCTAssertEqual(entry.sourceAccount, sharedAccount)
 
         let otherGroup = try GroupRepository(persistence: persistence).createGroup(
             from: GroupDraft(name: "室友", ownerDisplayName: "小華")
@@ -568,7 +585,7 @@ final class BookRepositoryTests: XCTestCase {
         }
     }
 
-    func testBackfillAssignsLegacyBookOwnedObjectsToDefaultBook() async throws {
+    func testLegacyCategoryAssignmentRepairIsIdempotent() async throws {
         let persistence = PersistenceController(inMemory: true)
         let group = try GroupRepository(persistence: persistence).createGroup(
             from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
@@ -579,12 +596,187 @@ final class BookRepositoryTests: XCTestCase {
             in: defaultBook,
             parent: nil
         )
-        category.book = nil
-        try persistence.container.viewContext.save()
+        let context = persistence.container.viewContext
+        let assignments = category.bookAssignments as? Set<BookCategoryAssignment> ?? []
+        assignments.forEach(context.delete)
+        category.book = defaultBook
+        try context.save()
 
-        try await BookRepository(persistence: persistence).backfillMissingBookRelationships()
-        persistence.container.viewContext.refresh(category, mergeChanges: false)
+        let repository = CategoryRepository(persistence: persistence)
+        try await repository.repairLegacyCategoryAssignments()
+        try await repository.repairLegacyCategoryAssignments()
+        context.refresh(category, mergeChanges: false)
 
+        let repairedAssignments = category.bookAssignments as? Set<BookCategoryAssignment> ?? []
+        XCTAssertEqual(category.group, group)
         XCTAssertEqual(category.book, defaultBook)
+        XCTAssertEqual(repairedAssignments.count, 1)
+        XCTAssertEqual(repairedAssignments.first?.book, defaultBook)
+        XCTAssertEqual(repairedAssignments.first?.category, category)
+        XCTAssertEqual(repairedAssignments.first?.isEnabled, true)
+    }
+
+    func testCategoryAvailabilityCascadesWithoutChangingHistory() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let book = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
+        let categoryRepository = CategoryRepository(persistence: persistence)
+        let parent = try categoryRepository.createCategory(
+            from: CategoryDraft(name: "交通"),
+            in: group,
+            parent: nil
+        )
+        let child = try categoryRepository.createCategory(
+            from: CategoryDraft(name: "捷運"),
+            in: group,
+            parent: parent
+        )
+        let account = try AccountRepository(persistence: persistence).createAccount(
+            from: AccountDraft(name: "現金"),
+            in: group
+        )
+        let members = Array(group.members as? Set<Member> ?? [])
+        let ownerID = try XCTUnwrap(members.first?.id)
+        let draft = TransactionDraft(
+            kind: .expense,
+            amountText: "50",
+            categoryID: child.id,
+            sourceAccountID: account.id,
+            payerMemberID: ownerID,
+            splitMemberIDs: [ownerID]
+        )
+        let entryRepository = EntryRepository(persistence: persistence)
+        let entry = try entryRepository.createEntry(
+            from: draft,
+            in: book,
+            accounts: [account],
+            categories: [parent, child],
+            members: members
+        )
+
+        try categoryRepository.setCategory(parent, enabled: false, in: book)
+
+        XCTAssertFalse(categoryRepository.isCategoryAvailable(parent, in: book))
+        XCTAssertFalse(categoryRepository.isCategoryAvailable(child, in: book))
+        XCTAssertEqual(entry.category, child)
+        XCTAssertThrowsError(
+            try entryRepository.createEntry(
+                from: draft,
+                in: book,
+                accounts: [account],
+                categories: [parent, child],
+                members: members
+            )
+        ) { error in
+            guard case EntryRepository.EntryError.crossScopeReference = error else {
+                return XCTFail("Expected crossScopeReference, got \(error)")
+            }
+        }
+
+        try categoryRepository.setCategory(child, enabled: true, in: book)
+        XCTAssertTrue(categoryRepository.isCategoryAvailable(parent, in: book))
+        XCTAssertTrue(categoryRepository.isCategoryAvailable(child, in: book))
+    }
+
+    func testNewBookCanUseAllCopyOrEmptyCategoryAssignments() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let bookRepository = BookRepository(persistence: persistence)
+        let defaultBook = try XCTUnwrap(bookRepository.defaultBook(in: group))
+        let categoryRepository = CategoryRepository(persistence: persistence)
+        let shared = try categoryRepository.createCategory(
+            from: CategoryDraft(name: "餐飲"),
+            in: group,
+            parent: nil
+        )
+        let homeOnly = try categoryRepository.createCategory(
+            from: CategoryDraft(name: "家用"),
+            in: defaultBook,
+            parent: nil
+        )
+
+        let allBook = try bookRepository.createBook(
+            from: BookDraft(name: "全部"),
+            in: group,
+            categorySource: .allGroupCategories
+        )
+        let emptyBook = try bookRepository.createBook(
+            from: BookDraft(name: "空白"),
+            in: group,
+            categorySource: .empty
+        )
+        try categoryRepository.setCategory(homeOnly, enabled: false, in: defaultBook)
+        let copyBook = try bookRepository.createBook(
+            from: BookDraft(name: "沿用"),
+            in: group,
+            categorySource: .copy(defaultBook)
+        )
+
+        XCTAssertEqual(Set(categoryRepository.availableCategories(in: allBook).map(\.objectID)), [shared.objectID, homeOnly.objectID])
+        XCTAssertTrue(categoryRepository.availableCategories(in: emptyBook).isEmpty)
+        XCTAssertEqual(categoryRepository.availableCategories(in: copyBook).map(\.objectID), [shared.objectID])
+    }
+
+    func testSharedStoreCategoryAndAssignmentStayWithGroupRoot() throws {
+        let persistence = PersistenceController(
+            inMemory: true,
+            inMemoryConfigurations: ["Private", "Shared"]
+        )
+        let context = persistence.container.viewContext
+        let group = LedgerGroup(context: context)
+        context.assign(group, to: persistence.sharedStore)
+        group.id = UUID()
+        group.name = "共享家庭"
+        group.createdAt = Date()
+        group.updatedAt = group.createdAt
+        try context.save()
+
+        let book = try BookRepository(persistence: persistence).createBook(
+            from: BookDraft(name: "主要帳本"),
+            in: group
+        )
+        let category = try CategoryRepository(persistence: persistence).createCategory(
+            from: CategoryDraft(name: "餐飲"),
+            in: group,
+            parent: nil
+        )
+        let assignment = try XCTUnwrap(
+            CategoryRepository(persistence: persistence).assignment(for: category, in: book)
+        )
+
+        XCTAssertEqual(group.objectID.persistentStore, persistence.sharedStore)
+        XCTAssertEqual(book.objectID.persistentStore, persistence.sharedStore)
+        XCTAssertEqual(category.objectID.persistentStore, persistence.sharedStore)
+        XCTAssertEqual(assignment.objectID.persistentStore, persistence.sharedStore)
+    }
+}
+
+final class CoreDataModelMigrationTests: XCTestCase {
+    func testV3ToV4LightweightMappingCanBeInferred() throws {
+        let bundle = Bundle(for: PersistenceController.self)
+        let modelDirectory = try XCTUnwrap(
+            bundle.url(forResource: "SharedLedger", withExtension: "momd")
+        )
+        let sourceModel = try XCTUnwrap(
+            NSManagedObjectModel(
+                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV3.mom")
+            )
+        )
+        let destinationModel = try XCTUnwrap(
+            NSManagedObjectModel(
+                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV4.mom")
+            )
+        )
+
+        XCTAssertNoThrow(
+            try NSMappingModel.inferredMappingModel(
+                forSourceModel: sourceModel,
+                destinationModel: destinationModel
+            )
+        )
     }
 }

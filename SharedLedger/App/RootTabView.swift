@@ -14,9 +14,9 @@ struct RootTabView: View {
             .tabItem { Label("交易", systemImage: "list.bullet.rectangle") }
 
             NavigationStack {
-                GroupsView()
+                CategoriesRootView()
             }
-            .tabItem { Label("群組", systemImage: "person.3") }
+            .tabItem { Label("分類", systemImage: "square.grid.2x2") }
 
             NavigationStack {
                 SettingsView()

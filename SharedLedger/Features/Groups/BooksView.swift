@@ -46,7 +46,7 @@ struct BooksView: View {
                 } header: {
                     Text("使用中的帳本")
                 } footer: {
-                    Text("目前帳本會決定分類與交易顯示的資料範圍；群組帳戶可供所有帳本共用。")
+                    Text("目前帳本決定交易與報表範圍；群組帳戶與分類目錄可供所有帳本共用。")
                 }
 
                 if !archivedBooks.isEmpty {
@@ -119,7 +119,7 @@ struct BooksView: View {
             }
             Button("取消", role: .cancel) {}
         } message: { book in
-            Text("帳本內的分類與交易都會保留，但不能再新增交易；群組帳戶不受影響。")
+            Text("帳本的分類啟用設定與交易都會保留，但不能再新增交易；群組帳戶與分類目錄不受影響。")
         }
         .alert("無法更新帳本", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
@@ -275,7 +275,7 @@ private struct ArchivedBookHistoryView: View {
     }
 
     private var categoryCount: Int {
-        (book.categories as? Set<LedgerCategory>)?.count ?? 0
+        Set(entries.compactMap { $0.category?.objectID }).count
     }
 
     var body: some View {
@@ -358,13 +358,39 @@ private struct NewBookView: View {
     let onCreated: (LedgerBook) -> Void
 
     @State private var draft = BookDraft()
+    @State private var categorySetup: NewBookCategorySetup = .groupCategories
+    @State private var sourceBookID: UUID?
     @State private var errorMessage: String?
+
+    private var activeBooks: [LedgerBook] {
+        BookRepository().books(in: group)
+    }
 
     var body: some View {
         Form {
             Section("名稱") {
                 TextField("例如：日本旅行", text: $draft.name)
                     .textInputAutocapitalization(.never)
+            }
+
+            Section {
+                Picker("分類設定", selection: $categorySetup) {
+                    ForEach(NewBookCategorySetup.allCases, id: \.self) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+
+                if categorySetup == .copyBook {
+                    Picker("沿用帳本", selection: $sourceBookID) {
+                        ForEach(activeBooks, id: \.objectID) { book in
+                            Text(book.name ?? "未命名帳本").tag(book.id)
+                        }
+                    }
+                }
+            } header: {
+                Text("可用分類")
+            } footer: {
+                Text(categorySetup.detail)
             }
         }
         .navigationTitle("新增帳本")
@@ -383,6 +409,11 @@ private struct NewBookView: View {
         } message: {
             Text(errorMessage ?? "請稍後再試。")
         }
+        .onAppear {
+            if sourceBookID == nil {
+                sourceBookID = activeBooks.first(where: \.isDefault)?.id ?? activeBooks.first?.id
+            }
+        }
     }
 
     private var errorBinding: Binding<Bool> {
@@ -394,11 +425,56 @@ private struct NewBookView: View {
 
     private func create() {
         do {
-            let book = try BookRepository().createBook(from: draft, in: group)
+            let categorySource: BookCategorySource
+            switch categorySetup {
+            case .groupCategories:
+                categorySource = .allGroupCategories
+            case .copyBook:
+                guard let sourceBook = activeBooks.first(where: { $0.id == sourceBookID }) else {
+                    errorMessage = "請選擇要沿用分類設定的帳本。"
+                    return
+                }
+                categorySource = .copy(sourceBook)
+            case .empty:
+                categorySource = .empty
+            }
+            let book = try BookRepository().createBook(
+                from: draft,
+                in: group,
+                categorySource: categorySource
+            )
             onCreated(book)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private enum NewBookCategorySetup: String, CaseIterable {
+    case groupCategories
+    case copyBook
+    case empty
+
+    var title: String {
+        switch self {
+        case .groupCategories:
+            return "使用所有群組分類"
+        case .copyBook:
+            return "沿用其他帳本"
+        case .empty:
+            return "空白開始"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .groupCategories:
+            return "預設啟用群組目前所有未封存分類。"
+        case .copyBook:
+            return "沿用另一個帳本的啟用設定，不會複製分類資料。"
+        case .empty:
+            return "建立後再到帳本設定選擇要使用的分類。"
         }
     }
 }

@@ -3,7 +3,7 @@ import SwiftUI
 struct NewCategoryView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let book: LedgerBook
+    let group: LedgerGroup
     let parent: LedgerCategory?
     let onCreated: () -> Void
 
@@ -20,9 +20,11 @@ struct NewCategoryView: View {
                 } else {
                     Text("分類名稱")
                 }
+            } footer: {
+                Text("新分類會加入群組目錄，並預設啟用於所有使用中的帳本。")
             }
         }
-        .navigationTitle("新增分類")
+        .navigationTitle("新增群組分類")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -49,7 +51,7 @@ struct NewCategoryView: View {
 
     private func createCategory() {
         do {
-            try CategoryRepository().createCategory(from: draft, in: book, parent: parent)
+            try CategoryRepository().createCategory(from: draft, in: group, parent: parent)
             onCreated()
             dismiss()
         } catch {

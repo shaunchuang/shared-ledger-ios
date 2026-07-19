@@ -62,19 +62,33 @@ struct GroupDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        LedgerSectionHeader(title: "群組帳戶")
+                        LedgerSectionHeader(title: "群組設定")
                         LedgerCard(padding: 0) {
-                            NavigationLink {
-                                AccountsView(group: group)
-                            } label: {
-                                LedgerNavRow(
-                                    title: "帳戶",
-                                    detail: "所有帳本共用的現金、銀行與信用卡",
-                                    icon: "creditcard.fill",
-                                    tint: .blue
-                                )
+                            VStack(spacing: 0) {
+                                NavigationLink {
+                                    AccountsView(group: group)
+                                } label: {
+                                    LedgerNavRow(
+                                        title: "帳戶",
+                                        detail: "所有帳本共用的現金、銀行與信用卡",
+                                        icon: "creditcard.fill",
+                                        tint: .blue
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                Divider().padding(.leading, 68)
+                                NavigationLink {
+                                    CategoriesView(group: group)
+                                } label: {
+                                    LedgerNavRow(
+                                        title: "分類管理",
+                                        detail: "所有帳本共用的分類目錄",
+                                        icon: "square.grid.2x2.fill",
+                                        tint: LedgerTheme.amber
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
 
@@ -84,11 +98,11 @@ struct GroupDetailView: View {
                             VStack(spacing: 0) {
                                 if let selectedBook {
                                     NavigationLink {
-                                        CategoriesView(book: selectedBook)
+                                        BookCategoriesView(book: selectedBook)
                                     } label: {
                                         LedgerNavRow(
-                                            title: "分類",
-                                            detail: "整理\(selectedBook.name ?? "目前帳本")的收支類別",
+                                            title: "使用的分類",
+                                            detail: "選擇\(selectedBook.name ?? "目前帳本")可使用的群組分類",
                                             icon: "square.grid.2x2.fill",
                                             tint: LedgerTheme.amber
                                         )

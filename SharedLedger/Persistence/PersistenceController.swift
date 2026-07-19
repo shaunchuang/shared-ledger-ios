@@ -17,11 +17,24 @@ final class PersistenceController {
     private var isRepairingData = false
     private var shouldRepeatDataRepair = false
 
-    init(inMemory: Bool = false, shareFetcher: ShareFetcher? = nil) {
+    init(
+        inMemory: Bool = false,
+        shareFetcher: ShareFetcher? = nil,
+        inMemoryConfigurations: [String]? = nil
+    ) {
         self.shareFetcher = shareFetcher
         container = NSPersistentCloudKitContainer(name: "SharedLedger")
 
-        if inMemory {
+        if let inMemoryConfigurations {
+            container.persistentStoreDescriptions = inMemoryConfigurations.map { configuration in
+                let description = NSPersistentStoreDescription(
+                    url: URL(fileURLWithPath: "/dev/null-SharedLedger-\(configuration)-\(UUID().uuidString)")
+                )
+                description.type = NSInMemoryStoreType
+                description.configuration = configuration
+                return description
+            }
+        } else if inMemory {
             let description = NSPersistentStoreDescription(url: URL(fileURLWithPath: "/dev/null"))
             description.type = NSInMemoryStoreType
             container.persistentStoreDescriptions = [description]
@@ -61,17 +74,28 @@ final class PersistenceController {
                   let loadedStore = self.container.persistentStoreCoordinator.persistentStore(for: url)
             else { return }
 
-            switch description.cloudKitContainerOptions?.databaseScope {
-            case .shared:
+            switch (description.configuration, description.cloudKitContainerOptions?.databaseScope) {
+            case ("Shared", _), (_, .shared):
                 self.sharedStore = loadedStore
             default:
                 self.privateStore = loadedStore
             }
         }
 
-        if inMemory {
+        if inMemory || inMemoryConfigurations != nil {
+            storeLoadGroup.wait()
+        }
+
+        if inMemory, inMemoryConfigurations == nil {
             privateStore = container.persistentStoreCoordinator.persistentStores.first
             sharedStore = privateStore
+        } else if inMemoryConfigurations != nil {
+            privateStore = container.persistentStoreCoordinator.persistentStores.first {
+                $0.configurationName == "Private"
+            }
+            sharedStore = container.persistentStoreCoordinator.persistentStores.first {
+                $0.configurationName == "Shared"
+            }
         }
 
         container.viewContext.automaticallyMergesChangesFromParent = true
@@ -152,6 +176,7 @@ final class PersistenceController {
                 self.shouldRepeatDataRepair = false
                 do {
                     try await BookRepository(persistence: self).backfillMissingBookRelationships()
+                    try await CategoryRepository(persistence: self).repairLegacyCategoryAssignments()
                     try await AccountRepository(persistence: self).migrateLegacyBalanceAdjustments()
                 } catch {
                     assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
