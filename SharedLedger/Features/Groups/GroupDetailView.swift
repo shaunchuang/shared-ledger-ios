@@ -40,6 +40,10 @@ struct GroupDetailView: View {
         AccountRepository().totalBalance(for: accounts)
     }
 
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(group.currencyCode)
+    }
+
     var body: some View {
         ZStack {
             LedgerBackground()
@@ -218,7 +222,7 @@ struct GroupDetailView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(group.name ?? "未命名群組")
                         .font(.title2.weight(.bold))
-                    Text("\(members.count) 位成員 · 共同餘額 \(ledgerGroupAmount(totalAccountBalance))")
+                    Text("\(members.count) 位成員 · \(currencyCode) · 共同餘額 \(ledgerGroupAmount(totalAccountBalance, currencyCode: currencyCode))")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -241,8 +245,8 @@ struct GroupDetailView: View {
     }
 }
 
-private func ledgerGroupAmount(_ amount: Decimal) -> String {
-    "$" + (amount as NSDecimalNumber).stringValue
+private func ledgerGroupAmount(_ amount: Decimal, currencyCode: String) -> String {
+    LedgerCurrency.format(amount, currencyCode: currencyCode)
 }
 
 private struct MemberRow: View {
