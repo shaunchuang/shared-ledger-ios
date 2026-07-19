@@ -21,7 +21,7 @@ struct CategoryRepository {
         category.sortOrder = Int32(siblingCount(of: parent, in: group))
         category.group = group
         category.parent = parent
-        context.assign(category, to: persistence.privateStore)
+        context.assign(category, to: persistence.store(for: group))
 
         do {
             try context.save()

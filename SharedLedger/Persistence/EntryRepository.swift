@@ -23,6 +23,7 @@ struct EntryRepository {
 
         let context = persistence.container.viewContext
         let now = Date()
+        let store = persistence.store(for: group)
 
         let entry = LedgerEntry(context: context)
         entry.id = UUID()
@@ -37,7 +38,7 @@ struct EntryRepository {
         entry.sourceAccount = accounts.first { $0.id == draft.sourceAccountID }
         entry.destinationAccount = accounts.first { $0.id == draft.destinationAccountID }
         entry.payer = members.first { $0.id == draft.payerMemberID }
-        context.assign(entry, to: persistence.privateStore)
+        context.assign(entry, to: store)
 
         if draft.kind != .transfer {
             let participants = members.filter { member in
@@ -50,7 +51,7 @@ struct EntryRepository {
                 split.amount = share as NSDecimalNumber
                 split.entry = entry
                 split.member = member
-                context.assign(split, to: persistence.privateStore)
+                context.assign(split, to: store)
             }
         }
 

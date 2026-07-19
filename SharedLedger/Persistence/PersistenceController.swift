@@ -80,6 +80,10 @@ final class PersistenceController {
         }
     }
 
+    func store(for object: NSManagedObject) -> NSPersistentStore {
+        object.objectID.persistentStore ?? privateStore
+    }
+
     private static func storeDescription(
         url: URL,
         configuration: String,
@@ -87,6 +91,8 @@ final class PersistenceController {
     ) -> NSPersistentStoreDescription {
         let description = NSPersistentStoreDescription(url: url)
         description.configuration = configuration
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
         let options = NSPersistentCloudKitContainerOptions(
             containerIdentifier: "iCloud.com.shaunchuang.SharedLedger"
         )

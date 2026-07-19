@@ -7,15 +7,24 @@ struct AccountsView: View {
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
 
     @State private var isPresentingNewAccount = false
+    @State private var accountPendingArchive: LedgerAccount?
     @State private var errorMessage: String?
 
     init(group: LedgerGroup) {
         self.group = group
         _accounts = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerAccount.createdAt, ascending: true)],
-            predicate: NSPredicate(format: "group == %@ AND archivedAt == nil", group),
+            predicate: NSPredicate(format: "group == %@", group),
             animation: .default
         )
+    }
+
+    private var activeAccounts: [LedgerAccount] {
+        accounts.filter { $0.archivedAt == nil }
+    }
+
+    private var archivedAccounts: [LedgerAccount] {
+        accounts.filter { $0.archivedAt != nil }
     }
 
     var body: some View {
@@ -27,20 +36,42 @@ struct AccountsView: View {
                         LedgerEmptyState(
                             systemImage: "creditcard",
                             title: "還沒有帳號",
-                            message: "新增現金或銀行帳號，開始記錄這個群組的收支。",
+                            message: "新增現金或銀行帳號，設定期初餘額後開始記錄收支。",
                             actionTitle: "新增帳號"
                         ) {
                             isPresentingNewAccount = true
                         }
-                    } else {
+                    } else if !activeAccounts.isEmpty {
                         LedgerCard(padding: 0) {
                             VStack(spacing: 0) {
-                                ForEach(Array(accounts.enumerated()), id: \.element.objectID) { index, account in
-                                    AccountRow(account: account) {
-                                        archive(account)
-                                    }
-                                    if index < accounts.count - 1 {
+                                ForEach(Array(activeAccounts.enumerated()), id: \.element.objectID) { index, account in
+                                    AccountRow(
+                                        account: account,
+                                        balance: AccountRepository().currentBalance(for: account),
+                                        onArchive: { accountPendingArchive = account }
+                                    )
+                                    if index < activeAccounts.count - 1 {
                                         Divider().padding(.leading, 68)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if !archivedAccounts.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            LedgerSectionHeader(title: "已封存帳號")
+                            LedgerCard(padding: 0) {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(archivedAccounts.enumerated()), id: \.element.objectID) { index, account in
+                                        AccountRow(
+                                            account: account,
+                                            balance: AccountRepository().currentBalance(for: account),
+                                            onArchive: nil
+                                        )
+                                        if index < archivedAccounts.count - 1 {
+                                            Divider().padding(.leading, 68)
+                                        }
                                     }
                                 }
                             }
@@ -69,10 +100,359 @@ struct AccountsView: View {
                     isPresentingNewAccount = false
                 }
             }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            "封存帳號？",
+            isPresented: archiveConfirmationBinding,
+            titleVisibility: .visible,
+            presenting: accountPendingArchive
+        ) { account in
+            Button("封存「\(account.name ?? "未命名帳號")」", role: .destructive) {
+                archive(account)
+            }
+            Button("取消", role: .cancel) {}
+        } message: { account in
+            if AccountRepository().hasTransactions(account) {
+                Text("這個帳號已有交易，封存後仍會保留所有歷史交易與餘額紀錄。")
+            } else {
+                Text("封存後不會再出現在新增交易的帳號選單中。")
+            }
+        }
+        .alert("無法更新帳號", isPresented: errorBinding) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "請稍後再試。")
+        }
+    }
+
+    private var archiveConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { accountPendingArchive != nil },
+            set: { if !$0 { accountPendingArchive = nil } }
+        )
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )
+    }
+
+    private func archive(_ account: LedgerAccount) {
+        do {
+            try AccountRepository().archiveAccount(account)
+            accountPendingArchive = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct AccountRow: View {
+    @ObservedObject var account: LedgerAccount
+    let balance: Decimal
+    let onArchive: (() -> Void)?
+
+    private var type: AccountType {
+        AccountType(rawValue: account.accountType ?? "") ?? .cash
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            NavigationLink {
+                AccountDetailView(account: account)
+            } label: {
+                HStack(spacing: 14) {
+                    LedgerIconBadge(systemImage: type.systemImage)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(account.name ?? "未命名帳號")
+                            .font(.subheadline.weight(.semibold))
+                        Text(account.archivedAt == nil ? type.displayName : "\(type.displayName) · 已封存")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(ledgerAmount(balance))
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(balance < 0 ? LedgerTheme.coral : .primary)
+                        Text("目前餘額")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if let onArchive {
+                Menu {
+                    Button(role: .destructive, action: onArchive) {
+                        Label("封存帳號", systemImage: "archivebox")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 32, height: 44)
+                }
+                .accessibilityLabel("帳號選項")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
+private struct AccountDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var account: LedgerAccount
+
+    @FetchRequest private var entries: FetchedResults<LedgerEntry>
+
+    @State private var isAdjustingBalance = false
+    @State private var isConfirmingReconciliation = false
+    @State private var isConfirmingArchive = false
+    @State private var errorMessage: String?
+
+    init(account: LedgerAccount) {
+        self.account = account
+        _entries = FetchRequest(
+            sortDescriptors: [
+                NSSortDescriptor(keyPath: \LedgerEntry.date, ascending: false),
+                NSSortDescriptor(keyPath: \LedgerEntry.createdAt, ascending: false)
+            ],
+            predicate: NSPredicate(
+                format: "sourceAccount == %@ OR destinationAccount == %@",
+                account,
+                account
+            ),
+            animation: .default
+        )
+    }
+
+    private var currentBalance: Decimal {
+        AccountRepository().currentBalance(for: account)
+    }
+
+    var body: some View {
+        ZStack {
+            LedgerBackground()
+            ScrollView {
+                VStack(spacing: 18) {
+                    balanceCard
+                    reconciliationCard
+                    transactionHistory
+                }
+                .padding(.horizontal, LedgerTheme.pagePadding)
+                .padding(.top, 16)
+                .padding(.bottom, 28)
+            }
+        }
+        .navigationTitle(account.name ?? "帳號明細")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if account.archivedAt == nil {
+                Menu {
+                    Button("調整餘額", systemImage: "slider.horizontal.3") {
+                        isAdjustingBalance = true
+                    }
+                    Button("完成對帳", systemImage: "checkmark.seal") {
+                        isConfirmingReconciliation = true
+                    }
+                    Divider()
+                    Button("封存帳號", systemImage: "archivebox", role: .destructive) {
+                        isConfirmingArchive = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("帳號操作")
+            }
+        }
+        .sheet(isPresented: $isAdjustingBalance) {
+            NavigationStack {
+                BalanceAdjustmentView(account: account, currentBalance: currentBalance) {
+                    isAdjustingBalance = false
+                }
+            }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+        .confirmationDialog(
+            "確認完成對帳？",
+            isPresented: $isConfirmingReconciliation,
+            titleVisibility: .visible
+        ) {
+            Button("以目前餘額完成對帳") { reconcile() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("系統會保存目前餘額 \(ledgerAmount(currentBalance)) 與對帳時間。")
+        }
+        .confirmationDialog(
+            "封存帳號？",
+            isPresented: $isConfirmingArchive,
+            titleVisibility: .visible
+        ) {
+            Button("封存帳號", role: .destructive) { archive() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text(entries.isEmpty
+                 ? "封存後不會再出現在新增交易的帳號選單中。"
+                 : "所有歷史交易與餘額調整都會保留，不會被刪除。")
+        }
         .alert("無法更新帳號", isPresented: errorBinding) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "請稍後再試。")
+        }
+    }
+
+    private var balanceCard: some View {
+        LedgerCard {
+            VStack(alignment: .leading, spacing: 16) {
+                Label("目前餘額", systemImage: "creditcard.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(ledgerAmount(currentBalance))
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .foregroundStyle(currentBalance < 0 ? LedgerTheme.coral : LedgerTheme.primaryStrong)
+                    .contentTransition(.numericText())
+                HStack {
+                    Text("期初餘額")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(ledgerAmount((account.openingBalance as Decimal?) ?? 0))
+                        .fontWeight(.semibold)
+                }
+                .font(.subheadline)
+            }
+        }
+    }
+
+    private var reconciliationCard: some View {
+        LedgerCard {
+            VStack(alignment: .leading, spacing: 10) {
+                LedgerSectionHeader(title: "最近對帳")
+                if let date = account.lastReconciledAt,
+                   let balance = account.lastReconciledBalance as Decimal? {
+                    HStack {
+                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(ledgerAmount(balance))
+                            .fontWeight(.semibold)
+                    }
+                    .font(.subheadline)
+                } else {
+                    Text("尚未對帳。確認實際帳戶餘額後，可保存目前餘額與時間作為核對基準。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var transactionHistory: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LedgerSectionHeader(title: "帳號明細")
+            if entries.isEmpty {
+                LedgerEmptyState(
+                    systemImage: "list.bullet.rectangle",
+                    title: "尚無交易",
+                    message: "收入、支出、轉帳與餘額調整會顯示在這裡。"
+                )
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(entries, id: \.objectID) { entry in
+                        AccountEntryRow(entry: entry, account: account)
+                    }
+                }
+            }
+        }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )
+    }
+
+    private func reconcile() {
+        do {
+            try AccountRepository().reconcile(account)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func archive() {
+        do {
+            try AccountRepository().archiveAccount(account)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct BalanceAdjustmentView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let account: LedgerAccount
+    let onSaved: () -> Void
+
+    @State private var targetBalanceText: String
+    @State private var note = ""
+    @State private var errorMessage: String?
+
+    init(account: LedgerAccount, currentBalance: Decimal, onSaved: @escaping () -> Void) {
+        self.account = account
+        self.onSaved = onSaved
+        _targetBalanceText = State(initialValue: (currentBalance as NSDecimalNumber).stringValue)
+    }
+
+    private var targetBalance: Decimal? {
+        Decimal(string: targetBalanceText.trimmingCharacters(in: .whitespaces))
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                HStack {
+                    Text("$")
+                        .foregroundStyle(.secondary)
+                    TextField("0", text: $targetBalanceText)
+                        .keyboardType(.numbersAndPunctuation)
+                        .multilineTextAlignment(.trailing)
+                }
+            } header: {
+                Text("實際餘額")
+            } footer: {
+                Text("系統會新增一筆差額調整，不會改寫或刪除既有交易。")
+            }
+
+            Section("備註") {
+                TextField("例如：依銀行帳單調整", text: $note)
+            }
+        }
+        .navigationTitle("調整餘額")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("取消") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("儲存", action: save)
+                    .disabled(targetBalance == nil)
+            }
+        }
+        .alert("無法調整餘額", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "請稍後再試。")
@@ -86,42 +466,80 @@ struct AccountsView: View {
         )
     }
 
-    private func archive(_ account: LedgerAccount) {
+    private func save() {
+        guard let targetBalance else { return }
         do {
-            try AccountRepository().archiveAccount(account)
+            try AccountRepository().adjustBalance(of: account, to: targetBalance, note: note)
+            onSaved()
+            dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 }
 
-private struct AccountRow: View {
+private struct AccountEntryRow: View {
+    @ObservedObject var entry: LedgerEntry
     @ObservedObject var account: LedgerAccount
-    let onArchive: () -> Void
 
-    private var type: AccountType {
-        AccountType(rawValue: account.accountType ?? "") ?? .cash
+    private var kind: EntryKind {
+        EntryKind(rawValue: entry.kind ?? "") ?? .expense
+    }
+
+    private var effect: Decimal {
+        AccountBalanceCalculator.effect(
+            of: AccountBalanceMovement(
+                kind: kind,
+                amount: (entry.amount as Decimal?) ?? 0,
+                isSourceAccount: entry.sourceAccount == account,
+                isDestinationAccount: entry.destinationAccount == account
+            )
+        )
+    }
+
+    private var title: String {
+        if kind == .transfer {
+            if entry.sourceAccount == account {
+                return "轉至 \(entry.destinationAccount?.name ?? "其他帳號")"
+            }
+            return "轉自 \(entry.sourceAccount?.name ?? "其他帳號")"
+        }
+        if let note = entry.note, !note.isEmpty {
+            return note
+        }
+        return entry.category?.name ?? kind.displayName
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            LedgerIconBadge(systemImage: type.systemImage)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(account.name ?? "未命名帳號")
-                    .font(.subheadline.weight(.semibold))
-                Text(type.displayName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        LedgerCard {
+            HStack(spacing: 14) {
+                LedgerIconBadge(systemImage: kind.systemImage, tint: kind.tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(entry.date?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(signedLedgerAmount(effect))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(effect < 0 ? LedgerTheme.coral : LedgerTheme.primary)
             }
-            Spacer()
-            Button(role: .destructive, action: onArchive) {
-                Image(systemName: "archivebox")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("封存帳號")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
+}
+
+private func ledgerAmount(_ amount: Decimal) -> String {
+    "$" + (amount as NSDecimalNumber).stringValue
+}
+
+private func signedLedgerAmount(_ amount: Decimal) -> String {
+    if amount > 0 {
+        return "+" + ledgerAmount(amount)
+    }
+    if amount < 0 {
+        return "-" + ledgerAmount(-amount)
+    }
+    return ledgerAmount(0)
 }

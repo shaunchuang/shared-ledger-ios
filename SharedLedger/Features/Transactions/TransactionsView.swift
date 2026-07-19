@@ -199,11 +199,14 @@ private struct EntryRow: View {
 
     private var amountText: String {
         let amount = (entry.amount as Decimal?) ?? 0
-        let formatted = (amount as NSDecimalNumber).stringValue
+        let absoluteAmount = amount < 0 ? -amount : amount
+        let formatted = (absoluteAmount as NSDecimalNumber).stringValue
         switch kind {
         case .income: return "+$\(formatted)"
         case .expense: return "-$\(formatted)"
         case .transfer: return "$\(formatted)"
+        case .balanceAdjustment:
+            return amount >= 0 ? "+$\(formatted)" : "-$\(formatted)"
         }
     }
 
@@ -212,6 +215,7 @@ private struct EntryRow: View {
         case .income: return LedgerTheme.primary
         case .expense: return LedgerTheme.coral
         case .transfer: return .secondary
+        case .balanceAdjustment: return .blue
         }
     }
 

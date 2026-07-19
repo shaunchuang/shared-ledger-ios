@@ -59,6 +59,7 @@
 		0FDB065A3AA8838068BC2F84 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		17603CF7F718E4B15A463C90 /* EntryKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryKind.swift; sourceTree = "<group>"; };
 		1986EBF2EE44CCC904C2A47E /* SharedLedger.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedger.xcdatamodel; sourceTree = "<group>"; };
+		A8B4C2D19F7045E18A3C6B22 /* SharedLedgerV2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV2.xcdatamodel; sourceTree = "<group>"; };
 		1C08A6952271AAF2C12550BD /* GroupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupsView.swift; sourceTree = "<group>"; };
 		1EB2692318D6DD111B869EF4 /* SharedLedger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SharedLedger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23001F74E857C5902E92E07F /* GroupRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupRepository.swift; sourceTree = "<group>"; };
@@ -662,8 +663,9 @@
 			isa = XCVersionGroup;
 			children = (
 				1986EBF2EE44CCC904C2A47E /* SharedLedger.xcdatamodel */,
+				A8B4C2D19F7045E18A3C6B22 /* SharedLedgerV2.xcdatamodel */,
 			);
-			currentVersion = 1986EBF2EE44CCC904C2A47E /* SharedLedger.xcdatamodel */;
+			currentVersion = A8B4C2D19F7045E18A3C6B22 /* SharedLedgerV2.xcdatamodel */;
 			path = SharedLedger.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

@@ -30,6 +30,8 @@ struct TransactionDraft: Equatable, Sendable {
             return sourceAccountID != nil
                 && payerMemberID != nil
                 && !splitMemberIDs.isEmpty
+        case .balanceAdjustment:
+            return false
         }
     }
 }

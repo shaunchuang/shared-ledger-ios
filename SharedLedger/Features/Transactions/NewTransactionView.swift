@@ -35,7 +35,7 @@ struct NewTransactionView: View {
         Form {
             Section {
                 Picker("類型", selection: $draft.kind) {
-                    ForEach(EntryKind.allCases, id: \.self) { kind in
+                    ForEach(EntryKind.userCreatableCases, id: \.self) { kind in
                         Text(kind.displayName).tag(kind)
                     }
                 }
