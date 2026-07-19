@@ -8,11 +8,13 @@ final class PersistenceController {
     typealias ShareFetcher = (
         [NSManagedObjectID]
     ) throws -> [NSManagedObjectID: CKShare]
+    typealias AccountStatusProvider = () async throws -> CKAccountStatus
 
     let container: NSPersistentCloudKitContainer
     private(set) var privateStore: NSPersistentStore!
     private(set) var sharedStore: NSPersistentStore!
     private let shareFetcher: ShareFetcher?
+    private let accountStatusProvider: AccountStatusProvider?
     private var remoteChangeObserver: NSObjectProtocol?
     private var isRepairingData = false
     private var shouldRepeatDataRepair = false
@@ -20,9 +22,11 @@ final class PersistenceController {
     init(
         inMemory: Bool = false,
         shareFetcher: ShareFetcher? = nil,
+        accountStatusProvider: AccountStatusProvider? = nil,
         inMemoryConfigurations: [String]? = nil
     ) {
         self.shareFetcher = shareFetcher
+        self.accountStatusProvider = accountStatusProvider
         container = NSPersistentCloudKitContainer(name: "SharedLedger")
 
         if let inMemoryConfigurations {
@@ -126,6 +130,20 @@ final class PersistenceController {
     func prepareShare(for group: LedgerGroup) async throws -> (CKShare, CKContainer) {
         let shareTitle = group.name ?? "Shared Ledger 群組"
         let objectID = group.objectID
+        let cloudContainer = CKContainer(identifier: Self.cloudKitContainerIdentifier)
+
+        switch try await accountStatus(for: cloudContainer) {
+        case .available:
+            break
+        case .noAccount:
+            throw SharingError.noICloudAccount
+        case .restricted:
+            throw SharingError.restrictedAccount
+        case .couldNotDetermine, .temporarilyUnavailable:
+            throw SharingError.iCloudUnavailable
+        @unknown default:
+            throw SharingError.iCloudUnavailable
+        }
 
         let existingShare: CKShare?
         if objectID.isTemporaryID {
@@ -138,10 +156,7 @@ final class PersistenceController {
 
         if let existingShare {
             existingShare[CKShare.SystemFieldKey.title] = shareTitle
-            return (
-                existingShare,
-                CKContainer(identifier: Self.cloudKitContainerIdentifier)
-            )
+            return (existingShare, cloudContainer)
         }
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -160,6 +175,22 @@ final class PersistenceController {
 
     func store(for object: NSManagedObject) -> NSPersistentStore {
         object.objectID.persistentStore ?? privateStore
+    }
+
+    private func accountStatus(for cloudContainer: CKContainer) async throws -> CKAccountStatus {
+        if let accountStatusProvider {
+            return try await accountStatusProvider()
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            cloudContainer.accountStatus { status, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: status)
+                }
+            }
+        }
     }
 
     private func scheduleDataRepair() {
@@ -203,11 +234,23 @@ final class PersistenceController {
         return description
     }
 
-    private enum SharingError: LocalizedError {
+    enum SharingError: LocalizedError {
         case missingShare
+        case noICloudAccount
+        case restrictedAccount
+        case iCloudUnavailable
 
         var errorDescription: String? {
-            "CloudKit did not return a share."
+            switch self {
+            case .missingShare:
+                return "CloudKit 未回傳共享邀請，請稍後再試。"
+            case .noICloudAccount:
+                return "此裝置尚未登入 iCloud，請先在「設定」登入 Apple 帳號後再邀請成員。"
+            case .restrictedAccount:
+                return "這個 Apple 帳號的 iCloud 功能受到限制，暫時無法建立共享邀請。"
+            case .iCloudUnavailable:
+                return "目前無法連線到 iCloud，請確認網路與 iCloud 狀態後再試。"
+            }
         }
     }
 }
