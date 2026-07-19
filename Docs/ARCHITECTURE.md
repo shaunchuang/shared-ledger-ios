@@ -54,7 +54,7 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 
 | 擁有者 | 直接擁有的資料 | 說明 |
 | --- | --- | --- |
-| `LedgerGroup` | `Member`、`LedgerBook`、`LedgerAccount`、`LedgerCategory`、`AuditEvent` | 群組負責共享範圍、成員、角色、共用帳戶、分類目錄與稽核；成員、帳戶與分類主資料不逐帳本重複建立 |
+| `LedgerGroup` | `Member`、`LedgerBook`、`LedgerAccount`、`LedgerCategory`、`AuditEvent` | 群組負責共享範圍、ISO 4217 `currencyCode`、成員、角色、共用帳戶、分類目錄與稽核；成員、帳戶與分類主資料不逐帳本重複建立 |
 | `LedgerBook` | `BookCategoryAssignment`、`LedgerEntry` | 帳本是交易的隔離邊界，並以 assignment 決定可用分類；一個群組可有多個帳本 |
 | `LedgerAccount` | `AccountAdjustment` | 餘額調整直接屬於帳戶，不是沒有帳本的交易 |
 | `LedgerCategory` | 子 `LedgerCategory` | 分類以同一群組內的自我關聯形成共用分類樹 |
@@ -71,6 +71,8 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 - 單筆交易只屬於一個帳本且不得以 `book == nil` 儲存；同群組帳戶間的轉帳記錄於目前帳本，不建立跨帳本交易關聯，並排除於收入／支出統計。
 - `AuditEvent` 保存變更摘要、操作者與時間；交易與設定修改不可靜默覆寫歷史。
 - 金額使用 `Decimal`／Core Data Decimal，不使用 `Double` 儲存貨幣。
+- MVP 採單一群組貨幣：`LedgerGroup.currencyCode` 是帳本、帳戶、交易、分攤、餘額及稽核金額格式的權威來源。建立群組時從 ISO 4217 代碼選擇，新群組預設使用裝置地區貨幣；V4 舊資料升級時使用 schema 預設 `TWD`。repository 必須依該貨幣的 fraction digits 驗證金額與分配尾差，不得固定假設 2 位小數。
+- MVP 不做匯率換算，也不允許同群組帳本、帳戶或交易另行指定不同貨幣。未來多幣別需新增交易幣別、換算率日期與快照 migration，不可重新解讀既有金額。
 - 已被交易使用的分類或帳戶採封存，不直接刪除；移除 `BookCategoryAssignment` 只代表該帳本停用分類，不得清除歷史交易的分類關聯。已封存帳本、帳戶或分類不得接受新的帳務關聯。
 - CloudKit schema 的 non-optional 欄位必須有合理預設值，relationships 必須符合 CloudKit 模型限制。
 - 正式資料模型變更必須建立新 model version、輕量 migration 驗證與舊資料升級測試，不直接破壞既有 schema。
@@ -115,9 +117,9 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | V2 | 新增 `LedgerBook`，讓帳戶、分類與交易歸屬帳本，並加入帳戶期初餘額與對帳欄位 | 為每個既有群組建立或取得「主要帳本」，再回填所有缺少 `book` 的 V1 物件 |
 | V3 | 帳戶回歸群組 scope，新增帳戶直屬 `AccountAdjustment`，移除 `LedgerAccount.book`／`LedgerBook.accounts`；分類與交易維持帳本 scope | 輕量 migration 保留帳戶既有 `group`、交易、期初餘額與對帳資料；啟動後將舊版無帳本的 `balanceAdjustment` entry 冪等轉為 `AccountAdjustment`，分類與交易缺少 `book` 時回填主要帳本 |
 | V4 | 分類提升為群組 scope，新增 `BookCategoryAssignment`；交易維持帳本 scope | 先保留 optional legacy `LedgerCategory.book` 供過渡修復；每個既有分類建立對原帳本的 assignment，不依名稱自動合併。完成 private/shared stores 與混合版本同步驗證後，後續 model version 才移除 legacy 關聯 |
-| V5 | 移除會隨群組分享的 `Member.isCurrentUser`，新增只存在 private configuration 的 `LocalMemberIdentity` | 以 lightweight migration 移除舊欄位；共享群組首次開啟時由目前使用者確認待邀請的 member／viewer，或建立新的 member，再把 `groupID`／`memberID` 對應寫入 private store |
+| V5 | 移除會隨群組分享的 `Member.isCurrentUser`，新增只存在 private configuration 的 `LocalMemberIdentity`；在 `LedgerGroup` 新增非 optional `currencyCode` | 以 lightweight migration 移除舊欄位並以 `TWD` 回填既有群組貨幣；共享群組首次開啟時由目前使用者確認待邀請的 member／viewer，或建立新的 member，再把 `groupID`／`memberID` 對應寫入 private store |
 
-V1→V2→V3→V4→V5 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。
+V1→V2→V3→V4→V5 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。同一版也為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可為舊資料推導 mapping；新群組仍由建立者明確選擇或採裝置地區預設。
 
 V4 資料修復對每個既有分類採以下規則：
 
