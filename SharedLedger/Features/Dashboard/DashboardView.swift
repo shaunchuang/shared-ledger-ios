@@ -1,6 +1,19 @@
+import CoreData
 import SwiftUI
 
 struct DashboardView: View {
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \LedgerGroup.updatedAt, ascending: false)]
+    ) private var groups: FetchedResults<LedgerGroup>
+
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(groups.first?.currencyCode)
+    }
+
+    private var zeroAmount: String {
+        LedgerCurrency.format(0, currencyCode: currencyCode)
+    }
+
     var body: some View {
         ZStack {
             LedgerBackground()
@@ -55,7 +68,7 @@ struct DashboardView: View {
             }
 
             VStack(alignment: .leading, spacing: 7) {
-                Text("$0")
+                Text(zeroAmount)
                     .font(.system(size: 44, weight: .bold, design: .rounded))
                     .contentTransition(.numericText())
                 Text("新增第一筆支出後，這裡會顯示群組趨勢")
@@ -101,7 +114,7 @@ struct DashboardView: View {
         HStack(spacing: 12) {
             MetricTile(
                 title: "待結算",
-                value: "$0",
+                value: zeroAmount,
                 detail: "目前已平衡",
                 systemImage: "arrow.left.arrow.right",
                 tint: LedgerTheme.amber
@@ -184,5 +197,7 @@ private struct OnboardingStep: View {
 }
 
 #Preview {
+    let persistence = PersistenceController(inMemory: true)
     NavigationStack { DashboardView() }
+        .environment(\.managedObjectContext, persistence.container.viewContext)
 }
