@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22522" systemVersion="23E224" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" userDefinedModelVersionIdentifier="">
+    <entity name="AccountAdjustment" representedClassName="AccountAdjustment" syncable="YES" codeGenerationType="class">
+        <attribute name="amount" optional="NO" attributeType="Decimal" defaultValueString="0"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="note" optional="NO" attributeType="String" defaultValueString=""/>
+        <relationship name="account" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerAccount" inverseName="adjustments" inverseEntity="LedgerAccount"/>
+    </entity>
+    <entity name="AuditEvent" representedClassName="AuditEvent" syncable="YES" codeGenerationType="class">
+        <attribute name="action" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="actorDisplayName" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="summary" optional="NO" attributeType="String" defaultValueString=""/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="auditEvents" inverseEntity="LedgerGroup"/>
+    </entity>
+    <entity name="BookCategoryAssignment" representedClassName="BookCategoryAssignment" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isEnabled" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="sortOrder" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="book" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerBook" inverseName="categoryAssignments" inverseEntity="LedgerBook"/>
+        <relationship name="category" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerCategory" inverseName="bookAssignments" inverseEntity="LedgerCategory"/>
+    </entity>
+    <entity name="EntrySplit" representedClassName="EntrySplit" syncable="YES" codeGenerationType="class">
+        <attribute name="amount" optional="NO" attributeType="Decimal" defaultValueString="0"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <relationship name="entry" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="splits" inverseEntity="LedgerEntry"/>
+        <relationship name="member" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Member" inverseName="splits" inverseEntity="Member"/>
+    </entity>
+    <entity name="LedgerAccount" representedClassName="LedgerAccount" syncable="YES" codeGenerationType="class">
+        <attribute name="accountType" optional="NO" attributeType="String" defaultValueString="cash"/>
+        <attribute name="archivedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lastReconciledAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastReconciledBalance" optional="YES" attributeType="Decimal"/>
+        <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="openingBalance" optional="NO" attributeType="Decimal" defaultValueString="0"/>
+        <relationship name="adjustments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AccountAdjustment" inverseName="account" inverseEntity="AccountAdjustment"/>
+        <relationship name="destinationEntries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="destinationAccount" inverseEntity="LedgerEntry"/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="accounts" inverseEntity="LedgerGroup"/>
+        <relationship name="sourceEntries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="sourceAccount" inverseEntity="LedgerEntry"/>
+    </entity>
+    <entity name="LedgerBook" representedClassName="LedgerBook" syncable="YES" codeGenerationType="class">
+        <attribute name="archivedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isDefault" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="sortOrder" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="categories" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerCategory" inverseName="book" inverseEntity="LedgerCategory"/>
+        <relationship name="categoryAssignments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="BookCategoryAssignment" inverseName="book" inverseEntity="BookCategoryAssignment"/>
+        <relationship name="entries" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerEntry" inverseName="book" inverseEntity="LedgerEntry"/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="books" inverseEntity="LedgerGroup"/>
+    </entity>
+    <entity name="LedgerCategory" representedClassName="LedgerCategory" syncable="YES" codeGenerationType="class">
+        <attribute name="archivedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="sortOrder" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="book" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerBook" inverseName="categories" inverseEntity="LedgerBook"/>
+        <relationship name="bookAssignments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="BookCategoryAssignment" inverseName="category" inverseEntity="BookCategoryAssignment"/>
+        <relationship name="children" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerCategory" inverseName="parent" inverseEntity="LedgerCategory"/>
+        <relationship name="entries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="category" inverseEntity="LedgerEntry"/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="categories" inverseEntity="LedgerGroup"/>
+        <relationship name="parent" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerCategory" inverseName="children" inverseEntity="LedgerCategory"/>
+    </entity>
+    <entity name="LedgerEntry" representedClassName="LedgerEntry" syncable="YES" codeGenerationType="class">
+        <attribute name="amount" optional="NO" attributeType="Decimal" defaultValueString="0"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="kind" optional="NO" attributeType="String" defaultValueString="expense"/>
+        <attribute name="note" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="book" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerBook" inverseName="entries" inverseEntity="LedgerBook"/>
+        <relationship name="category" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerCategory" inverseName="entries" inverseEntity="LedgerCategory"/>
+        <relationship name="destinationAccount" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerAccount" inverseName="destinationEntries" inverseEntity="LedgerAccount"/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="entries" inverseEntity="LedgerGroup"/>
+        <relationship name="payer" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Member" inverseName="paidEntries" inverseEntity="Member"/>
+        <relationship name="sourceAccount" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerAccount" inverseName="sourceEntries" inverseEntity="LedgerAccount"/>
+        <relationship name="splits" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="EntrySplit" inverseName="entry" inverseEntity="EntrySplit"/>
+    </entity>
+    <entity name="LedgerGroup" representedClassName="LedgerGroup" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String" defaultValueString="TWD"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="accounts" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerAccount" inverseName="group" inverseEntity="LedgerAccount"/>
+        <relationship name="auditEvents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AuditEvent" inverseName="group" inverseEntity="AuditEvent"/>
+        <relationship name="books" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerBook" inverseName="group" inverseEntity="LedgerBook"/>
+        <relationship name="categories" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerCategory" inverseName="group" inverseEntity="LedgerCategory"/>
+        <relationship name="entries" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerEntry" inverseName="group" inverseEntity="LedgerEntry"/>
+        <relationship name="members" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Member" inverseName="group" inverseEntity="Member"/>
+    </entity>
+    <entity name="LocalMemberIdentity" representedClassName="LocalMemberIdentity" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="groupID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="memberID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="Member" representedClassName="Member" syncable="YES" codeGenerationType="class">
+        <attribute name="displayName" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="invitationStatus" optional="NO" attributeType="String" defaultValueString="pending"/>
+        <attribute name="joinedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="role" optional="NO" attributeType="String" defaultValueString="member"/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="members" inverseEntity="LedgerGroup"/>
+        <relationship name="paidEntries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="payer" inverseEntity="LedgerEntry"/>
+        <relationship name="splits" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="EntrySplit" inverseName="member" inverseEntity="EntrySplit"/>
+    </entity>
+    <configuration name="Private" usedWithCloudKit="YES">
+        <memberEntity name="AccountAdjustment"/>
+        <memberEntity name="AuditEvent"/>
+        <memberEntity name="BookCategoryAssignment"/>
+        <memberEntity name="EntrySplit"/>
+        <memberEntity name="LedgerAccount"/>
+        <memberEntity name="LedgerBook"/>
+        <memberEntity name="LedgerCategory"/>
+        <memberEntity name="LedgerEntry"/>
+        <memberEntity name="LedgerGroup"/>
+        <memberEntity name="LocalMemberIdentity"/>
+        <memberEntity name="Member"/>
+    </configuration>
+    <configuration name="Shared" usedWithCloudKit="YES">
+        <memberEntity name="AccountAdjustment"/>
+        <memberEntity name="AuditEvent"/>
+        <memberEntity name="BookCategoryAssignment"/>
+        <memberEntity name="EntrySplit"/>
+        <memberEntity name="LedgerAccount"/>
+        <memberEntity name="LedgerBook"/>
+        <memberEntity name="LedgerCategory"/>
+        <memberEntity name="LedgerEntry"/>
+        <memberEntity name="LedgerGroup"/>
+        <memberEntity name="Member"/>
+    </configuration>
+</model>
