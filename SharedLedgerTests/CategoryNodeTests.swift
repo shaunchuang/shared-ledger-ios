@@ -721,6 +721,100 @@ final class BookRepositoryTests: XCTestCase {
         XCTAssertEqual(categoryRepository.availableCategories(in: copyBook).map(\.objectID), [shared.objectID])
     }
 
+
+    func testChildCategoryInheritsParentAvailabilityAcrossBooks() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let bookRepository = BookRepository(persistence: persistence)
+        let homeBook = try XCTUnwrap(bookRepository.defaultBook(in: group))
+        let travelBook = try bookRepository.createBook(
+            from: BookDraft(name: "旅行"),
+            in: group
+        )
+        let repository = CategoryRepository(persistence: persistence)
+        let parent = try repository.createCategory(
+            from: CategoryDraft(name: "交通"),
+            in: group,
+            parent: nil
+        )
+
+        try repository.setCategory(parent, enabled: false, in: travelBook)
+        let child = try repository.createCategory(
+            from: CategoryDraft(name: "捷運"),
+            in: group,
+            parent: parent
+        )
+
+        XCTAssertTrue(repository.isCategoryAvailable(child, in: homeBook))
+        XCTAssertFalse(repository.isCategoryAvailable(parent, in: travelBook))
+        XCTAssertFalse(repository.isCategoryAvailable(child, in: travelBook))
+        XCTAssertNil(repository.assignment(for: child, in: travelBook))
+
+        try repository.setCategory(child, enabled: true, in: travelBook)
+
+        XCTAssertTrue(repository.isCategoryAvailable(parent, in: travelBook))
+        XCTAssertTrue(repository.isCategoryAvailable(child, in: travelBook))
+    }
+
+    func testCategoryMutationsRequireManagerPermissionAndFailClosed() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let book = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
+        let repository = CategoryRepository(persistence: persistence)
+        let category = try repository.createCategory(
+            from: CategoryDraft(name: "餐飲"),
+            in: group,
+            parent: nil
+        )
+        let owner = try XCTUnwrap(
+            (group.members as? Set<Member> ?? []).first(where: \.isCurrentUser)
+        )
+        owner.role = MemberRole.viewer.rawValue
+
+        XCTAssertFalse(repository.canManageCategories(in: group))
+        XCTAssertThrowsError(
+            try repository.createCategory(
+                from: CategoryDraft(name: "交通"),
+                in: group,
+                parent: nil
+            )
+        ) { error in
+            guard case CategoryRepository.CategoryError.permissionDenied = error else {
+                return XCTFail("Expected permissionDenied, got \(error)")
+            }
+        }
+        XCTAssertThrowsError(
+            try repository.setCategory(category, enabled: false, in: book)
+        ) { error in
+            guard case CategoryRepository.CategoryError.permissionDenied = error else {
+                return XCTFail("Expected permissionDenied, got \(error)")
+            }
+        }
+        XCTAssertThrowsError(
+            try repository.archiveCategory(category)
+        ) { error in
+            guard case CategoryRepository.CategoryError.permissionDenied = error else {
+                return XCTFail("Expected permissionDenied, got \(error)")
+            }
+        }
+
+        owner.role = MemberRole.owner.rawValue
+        owner.isCurrentUser = false
+
+        XCTAssertFalse(repository.canManageCategories(in: group))
+        XCTAssertThrowsError(
+            try repository.archiveCategory(category)
+        ) { error in
+            guard case CategoryRepository.CategoryError.permissionDenied = error else {
+                return XCTFail("Expected permissionDenied, got \(error)")
+            }
+        }
+    }
+
     func testSharedStoreCategoryAndAssignmentStayWithGroupRoot() throws {
         let persistence = PersistenceController(
             inMemory: true,
@@ -733,6 +827,16 @@ final class BookRepositoryTests: XCTestCase {
         group.name = "共享家庭"
         group.createdAt = Date()
         group.updatedAt = group.createdAt
+
+        let owner = Member(context: context)
+        context.assign(owner, to: persistence.sharedStore)
+        owner.id = UUID()
+        owner.displayName = "小明"
+        owner.invitationStatus = InvitationStatus.accepted.rawValue
+        owner.isCurrentUser = true
+        owner.joinedAt = Date()
+        owner.role = MemberRole.owner.rawValue
+        owner.group = group
         try context.save()
 
         let book = try BookRepository(persistence: persistence).createBook(

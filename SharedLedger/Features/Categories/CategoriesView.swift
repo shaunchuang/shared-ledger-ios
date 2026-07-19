@@ -75,6 +75,7 @@ struct CategoriesView: View {
 
     @State private var isPresentingNewCategory = false
     @State private var newCategoryParent: LedgerCategory?
+    @State private var categoryPendingArchive: LedgerCategory?
     @State private var errorMessage: String?
 
     init(group: LedgerGroup) {
@@ -87,11 +88,7 @@ struct CategoriesView: View {
     }
 
     private var canManage: Bool {
-        let members = group.members as? Set<Member> ?? []
-        guard let rawRole = members.first(where: \.isCurrentUser)?.role,
-              let role = MemberRole(rawValue: rawRole)
-        else { return true }
-        return role.canManageLedgerSettings
+        CategoryRepository().canManageCategories(in: group)
     }
 
     var body: some View {
@@ -116,7 +113,7 @@ struct CategoriesView: View {
                                         depth: 0,
                                         canManage: canManage,
                                         onAddChild: presentChildCategory,
-                                        onArchive: archive
+                                        onArchive: requestArchive
                                     )
                                 }
                             }
@@ -153,11 +150,34 @@ struct CategoriesView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+        .confirmationDialog(
+            "封存分類？",
+            isPresented: archiveConfirmationBinding,
+            titleVisibility: .visible,
+            presenting: categoryPendingArchive
+        ) { category in
+            Button("封存「\(category.name ?? "未命名分類")」", role: .destructive) {
+                categoryPendingArchive = nil
+                archive(category)
+            }
+            Button("取消", role: .cancel) {
+                categoryPendingArchive = nil
+            }
+        } message: { _ in
+            Text("封存後會從所有帳本的新交易選單隱藏，但既有交易與歷史報表仍會保留。")
+        }
         .alert("無法更新分類", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "請稍後再試。")
         }
+    }
+
+    private var archiveConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { categoryPendingArchive != nil },
+            set: { if !$0 { categoryPendingArchive = nil } }
+        )
     }
 
     private var errorBinding: Binding<Bool> {
@@ -175,6 +195,10 @@ struct CategoriesView: View {
     private func presentChildCategory(_ parent: LedgerCategory) {
         newCategoryParent = parent
         isPresentingNewCategory = true
+    }
+
+    private func requestArchive(_ category: LedgerCategory) {
+        categoryPendingArchive = category
     }
 
     private func archive(_ category: LedgerCategory) {
@@ -206,11 +230,8 @@ struct BookCategoriesView: View {
     }
 
     private var canManage: Bool {
-        let members = book.group?.members as? Set<Member> ?? []
-        guard let rawRole = members.first(where: \.isCurrentUser)?.role,
-              let role = MemberRole(rawValue: rawRole)
-        else { return true }
-        return role.canManageLedgerSettings
+        guard let group = book.group else { return false }
+        return CategoryRepository().canManageCategories(in: group)
     }
 
     var body: some View {
