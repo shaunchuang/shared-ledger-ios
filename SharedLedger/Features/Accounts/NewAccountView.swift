@@ -9,6 +9,10 @@ struct NewAccountView: View {
     @State private var draft = AccountDraft()
     @State private var errorMessage: String?
 
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(group.currencyCode)
+    }
+
     var body: some View {
         Form {
             Section {
@@ -29,7 +33,8 @@ struct NewAccountView: View {
 
             Section {
                 HStack {
-                    Text("$")
+                    Text(currencyCode)
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $draft.openingBalanceText)
                         .keyboardType(.numbersAndPunctuation)
