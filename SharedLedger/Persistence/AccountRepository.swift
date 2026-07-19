@@ -266,8 +266,10 @@ struct AccountRepository {
     }
 
     private func currentActorName(in group: LedgerGroup) -> String {
-        let members = group.members as? Set<Member> ?? []
-        return members.first(where: \.isCurrentUser)?.displayName ?? "目前使用者"
+        CurrentMemberIdentityRepository(persistence: persistence)
+            .currentMember(in: group)?
+            .displayName
+            ?? "目前使用者"
     }
 
     enum AccountError: LocalizedError {
