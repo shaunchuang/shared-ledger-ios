@@ -127,7 +127,7 @@ struct BooksView: View {
             Text(errorMessage ?? "請稍後再試。")
         }
         .onAppear(perform: normalizeSelection)
-        .onChange(of: activeBooks.count) { _ in
+        .onChange(of: activeBooks.count) {
             normalizeSelection()
         }
     }
