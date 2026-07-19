@@ -16,9 +16,12 @@ struct NewTransactionView: View {
     init(book: LedgerBook, onSaved: @escaping () -> Void) {
         self.book = book
         self.onSaved = onSaved
+        let accountPredicate = book.group.map {
+            NSPredicate(format: "group == %@ AND archivedAt == nil", $0)
+        } ?? NSPredicate(value: false)
         _accounts = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerAccount.createdAt, ascending: true)],
-            predicate: NSPredicate(format: "book == %@ AND archivedAt == nil", book)
+            predicate: accountPredicate
         )
         _categories = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerCategory.sortOrder, ascending: true)],
@@ -57,7 +60,7 @@ struct NewTransactionView: View {
             if draft.kind == .transfer {
                 Section("轉帳帳戶") {
                     if accounts.isEmpty {
-                        Text("請先在「帳本設定」新增至少兩個帳號。")
+                        Text("請先在群組設定新增至少兩個帳號。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
@@ -78,7 +81,7 @@ struct NewTransactionView: View {
             } else {
                 Section("帳戶與分類") {
                     if accounts.isEmpty {
-                        Text("請先在「帳本設定」新增帳號。")
+                        Text("請先在群組設定新增帳號。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {

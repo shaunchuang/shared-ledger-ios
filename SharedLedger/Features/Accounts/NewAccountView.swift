@@ -3,7 +3,7 @@ import SwiftUI
 struct NewAccountView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let book: LedgerBook
+    let group: LedgerGroup
     let onCreated: () -> Void
 
     @State private var draft = AccountDraft()
@@ -68,7 +68,7 @@ struct NewAccountView: View {
 
     private func createAccount() {
         do {
-            try AccountRepository().createAccount(from: draft, in: book)
+            try AccountRepository().createAccount(from: draft, in: group)
             onCreated()
             dismiss()
         } catch {

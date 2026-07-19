@@ -11,19 +11,12 @@ struct AccountRepository {
 
     @discardableResult
     func createAccount(from draft: AccountDraft, in group: LedgerGroup) throws -> LedgerAccount {
-        let book = try BookRepository(persistence: persistence).ensureDefaultBook(in: group)
-        return try createAccount(from: draft, in: book)
-    }
-
-    @discardableResult
-    func createAccount(from draft: AccountDraft, in book: LedgerBook) throws -> LedgerAccount {
         guard draft.canCreate, let openingBalance = draft.openingBalanceValue else {
             throw AccountError.invalidDraft
         }
-        guard let group = book.group else { throw AccountError.missingGroup }
 
         let context = persistence.container.viewContext
-        let store = persistence.store(for: book)
+        let store = persistence.store(for: group)
 
         let account = LedgerAccount(context: context)
         context.assign(account, to: store)
@@ -33,7 +26,6 @@ struct AccountRepository {
         account.openingBalance = openingBalance as NSDecimalNumber
         account.createdAt = Date()
         account.group = group
-        account.book = book
 
         do {
             try context.save()
@@ -226,7 +218,7 @@ struct AccountRepository {
             case .invalidDraft:
                 return "請輸入帳號名稱與有效的期初餘額。"
             case .missingGroup:
-                return "找不到這個帳本所屬的群組。"
+                return "找不到這個帳號所屬的群組。"
             case .archivedAccount:
                 return "已封存的帳號不能再調整餘額或對帳。"
             }

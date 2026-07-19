@@ -2,7 +2,7 @@ import CoreData
 import SwiftUI
 
 struct AccountsView: View {
-    @ObservedObject var book: LedgerBook
+    @ObservedObject var group: LedgerGroup
 
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
     private let accountRepository = AccountRepository()
@@ -13,11 +13,11 @@ struct AccountsView: View {
     @State private var accountBalances: [NSManagedObjectID: Decimal] = [:]
     @State private var hasLoadedBalances = false
 
-    init(book: LedgerBook) {
-        self.book = book
+    init(group: LedgerGroup) {
+        self.group = group
         _accounts = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerAccount.createdAt, ascending: true)],
-            predicate: NSPredicate(format: "book == %@", book),
+            predicate: NSPredicate(format: "group == %@", group),
             animation: .default
         )
     }
@@ -94,7 +94,7 @@ struct AccountsView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle(book.name ?? "帳號")
+        .navigationTitle("帳號")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button {
@@ -107,7 +107,7 @@ struct AccountsView: View {
         }
         .sheet(isPresented: $isPresentingNewAccount) {
             NavigationStack {
-                NewAccountView(book: book) {
+                NewAccountView(group: group) {
                     isPresentingNewAccount = false
                 }
             }
@@ -147,7 +147,7 @@ struct AccountsView: View {
         .onReceive(
             NotificationCenter.default.publisher(
                 for: .NSManagedObjectContextObjectsDidChange,
-                object: book.managedObjectContext
+                object: group.managedObjectContext
             )
         ) { notification in
             guard shouldRefreshBalances(for: notification) else { return }
@@ -567,6 +567,12 @@ private struct AccountEntryRow: View {
         return entry.category?.name ?? kind.displayName
     }
 
+    private var subtitle: String {
+        let date = entry.date?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定"
+        guard let bookName = entry.book?.name, !bookName.isEmpty else { return date }
+        return "\(date) · \(bookName)"
+    }
+
     var body: some View {
         LedgerCard {
             HStack(spacing: 14) {
@@ -574,7 +580,7 @@ private struct AccountEntryRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
-                    Text(entry.date?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定")
+                    Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

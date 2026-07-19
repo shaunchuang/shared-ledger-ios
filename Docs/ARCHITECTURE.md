@@ -54,17 +54,18 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 
 | 擁有者 | 直接擁有的資料 | 說明 |
 | --- | --- | --- |
-| `LedgerGroup` | `Member`、`LedgerBook`、`AuditEvent` | 群組負責共享範圍、成員、角色與稽核；成員目前為群組共用，不逐帳本設定成員名單 |
-| `LedgerBook` | `LedgerAccount`、`LedgerCategory`、`LedgerEntry` | 帳本是帳務資料的隔離邊界；一個群組可有多個帳本 |
+| `LedgerGroup` | `Member`、`LedgerBook`、`LedgerAccount`、`AuditEvent` | 群組負責共享範圍、成員、角色、共用帳號與稽核；成員與帳號不逐帳本重複建立 |
+| `LedgerBook` | `LedgerCategory`、`LedgerEntry` | 帳本是分類與交易的隔離邊界；一個群組可有多個帳本 |
 | `LedgerCategory` | 子 `LedgerCategory` | 分類以同一帳本內的自我關聯形成分類樹 |
 | `LedgerEntry` | `EntrySplit` | 交易代表收入、支出或轉帳；split 記錄群組成員應負擔金額 |
 
 - 每個群組必須至少有一個啟用中的帳本，且啟用中的帳本必須有唯一的預設帳本。
 - 建立群組時同步建立名為「主要帳本」的預設帳本。
-- 建立帳號、分類或交易的 repository API 以 `LedgerBook` 為 scope，不再以 `LedgerGroup` 作為新資料的帳務 scope。
-- 交易引用的來源帳號、目的帳號與分類都必須屬於交易的帳本；分類的 parent 與 child 也必須屬於同一帳本。
+- 建立帳號的 repository API 以 `LedgerGroup` 為 scope；建立分類與交易則以 `LedgerBook` 為 scope。
+- 交易引用的來源與目的帳號必須屬於帳本所屬群組，分類必須屬於交易帳本；分類的 parent 與 child 也必須屬於同一帳本。
 - 付款人與 split 成員仍以群組為 scope，但必須與帳本所屬群組一致。
-- MVP 不支援以單筆交易執行跨帳本轉帳。若未來要支援跨帳本移轉，必須先定義成對交易、稽核、作廢與同步規則，不可繞過 repository 驗證直接建立關聯。
+- 帳號餘額由群組內所有帳本引用該帳號的交易共同推導；帳號明細需標示每筆交易所屬帳本。
+- 單筆交易只屬於一個帳本；同群組帳號間的轉帳記錄於目前帳本，不建立跨帳本交易關聯。
 - `AuditEvent` 保存變更摘要、操作者與時間；交易與設定修改不可靜默覆寫歷史。
 - 金額使用 `Decimal`／Core Data Decimal，不使用 `Double` 儲存貨幣。
 - 已被交易使用的分類或帳號採封存，不直接刪除。
@@ -76,10 +77,10 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | Model version | 內容 | Migration 要求 |
 | --- | --- | --- |
 | V1 | 原始群組直屬帳號、分類與交易模型 | 僅作為既有資料來源，不直接修改 |
-| V2 | 新增 `LedgerBook`，並讓帳號、分類與交易歸屬帳本 | 為每個既有群組建立或取得「主要帳本」，再回填所有缺少 `book` 的 V1 物件 |
-| V3 | 帳號期初餘額、對帳欄位及後續餘額模型 | 必須在 V2 多帳本 migration 合併後建立，不可與 V2 競用同一 model version |
+| V2 | 新增 `LedgerBook`，讓帳號、分類與交易歸屬帳本，並加入帳號期初餘額與對帳欄位 | 為每個既有群組建立或取得「主要帳本」，再回填所有缺少 `book` 的 V1 物件 |
+| V3 | 帳號回歸群組 scope，移除 `LedgerAccount.book`／`LedgerBook.accounts`；分類與交易維持帳本 scope | 使用輕量 migration 移除可選關聯，保留帳號既有 `group`、交易引用、期初餘額與對帳資料；分類與交易缺少 `book` 時仍回填主要帳本 |
 
-V1→V2 採分階段 migration：為支援輕量 migration 與舊資料回填，V2 可暫時保留帳號、分類與交易對 `LedgerGroup` 的直接關聯，但 `LedgerBook` 關聯是新程式碼的帳務 scope 來源。待 migration、CloudKit schema 與實機升級驗證完成後，再以新的 model version 移除過渡關聯。
+V1→V2→V3 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳號與帳本的關聯，帳號既有 `group` 關聯成為唯一 scope。分類與交易暫時保留對 `LedgerGroup` 的直接關聯以相容舊資料與 CloudKit，`LedgerBook` 關聯則是新程式碼的帳本 scope 來源。
 
 回填必須可重複執行且結果一致：App 啟動載入 stores 後執行一次，收到 CloudKit remote change 後也要重新檢查，以涵蓋稍後同步進來的 V1 資料。回填在 background context 進行，只傳遞 object ID；完成後由 persistent history／context merge 更新畫面。
 
@@ -98,7 +99,7 @@ V1→V2 採分階段 migration：為支援輕量 migration 與舊資料回填，
 
 持久層包含 private 與 shared stores。使用者建立的群組先進入 private store；接受 CloudKit 分享後的群組進入 shared store。兩者透過同一個 view context 提供畫面查詢。
 
-`LedgerBook` 及其帳號、分類、交易必須與所屬群組位於相同 persistent store。聯絡人挑選只建立 App 內的待邀請成員；真正的 iCloud participant、讀寫權限與分享狀態由 CloudKit Sharing 管理。新增資料時必須依群組或帳本所屬 store 指派正確 persistent store，不可一律寫入 private store。
+`LedgerAccount`、`LedgerBook` 及帳本的分類與交易必須與所屬群組位於相同 persistent store。聯絡人挑選只建立 App 內的待邀請成員；真正的 iCloud participant、讀寫權限與分享狀態由 CloudKit Sharing 管理。新增資料時必須依群組或帳本所屬 store 指派正確 persistent store，不可一律寫入 private store。
 
 App 必須呈現未登入 iCloud、暫時不可用、同步中、同步成功、離線及同步失敗等狀態。沒有 iCloud 帳號時仍允許本機記帳，但停用共享邀請並說明原因。
 
@@ -131,7 +132,7 @@ xcodebuild build-for-testing \
 
 所有功能性改動都需通過相關單元／整合測試及 macOS Xcode CI。只有文件變更可省略 App build，但仍需驗證 Markdown 連結與內容責任沒有衝突。
 
-多帳本資料層至少需測試：新群組建立預設帳本、同群組建立多個帳本、封存預設帳本時提升替代帳本、拒絕跨帳本帳號／分類／交易關聯、V1 舊資料回填，以及重複執行回填的冪等性。
+多帳本資料層至少需測試：新群組建立預設帳本、同群組建立多個帳本、封存預設帳本時提升替代帳本、同群組帳號可跨帳本使用且餘額正確、拒絕跨群組帳號與跨帳本分類關聯、V1／V2 舊資料升級，以及重複執行回填的冪等性。
 
 ## CloudKit 驗收清單
 
