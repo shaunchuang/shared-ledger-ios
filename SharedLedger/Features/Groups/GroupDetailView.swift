@@ -52,7 +52,11 @@ struct GroupDetailView: View {
                         LedgerCard(padding: 0) {
                             VStack(spacing: 0) {
                                 ForEach(Array(members.enumerated()), id: \.element.objectID) { index, member in
-                                    MemberRow(member: member)
+                                    MemberRow(
+                                        member: member,
+                                        isCurrentUser: member == CurrentMemberIdentityRepository()
+                                            .currentMember(in: group)
+                                    )
                                     if index < members.count - 1 {
                                         Divider().padding(.leading, 72)
                                     }
@@ -243,6 +247,7 @@ private func ledgerGroupAmount(_ amount: Decimal) -> String {
 
 private struct MemberRow: View {
     @ObservedObject var member: Member
+    let isCurrentUser: Bool
 
     private var name: String {
         member.displayName ?? "未命名成員"
@@ -266,7 +271,7 @@ private struct MemberRow: View {
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
                     .background(LedgerTheme.amber.opacity(0.12), in: Capsule())
-            } else if member.isCurrentUser {
+            } else if isCurrentUser {
                 Text("你")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)

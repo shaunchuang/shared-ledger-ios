@@ -60,6 +60,7 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | `LedgerCategory` | 子 `LedgerCategory` | 分類以同一群組內的自我關聯形成共用分類樹 |
 | `BookCategoryAssignment` | 無 | 明確連接同群組的帳本與分類，保存帳本內的啟用狀態與顯示順序 |
 | `LedgerEntry` | `EntrySplit` | 交易代表收入、支出或轉帳；split 記錄群組成員應負擔金額 |
+| private store | `LocalMemberIdentity` | 保存目前 Apple Account 在各群組對應的 `Member` 識別；只存 `groupID`／`memberID`，不建立跨 store relationship，也不分享給其他參與者 |
 
 - 每個群組必須至少有一個啟用中的帳本，且啟用中的帳本必須有唯一的預設帳本。
 - 建立群組時同步建立名為「主要帳本」的預設帳本。
@@ -114,8 +115,9 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | V2 | 新增 `LedgerBook`，讓帳戶、分類與交易歸屬帳本，並加入帳戶期初餘額與對帳欄位 | 為每個既有群組建立或取得「主要帳本」，再回填所有缺少 `book` 的 V1 物件 |
 | V3 | 帳戶回歸群組 scope，新增帳戶直屬 `AccountAdjustment`，移除 `LedgerAccount.book`／`LedgerBook.accounts`；分類與交易維持帳本 scope | 輕量 migration 保留帳戶既有 `group`、交易、期初餘額與對帳資料；啟動後將舊版無帳本的 `balanceAdjustment` entry 冪等轉為 `AccountAdjustment`，分類與交易缺少 `book` 時回填主要帳本 |
 | V4 | 分類提升為群組 scope，新增 `BookCategoryAssignment`；交易維持帳本 scope | 先保留 optional legacy `LedgerCategory.book` 供過渡修復；每個既有分類建立對原帳本的 assignment，不依名稱自動合併。完成 private/shared stores 與混合版本同步驗證後，後續 model version 才移除 legacy 關聯 |
+| V5 | 移除會隨群組分享的 `Member.isCurrentUser`，新增只存在 private configuration 的 `LocalMemberIdentity` | 以 lightweight migration 移除舊欄位；共享群組首次開啟時由目前使用者確認待邀請的 member／viewer，或建立新的 member，再把 `groupID`／`memberID` 對應寫入 private store |
 
-V1→V2→V3→V4 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。
+V1→V2→V3→V4→V5 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。
 
 V4 資料修復對每個既有分類採以下規則：
 
@@ -143,6 +145,8 @@ V4 資料修復對每個既有分類採以下規則：
 持久層包含 private 與 shared stores。使用者建立的群組先進入 private store；接受 CloudKit 分享後的群組進入 shared store。兩者透過同一個 view context 提供畫面查詢。
 
 `LedgerAccount`、`LedgerBook`、群組分類、`BookCategoryAssignment` 及帳本交易必須與所屬群組位於相同 persistent store。聯絡人挑選只建立 App 內的待邀請成員；真正的 iCloud participant、讀寫權限與分享狀態由 CloudKit Sharing 管理。新增資料時必須依群組或帳本所屬 store 指派正確 persistent store，不可一律寫入 private store。
+
+目前使用者的 App 內成員身分由 `CurrentMemberIdentityRepository` 解析。private 群組以唯一已接受的 owner 為目前成員；shared 群組使用 private store 的 `LocalMemberIdentity`，將 shared `LedgerGroup.id` 對應到 shared `Member.id`。首次開啟尚無對應的共享群組時，畫面必須阻止繼續操作並要求使用者確認身分：只能認領待接受的 member／viewer，不能直接認領 owner／administrator；若沒有相符邀請，可用顯示名稱建立基本 member。認領後才由 repository 將該成員用於權限、稽核、付款人預設與「你」的標示，不以姓名猜測，也不把目前使用者旗標同步給群組。這個 App 內對應不取代 CloudKit participant 的資料存取權限。
 
 MVP 的 CloudKit share 邊界是整個 `LedgerGroup`：加入群組即能同步該群組的全部帳戶與帳本，暫不提供逐帳本成員名單或只分享單一帳本。畫面隱藏不構成資料權限；若未來需要帳本級隱私，必須另行設計 share 邊界與資料搬移流程。
 

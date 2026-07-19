@@ -69,13 +69,9 @@ struct CategoryRepository {
     }
 
     func canManageCategories(in group: LedgerGroup) -> Bool {
-        let members = group.members as? Set<Member> ?? []
-        let currentMembers = members.filter {
-            $0.isCurrentUser
-                && $0.invitationStatus == InvitationStatus.accepted.rawValue
-        }
-        guard currentMembers.count == 1,
-              let rawRole = currentMembers.first?.role,
+        guard let rawRole = CurrentMemberIdentityRepository(persistence: persistence)
+            .currentMember(in: group)?
+            .role,
               let role = MemberRole(rawValue: rawRole)
         else { return false }
         return role.canManageLedgerSettings
@@ -374,12 +370,14 @@ struct CategoryRepository {
         store: NSPersistentStore
     ) {
         let context = persistence.container.viewContext
-        let members = group.members as? Set<Member> ?? []
         let audit = AuditEvent(context: context)
         context.assign(audit, to: store)
         audit.id = UUID()
         audit.action = action
-        audit.actorDisplayName = members.first(where: \.isCurrentUser)?.displayName ?? "目前使用者"
+        audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
+            .currentMember(in: group)?
+            .displayName
+            ?? "目前使用者"
         audit.createdAt = Date()
         audit.summary = summary
         audit.group = group
