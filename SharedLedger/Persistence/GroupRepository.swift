@@ -37,7 +37,6 @@ struct GroupRepository {
             member.displayName = invitee.displayName
             member.role = MemberRole.member.rawValue
             member.invitationStatus = InvitationStatus.pending.rawValue
-            member.isCurrentUser = false
             member.group = group
             context.assign(member, to: persistence.privateStore)
         }
