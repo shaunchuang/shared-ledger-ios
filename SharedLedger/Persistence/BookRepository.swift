@@ -222,12 +222,14 @@ struct BookRepository {
                     book.group = group
                     defaultBook = book
 
-                    let members = group.members as? Set<Member> ?? []
                     let audit = AuditEvent(context: context)
                     context.assign(audit, to: store)
                     audit.id = UUID()
                     audit.action = "book.migrated"
-                    audit.actorDisplayName = members.first(where: \.isCurrentUser)?.displayName ?? "目前使用者"
+                    audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
+                        .currentMember(in: group)?
+                        .displayName
+                        ?? "目前使用者"
                     audit.createdAt = now
                     audit.summary = "為既有群組建立預設帳本「\(BookDraft.defaultName)」"
                     audit.group = group
@@ -319,12 +321,14 @@ struct BookRepository {
         store: NSPersistentStore
     ) {
         let context = persistence.container.viewContext
-        let members = group.members as? Set<Member> ?? []
         let audit = AuditEvent(context: context)
         context.assign(audit, to: store)
         audit.id = UUID()
         audit.action = action
-        audit.actorDisplayName = members.first(where: \.isCurrentUser)?.displayName ?? "目前使用者"
+        audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
+            .currentMember(in: group)?
+            .displayName
+            ?? "目前使用者"
         audit.createdAt = Date()
         audit.summary = summary
         audit.group = group
