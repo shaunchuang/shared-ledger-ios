@@ -73,6 +73,14 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 - CloudKit schema 的 non-optional 欄位必須有合理預設值，relationships 必須符合 CloudKit 模型限制。
 - 正式資料模型變更必須建立新 model version、輕量 migration 驗證與舊資料升級測試，不直接破壞既有 schema。
 
+### 分攤與付款模型方向
+
+- `EntrySplit.amount` 是每位成員最後實際負擔金額，也是淨額與結算引擎的計算來源；比例與指定金額的原始輸入需另行保存，不能只靠最後金額反推。
+- 後續 model version 應在 `LedgerEntry` 保存穩定的分攤模式 `equal`／`percentage`／`fixedAmount`，並為 split 保存對應的比例或輸入金額快照。
+- 多人付款不可繼續擴充單一 `LedgerEntry.payer`；應新增交易直屬的付款明細 entity，每筆包含付款成員與付款金額，並以 migration 將既有 `payer` 轉為一筆全額付款。
+- 分攤與付款驗證集中在 Domain service，由新增、編輯、匯入與同步修復共用；View 不自行決定尾差或合法性。
+- 尾差使用交易貨幣的 fraction digits 與穩定排序分配，確保相同輸入在不同裝置產生完全一致的 split，避免 CloudKit 同步衝突。
+
 ### Model version 與 migration 順序
 
 | Model version | 內容 | Migration 要求 |
