@@ -182,7 +182,9 @@ struct NewTransactionView: View {
             draft.splitMemberIDs = Set(members.compactMap(\.id))
         }
         if draft.payerMemberID == nil {
-            draft.payerMemberID = members.first(where: { $0.isCurrentUser })?.id ?? members.first?.id
+            draft.payerMemberID = book.group.flatMap {
+                CurrentMemberIdentityRepository().currentMember(in: $0)?.id
+            } ?? members.first?.id
         }
         if draft.sourceAccountID == nil {
             draft.sourceAccountID = accounts.first?.id
