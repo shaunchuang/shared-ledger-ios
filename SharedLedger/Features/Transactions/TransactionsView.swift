@@ -303,13 +303,24 @@ private struct EntryRow: View {
     private var amountText: String {
         let amount = (entry.amount as Decimal?) ?? 0
         let absoluteAmount = amount < 0 ? -amount : amount
-        let formatted = (absoluteAmount as NSDecimalNumber).stringValue
+        let currencyCode = LedgerCurrency.normalizedCode(entry.group?.currencyCode)
         switch kind {
-        case .income: return "+$\(formatted)"
-        case .expense: return "-$\(formatted)"
-        case .transfer: return "$\(formatted)"
+        case .income:
+            return LedgerCurrency.format(
+                absoluteAmount,
+                currencyCode: currencyCode,
+                showPositiveSign: true
+            )
+        case .expense:
+            return LedgerCurrency.format(-absoluteAmount, currencyCode: currencyCode)
+        case .transfer:
+            return LedgerCurrency.format(absoluteAmount, currencyCode: currencyCode)
         case .balanceAdjustment:
-            return amount >= 0 ? "+$\(formatted)" : "-$\(formatted)"
+            return LedgerCurrency.format(
+                amount,
+                currencyCode: currencyCode,
+                showPositiveSign: true
+            )
         }
     }
 
