@@ -238,7 +238,7 @@ private struct AccountRow: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 3) {
-                        Text(ledgerAmount(balance))
+                        Text(ledgerAmount(balance, currencyCode: account.group?.currencyCode))
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(balance < 0 ? LedgerTheme.coral : .primary)
                         Text("目前餘額")
@@ -360,7 +360,7 @@ private struct AccountDetailView: View {
             Button("以目前餘額完成對帳") { reconcile() }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("系統會保存目前餘額 \(ledgerAmount(currentBalance)) 與對帳時間。")
+            Text("系統會保存目前餘額 \(ledgerAmount(currentBalance, currencyCode: account.group?.currencyCode)) 與對帳時間。")
         }
         .confirmationDialog(
             "封存帳戶？",
@@ -387,7 +387,7 @@ private struct AccountDetailView: View {
                 Label("目前餘額", systemImage: "creditcard.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text(ledgerAmount(currentBalance))
+                Text(ledgerAmount(currentBalance, currencyCode: account.group?.currencyCode))
                     .font(.system(size: 38, weight: .bold, design: .rounded))
                     .foregroundStyle(currentBalance < 0 ? LedgerTheme.coral : LedgerTheme.primaryStrong)
                     .contentTransition(.numericText())
@@ -395,7 +395,7 @@ private struct AccountDetailView: View {
                     Text("期初餘額")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text(ledgerAmount((account.openingBalance as Decimal?) ?? 0))
+                    Text(ledgerAmount((account.openingBalance as Decimal?) ?? 0, currencyCode: account.group?.currencyCode))
                         .fontWeight(.semibold)
                 }
                 .font(.subheadline)
@@ -413,7 +413,7 @@ private struct AccountDetailView: View {
                         Text(date.formatted(date: .abbreviated, time: .shortened))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text(ledgerAmount(balance))
+                        Text(ledgerAmount(balance, currencyCode: account.group?.currencyCode))
                             .fontWeight(.semibold)
                     }
                     .font(.subheadline)
@@ -501,11 +501,16 @@ private struct BalanceAdjustmentView: View {
         Decimal(string: targetBalanceText.trimmingCharacters(in: .whitespaces))
     }
 
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(account.group?.currencyCode)
+    }
+
     var body: some View {
         Form {
             Section {
                 HStack {
-                    Text("$")
+                    Text(currencyCode)
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $targetBalanceText)
                         .keyboardType(.numbersAndPunctuation)
@@ -605,7 +610,7 @@ private struct AccountAdjustmentRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(signedLedgerAmount(amount))
+                Text(signedLedgerAmount(amount, currencyCode: adjustment.account?.group?.currencyCode))
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(amount < 0 ? LedgerTheme.coral : LedgerTheme.primary)
             }
@@ -663,7 +668,7 @@ private struct AccountEntryRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(signedLedgerAmount(effect))
+                Text(signedLedgerAmount(effect, currencyCode: account.group?.currencyCode))
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(effect < 0 ? LedgerTheme.coral : LedgerTheme.primary)
             }
@@ -671,16 +676,17 @@ private struct AccountEntryRow: View {
     }
 }
 
-private func ledgerAmount(_ amount: Decimal) -> String {
-    "$" + (amount as NSDecimalNumber).stringValue
+private func ledgerAmount(_ amount: Decimal, currencyCode: String?) -> String {
+    LedgerCurrency.format(
+        amount,
+        currencyCode: LedgerCurrency.normalizedCode(currencyCode)
+    )
 }
 
-private func signedLedgerAmount(_ amount: Decimal) -> String {
-    if amount > 0 {
-        return "+" + ledgerAmount(amount)
-    }
-    if amount < 0 {
-        return "-" + ledgerAmount(-amount)
-    }
-    return ledgerAmount(0)
+private func signedLedgerAmount(_ amount: Decimal, currencyCode: String?) -> String {
+    LedgerCurrency.format(
+        amount,
+        currencyCode: LedgerCurrency.normalizedCode(currencyCode),
+        showPositiveSign: true
+    )
 }
