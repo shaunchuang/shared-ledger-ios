@@ -14,6 +14,10 @@ struct AccountRepository {
         guard draft.canCreate, let openingBalance = draft.openingBalanceValue else {
             throw AccountError.invalidDraft
         }
+        let currencyCode = LedgerCurrency.normalizedCode(group.currencyCode)
+        guard LedgerCurrency.isValidAmount(openingBalance, currencyCode: currencyCode) else {
+            throw AccountError.invalidCurrencyAmount(currencyCode)
+        }
 
         let context = persistence.container.viewContext
         let store = persistence.store(for: group)
@@ -135,11 +139,15 @@ struct AccountRepository {
         note: String
     ) throws -> AccountAdjustment? {
         guard account.archivedAt == nil else { throw AccountError.archivedAccount }
+        guard let group = account.group else { throw AccountError.missingGroup }
+        let currencyCode = LedgerCurrency.normalizedCode(group.currencyCode)
+        guard LedgerCurrency.isValidAmount(targetBalance, currencyCode: currencyCode) else {
+            throw AccountError.invalidCurrencyAmount(currencyCode)
+        }
 
         let currentBalance = currentBalance(for: account)
         let difference = targetBalance - currentBalance
         guard difference != 0 else { return nil }
-        guard let group = account.group else { throw AccountError.missingGroup }
 
         let context = persistence.container.viewContext
         let now = Date()
@@ -159,7 +167,9 @@ struct AccountRepository {
         audit.action = "account.balance.adjusted"
         audit.actorDisplayName = actorName
         audit.createdAt = now
-        audit.summary = "將帳戶「\(account.name ?? "未命名帳戶")」餘額由 \(currentBalance) 調整為 \(targetBalance)"
+        let oldBalance = LedgerCurrency.format(currentBalance, currencyCode: currencyCode)
+        let newBalance = LedgerCurrency.format(targetBalance, currencyCode: currencyCode)
+        audit.summary = "將帳戶「\(account.name ?? "未命名帳戶")」餘額由 \(oldBalance) 調整為 \(newBalance)"
         audit.group = group
         context.assign(audit, to: store)
 
@@ -186,7 +196,11 @@ struct AccountRepository {
         audit.action = "account.reconciled"
         audit.actorDisplayName = currentActorName(in: group)
         audit.createdAt = date
-        audit.summary = "完成帳戶「\(account.name ?? "未命名帳戶")」對帳，餘額為 \(balance)"
+        let formattedBalance = LedgerCurrency.format(
+            balance,
+            currencyCode: LedgerCurrency.normalizedCode(group.currencyCode)
+        )
+        audit.summary = "完成帳戶「\(account.name ?? "未命名帳戶")」對帳，餘額為 \(formattedBalance)"
         audit.group = group
         context.assign(audit, to: persistence.store(for: account))
 
@@ -274,6 +288,7 @@ struct AccountRepository {
 
     enum AccountError: LocalizedError {
         case invalidDraft
+        case invalidCurrencyAmount(String)
         case missingGroup
         case archivedAccount
 
@@ -281,6 +296,9 @@ struct AccountRepository {
             switch self {
             case .invalidDraft:
                 return "請輸入帳戶名稱與有效的期初餘額。"
+            case .invalidCurrencyAmount(let code):
+                let digits = LedgerCurrency.fractionDigits(for: code)
+                return "\(code) 金額最多只能有 \(digits) 位小數。"
             case .missingGroup:
                 return "找不到這個帳戶所屬的群組。"
             case .archivedAccount:
