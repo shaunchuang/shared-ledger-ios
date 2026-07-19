@@ -40,6 +40,10 @@ struct EntryRepository {
         }
         guard let group = book.group else { throw EntryError.missingGroup }
         guard book.archivedAt == nil else { throw EntryError.archivedBook }
+        let currencyCode = LedgerCurrency.normalizedCode(group.currencyCode)
+        guard LedgerCurrency.isValidAmount(amount, currencyCode: currencyCode) else {
+            throw EntryError.invalidCurrencyAmount(currencyCode)
+        }
 
         let groupAccounts = accounts.filter { $0.group == group }
         let groupCategories = categories.filter { $0.group == group }
@@ -51,10 +55,14 @@ struct EntryRepository {
             CategoryRepository(persistence: persistence).isCategoryAvailable($0, in: book) ? $0 : nil
         }
         let payer = groupMembers.first { $0.id == draft.payerMemberID }
-        let participants = groupMembers.filter { member in
-            guard let id = member.id else { return false }
-            return draft.splitMemberIDs.contains(id)
-        }
+        let participants = groupMembers
+            .filter { member in
+                guard let id = member.id else { return false }
+                return draft.splitMemberIDs.contains(id)
+            }
+            .sorted {
+                ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "")
+            }
 
         if sourceAccount?.archivedAt != nil || destinationAccount?.archivedAt != nil {
             throw EntryError.archivedAccount
@@ -100,7 +108,12 @@ struct EntryRepository {
         entry.payer = payer
 
         if draft.kind != .transfer {
-            for (member, share) in zip(participants, splitAmounts(total: amount, count: participants.count)) {
+            let shares = splitAmounts(
+                total: amount,
+                count: participants.count,
+                currencyCode: currencyCode
+            )
+            for (member, share) in zip(participants, shares) {
                 let split = EntrySplit(context: context)
                 context.assign(split, to: store)
                 split.id = UUID()
@@ -119,24 +132,26 @@ struct EntryRepository {
         }
     }
 
-    private func splitAmounts(total: Decimal, count: Int) -> [Decimal] {
+    private func splitAmounts(
+        total: Decimal,
+        count: Int,
+        currencyCode: String
+    ) -> [Decimal] {
         guard count > 0 else { return [] }
-        let base = rounded(total / Decimal(count))
+        let base = LedgerCurrency.rounded(
+            total / Decimal(count),
+            currencyCode: currencyCode,
+            mode: .down
+        )
         var amounts = Array(repeating: base, count: count)
         let distributed = base * Decimal(count)
         amounts[amounts.count - 1] += (total - distributed)
         return amounts
     }
 
-    private func rounded(_ value: Decimal, scale: Int = 2) -> Decimal {
-        var result = Decimal()
-        var mutableValue = value
-        NSDecimalRound(&result, &mutableValue, scale, .plain)
-        return result
-    }
-
     enum EntryError: LocalizedError {
         case invalidDraft
+        case invalidCurrencyAmount(String)
         case missingGroup
         case archivedBook
         case archivedAccount
@@ -147,6 +162,9 @@ struct EntryRepository {
             switch self {
             case .invalidDraft:
                 return "請確認金額、帳戶與分攤成員都已填寫。"
+            case .invalidCurrencyAmount(let code):
+                let digits = LedgerCurrency.fractionDigits(for: code)
+                return "\(code) 金額最多只能有 \(digits) 位小數。"
             case .missingGroup:
                 return "找不到這個帳本所屬的群組。"
             case .archivedBook:

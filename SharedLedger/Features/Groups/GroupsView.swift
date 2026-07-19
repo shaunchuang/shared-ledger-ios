@@ -244,6 +244,8 @@ private struct GroupCard: View {
                         .foregroundStyle(.primary)
                     HStack(spacing: 8) {
                         Label("\(members.count) 位成員", systemImage: "person.2")
+                        Text("·")
+                        Text(LedgerCurrency.normalizedCode(group.currencyCode))
                         if pendingCount > 0 {
                             Text("·")
                             Text("\(pendingCount) 位待邀請")

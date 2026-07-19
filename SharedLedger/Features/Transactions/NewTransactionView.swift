@@ -36,6 +36,10 @@ struct NewTransactionView: View {
         return set.sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
     }
 
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(book.group?.currencyCode)
+    }
+
     private var availableCategories: [LedgerCategory] {
         let availableIDs = Set(
             CategoryRepository()
@@ -61,8 +65,15 @@ struct NewTransactionView: View {
                 HStack {
                     Text("金額")
                     Spacer()
+                    Text(currencyCode)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
                     TextField("0", text: $draft.amountText)
-                        .keyboardType(.decimalPad)
+                        .keyboardType(
+                            LedgerCurrency.fractionDigits(for: currencyCode) == 0
+                                ? .numberPad
+                                : .decimalPad
+                        )
                         .multilineTextAlignment(.trailing)
                 }
                 DatePicker("日期", selection: $draft.date, displayedComponents: .date)

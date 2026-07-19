@@ -18,6 +18,7 @@ struct GroupRepository {
         let group = LedgerGroup(context: context)
         group.id = UUID()
         group.name = draft.trimmedName
+        group.currencyCode = draft.normalizedCurrencyCode
         group.createdAt = now
         group.updatedAt = now
         context.assign(group, to: persistence.privateStore)

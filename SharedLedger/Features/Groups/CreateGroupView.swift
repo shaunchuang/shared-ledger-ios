@@ -36,8 +36,21 @@ struct CreateGroupView: View {
                     LedgerIconBadge(systemImage: "person.crop.circle.fill", tint: .blue)
                     TextField("你的顯示名稱", text: $draft.ownerDisplayName)
                 }
+                Picker(selection: $draft.currencyCode) {
+                    ForEach(LedgerCurrency.supportedCodes, id: \.self) { code in
+                        Text(LedgerCurrency.displayName(for: code))
+                            .tag(code)
+                    }
+                } label: {
+                    HStack(spacing: 13) {
+                        LedgerIconBadge(systemImage: "banknote.fill", tint: LedgerTheme.amber)
+                        Text("群組貨幣")
+                    }
+                }
             } header: {
                 Text("群組資料")
+            } footer: {
+                Text("帳戶、交易與分攤都使用這個貨幣；MVP 不進行跨幣別換算。")
             }
             .listRowBackground(LedgerTheme.surface)
 
