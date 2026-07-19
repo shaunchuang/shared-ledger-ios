@@ -10,6 +10,7 @@ struct GroupsView: View {
     @State private var isCreatingGroup = false
     @State private var sharePayload: CloudSharePayload?
     @State private var sharingError: String?
+    @State private var isPreparingShare = false
 
     var body: some View {
         ZStack {
@@ -52,7 +53,10 @@ struct GroupsView: View {
             }
         }
         .sheet(item: $sharePayload) { payload in
-            CloudSharingView(payload: payload)
+            CloudSharingView(payload: payload) { message in
+                sharePayload = nil
+                sharingError = message
+            }
         }
         .alert("無法建立邀請", isPresented: sharingErrorBinding) {
             Button("好", role: .cancel) {}
@@ -108,13 +112,21 @@ struct GroupsView: View {
         )
     }
 
+    @MainActor
     private func prepareShare(_ group: LedgerGroup) {
-        Task {
+        guard !isPreparingShare else { return }
+        isPreparingShare = true
+
+        Task { @MainActor in
+            defer { isPreparingShare = false }
+
             do {
-                let (share, container) = try await PersistenceController.shared.prepareShare(for: group)
+                let persistence = PersistenceController.shared
+                let (share, container) = try await persistence.prepareShare(for: group)
                 sharePayload = CloudSharePayload(
                     share: share,
                     container: container,
+                    store: persistence.store(for: group),
                     title: group.name ?? "Shared Ledger 群組"
                 )
             } catch {

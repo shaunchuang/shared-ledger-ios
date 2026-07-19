@@ -127,7 +127,8 @@ final class CloudSharingTests: XCTestCase {
                 fetchedObjectIDs = objectIDs
                 guard let existingGroupID else { return [:] }
                 return [existingGroupID: existingShare]
-            }
+            },
+            accountStatusProvider: { .available }
         )
         let group = try GroupRepository(persistence: persistence).createGroup(
             from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
@@ -146,6 +147,31 @@ final class CloudSharingTests: XCTestCase {
             cloudContainer.containerIdentifier,
             "iCloud.com.shaunchuang.SharedLedger"
         )
+    }
+
+    func testPrepareShareExplainsMissingICloudAccount() async throws {
+        let persistence = PersistenceController(
+            inMemory: true,
+            accountStatusProvider: { .noAccount }
+        )
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+
+        do {
+            _ = try await persistence.prepareShare(for: group)
+            XCTFail("Expected the missing iCloud account error.")
+        } catch let error as PersistenceController.SharingError {
+            guard case .noICloudAccount = error else {
+                return XCTFail("Expected noICloudAccount, got \(error)")
+            }
+            XCTAssertEqual(
+                error.localizedDescription,
+                "此裝置尚未登入 iCloud，請先在「設定」登入 Apple 帳號後再邀請成員。"
+            )
+        } catch {
+            XCTFail("Expected SharingError, got \(error)")
+        }
     }
 }
 

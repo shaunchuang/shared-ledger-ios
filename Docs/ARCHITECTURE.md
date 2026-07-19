@@ -33,6 +33,7 @@
 Debug／Release build settings 都必須保留：
 
 ```text
+INFOPLIST_KEY_CKSharingSupported = YES;
 INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 ```
 
@@ -154,7 +155,9 @@ V4 資料修復對每個既有分類採以下規則：
 
 MVP 的 CloudKit share 邊界是整個 `LedgerGroup`：加入群組即能同步該群組的全部帳戶與帳本，暫不提供逐帳本成員名單或只分享單一帳本。畫面隱藏不構成資料權限；若未來需要帳本級隱私，必須另行設計 share 邊界與資料搬移流程。
 
-App 必須呈現未登入 iCloud、暫時不可用、同步中、同步成功、離線及同步失敗等狀態。沒有 iCloud 帳號時仍允許本機記帳，但停用共享邀請並說明原因。
+App 必須呈現未登入 iCloud、暫時不可用、同步中、同步成功、離線及同步失敗等狀態。沒有 iCloud 帳號時仍允許本機記帳，但停用共享邀請並說明原因。邀請畫面維持 private、read-write CloudKit Sharing；已存在的群組 share 必須重用，不可為同一個 root group 建立第二份 share。分享控制器的儲存與同步錯誤必須顯示給使用者，不可只在 Release 中停用的 assertion 回報。
+
+Debug／Release 產生的 Info.plist 都必須包含 `CKSharingSupported = YES`，讓系統能把邀請連結交回 App。TestFlight 與 App Store 使用 CloudKit Production environment；每次 model version 新增 record type 或欄位後，必須先在 Development 驗證，再將 schema 部署到 Production。
 
 ## 聯絡人與隱私
 
