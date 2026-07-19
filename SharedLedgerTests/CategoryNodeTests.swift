@@ -1,3 +1,4 @@
+import CloudKit
 import CoreData
 import XCTest
 @testable import SharedLedger
@@ -54,6 +55,42 @@ final class GroupDraftTests: XCTestCase {
         draft.addInvitees([contact, contact])
 
         XCTAssertEqual(draft.invitees, [contact])
+    }
+}
+
+@MainActor
+final class CloudSharingTests: XCTestCase {
+    func testPrepareShareReusesExistingShare() async throws {
+        var existingGroupID: NSManagedObjectID?
+        var fetchedObjectIDs: [NSManagedObjectID] = []
+        let existingShare = CKShare(
+            rootRecord: CKRecord(recordType: "LedgerGroup")
+        )
+        let persistence = PersistenceController(
+            inMemory: true,
+            shareFetcher: { objectIDs in
+                fetchedObjectIDs = objectIDs
+                guard let existingGroupID else { return [:] }
+                return [existingGroupID: existingShare]
+            }
+        )
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        existingGroupID = group.objectID
+
+        let (share, cloudContainer) = try await persistence.prepareShare(for: group)
+
+        XCTAssertEqual(fetchedObjectIDs, [group.objectID])
+        XCTAssertEqual(share.recordID, existingShare.recordID)
+        XCTAssertEqual(
+            share[CKShare.SystemFieldKey.title] as? String,
+            "家庭"
+        )
+        XCTAssertEqual(
+            cloudContainer.containerIdentifier,
+            "iCloud.com.shaunchuang.SharedLedger"
+        )
     }
 }
 
