@@ -178,6 +178,7 @@ final class PersistenceController {
                     try await BookRepository(persistence: self).backfillMissingBookRelationships()
                     try await CategoryRepository(persistence: self).repairLegacyCategoryAssignments()
                     try await AccountRepository(persistence: self).migrateLegacyBalanceAdjustments()
+                    try await EntryRepository(persistence: self).migrateLegacyPayments()
                 } catch {
                     assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
                 }
