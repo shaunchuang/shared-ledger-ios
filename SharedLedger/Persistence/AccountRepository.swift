@@ -11,17 +11,26 @@ struct AccountRepository {
 
     @discardableResult
     func createAccount(from draft: AccountDraft, in group: LedgerGroup) throws -> LedgerAccount {
+        let book = try BookRepository(persistence: persistence).ensureDefaultBook(in: group)
+        return try createAccount(from: draft, in: book)
+    }
+
+    @discardableResult
+    func createAccount(from draft: AccountDraft, in book: LedgerBook) throws -> LedgerAccount {
         guard draft.canCreate else { throw AccountError.invalidDraft }
+        guard let group = book.group else { throw AccountError.missingGroup }
 
         let context = persistence.container.viewContext
+        let store = persistence.store(for: book)
 
         let account = LedgerAccount(context: context)
+        context.assign(account, to: store)
         account.id = UUID()
         account.name = draft.trimmedName
         account.accountType = draft.type.rawValue
         account.createdAt = Date()
         account.group = group
-        context.assign(account, to: persistence.privateStore)
+        account.book = book
 
         do {
             try context.save()
@@ -46,9 +55,15 @@ struct AccountRepository {
 
     enum AccountError: LocalizedError {
         case invalidDraft
+        case missingGroup
 
         var errorDescription: String? {
-            "請輸入帳號名稱。"
+            switch self {
+            case .invalidDraft:
+                return "請輸入帳號名稱。"
+            case .missingGroup:
+                return "找不到這個帳本所屬的群組。"
+            }
         }
     }
 }

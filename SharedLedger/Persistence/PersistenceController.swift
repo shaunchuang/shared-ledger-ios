@@ -7,6 +7,7 @@ final class PersistenceController {
     let container: NSPersistentCloudKitContainer
     private(set) var privateStore: NSPersistentStore!
     private(set) var sharedStore: NSPersistentStore!
+    private var remoteChangeObserver: NSObjectProtocol?
 
     init(inMemory: Bool = false) {
         container = NSPersistentCloudKitContainer(name: "SharedLedger")
@@ -35,7 +36,13 @@ final class PersistenceController {
             description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
         }
 
+        let storeLoadGroup = DispatchGroup()
+        for _ in container.persistentStoreDescriptions {
+            storeLoadGroup.enter()
+        }
+
         container.loadPersistentStores { description, error in
+            defer { storeLoadGroup.leave() }
             if let error {
                 assertionFailure("Persistent store failed to load: \(error.localizedDescription)")
                 return
@@ -60,6 +67,26 @@ final class PersistenceController {
 
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+
+        storeLoadGroup.notify(queue: .main) { [weak self] in
+            guard let self else { return }
+            self.scheduleBookBackfill()
+            if !inMemory {
+                self.remoteChangeObserver = NotificationCenter.default.addObserver(
+                    forName: .NSPersistentStoreRemoteChange,
+                    object: self.container.persistentStoreCoordinator,
+                    queue: .main
+                ) { [weak self] _ in
+                    self?.scheduleBookBackfill()
+                }
+            }
+        }
+    }
+
+    deinit {
+        if let remoteChangeObserver {
+            NotificationCenter.default.removeObserver(remoteChangeObserver)
+        }
     }
     
     @MainActor
@@ -80,6 +107,21 @@ final class PersistenceController {
         }
     }
 
+    func store(for object: NSManagedObject) -> NSPersistentStore {
+        object.objectID.persistentStore ?? privateStore
+    }
+
+    private func scheduleBookBackfill() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await BookRepository(persistence: self).backfillMissingBookRelationships()
+            } catch {
+                assertionFailure("Unable to backfill ledger books: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private static func storeDescription(
         url: URL,
         configuration: String,
@@ -87,6 +129,8 @@ final class PersistenceController {
     ) -> NSPersistentStoreDescription {
         let description = NSPersistentStoreDescription(url: url)
         description.configuration = configuration
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
         let options = NSPersistentCloudKitContainerOptions(
             containerIdentifier: "iCloud.com.shaunchuang.SharedLedger"
         )

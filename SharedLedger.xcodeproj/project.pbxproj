@@ -42,6 +42,8 @@
 		294014D28D1484A557694285 /* NewCategoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8513BBF65E390435C125337A /* NewCategoryView.swift */; };
 		4109D620E2FDD335ACF2B722 /* NewTransactionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E0587D01B5AC7D2297C150 /* NewTransactionView.swift */; };
 		EC5F148C8E521294E047D6DD /* EntryKind+Presentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E6F6CD76DCD3D541266091 /* EntryKind+Presentation.swift */; };
+		B00CDAF70000000000000002 /* BookDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00CDAF70000000000000001 /* BookDraft.swift */; };
+		B00CDAF70000000000000004 /* BookRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00CDAF70000000000000003 /* BookRepository.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +95,9 @@
 		8513BBF65E390435C125337A /* NewCategoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewCategoryView.swift; sourceTree = "<group>"; };
 		F7E0587D01B5AC7D2297C150 /* NewTransactionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewTransactionView.swift; sourceTree = "<group>"; };
 		D4E6F6CD76DCD3D541266091 /* EntryKind+Presentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryKind+Presentation.swift"; sourceTree = "<group>"; };
+		B00CDAF70000000000000001 /* BookDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDraft.swift; sourceTree = "<group>"; };
+		B00CDAF70000000000000003 /* BookRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookRepository.swift; sourceTree = "<group>"; };
+		B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV2.xcdatamodel; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -135,6 +140,7 @@
 			isa = PBXGroup;
 			children = (
 				783D94A8B191EA3C68BDCC8E /* AccountRepository.swift */,
+				B00CDAF70000000000000003 /* BookRepository.swift */,
 				3E6EBEA69AD91742929038A3 /* CategoryRepository.swift */,
 				B1788D61353B381E92004D40 /* EntryRepository.swift */,
 				23001F74E857C5902E92E07F /* GroupRepository.swift */,
@@ -156,6 +162,7 @@
 			children = (
 				87EB3F50D248BDD68128A10F /* AccountDraft.swift */,
 				71CF7E85A2BE64B7FDC4A29E /* AccountType.swift */,
+				B00CDAF70000000000000001 /* BookDraft.swift */,
 				2337C09D411E2A550FCB5198 /* CategoryNode.swift */,
 				0603C49AD318F5738BBEB20A /* CategoryDraft.swift */,
 				17603CF7F718E4B15A463C90 /* EntryKind.swift */,
@@ -365,6 +372,8 @@
 				6441D1FBF057593839DC7E0E /* AccountType.swift in Sources */,
 				C64BB8937B76F219A5869183 /* AccountDraft.swift in Sources */,
 				B3A5759CBAB1E792D2E0E31D /* AccountRepository.swift in Sources */,
+				B00CDAF70000000000000002 /* BookDraft.swift in Sources */,
+				B00CDAF70000000000000004 /* BookRepository.swift in Sources */,
 				608CAF6A129AD49F9CA7C13A /* AccountsView.swift in Sources */,
 				7B077DA6C35F4211288E510E /* NewAccountView.swift in Sources */,
 				63831BBF5E64C0539073D693 /* CategoryNode.swift in Sources */,
@@ -662,8 +671,9 @@
 			isa = XCVersionGroup;
 			children = (
 				1986EBF2EE44CCC904C2A47E /* SharedLedger.xcdatamodel */,
+				B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */,
 			);
-			currentVersion = 1986EBF2EE44CCC904C2A47E /* SharedLedger.xcdatamodel */;
+			currentVersion = B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */;
 			path = SharedLedger.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;
