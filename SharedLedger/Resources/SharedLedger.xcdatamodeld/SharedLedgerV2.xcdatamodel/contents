@@ -19,7 +19,10 @@
         <attribute name="archivedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lastReconciledAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastReconciledBalance" optional="YES" attributeType="Decimal"/>
         <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="openingBalance" optional="NO" attributeType="Decimal" defaultValueString="0"/>
         <relationship name="book" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerBook" inverseName="accounts" inverseEntity="LedgerBook"/>
         <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="accounts" inverseEntity="LedgerGroup"/>
         <relationship name="sourceEntries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="sourceAccount" inverseEntity="LedgerEntry"/>

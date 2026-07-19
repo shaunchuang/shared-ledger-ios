@@ -26,6 +26,20 @@ struct NewAccountView: View {
             } header: {
                 Text("帳號類型")
             }
+
+            Section {
+                HStack {
+                    Text("$")
+                        .foregroundStyle(.secondary)
+                    TextField("0", text: $draft.openingBalanceText)
+                        .keyboardType(.numbersAndPunctuation)
+                        .multilineTextAlignment(.trailing)
+                }
+            } header: {
+                Text("期初餘額")
+            } footer: {
+                Text("建立後若帳面與實際餘額不同，請使用餘額調整保留紀錄。")
+            }
         }
         .navigationTitle("新增帳號")
         .navigationBarTitleDisplayMode(.inline)

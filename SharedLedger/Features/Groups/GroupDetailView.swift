@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct GroupDetailView: View {
@@ -7,6 +8,15 @@ struct GroupDetailView: View {
     private var members: [Member] {
         let set = group.members as? Set<Member> ?? []
         return set.sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
+    }
+
+    private var accounts: [LedgerAccount] {
+        let set = group.accounts as? Set<LedgerAccount> ?? []
+        return Array(set)
+    }
+
+    private var totalAccountBalance: Decimal {
+        AccountRepository().totalBalance(for: accounts)
     }
 
     var body: some View {
@@ -82,13 +92,17 @@ struct GroupDetailView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(group.name ?? "未命名群組")
                         .font(.title2.weight(.bold))
-                    Text("\(members.count) 位成員 · 共同餘額 $0")
+                    Text("\(members.count) 位成員 · 共同餘額 \(ledgerGroupAmount(totalAccountBalance))")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
         }
     }
+}
+
+private func ledgerGroupAmount(_ amount: Decimal) -> String {
+    "$" + (amount as NSDecimalNumber).stringValue
 }
 
 private struct MemberRow: View {
@@ -126,4 +140,3 @@ private struct MemberRow: View {
         .padding(.vertical, 12)
     }
 }
-
