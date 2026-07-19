@@ -1,4 +1,5 @@
 import CloudKit
+import CoreData
 import SwiftUI
 import UIKit
 
@@ -6,14 +7,20 @@ struct CloudSharePayload: Identifiable {
     let id = UUID()
     let share: CKShare
     let container: CKContainer
+    let store: NSPersistentStore
     let title: String
 }
 
 struct CloudSharingView: UIViewControllerRepresentable {
     let payload: CloudSharePayload
+    let onError: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(title: payload.title)
+        Coordinator(
+            title: payload.title,
+            store: payload.store,
+            onError: onError
+        )
     }
 
     func makeUIViewController(context: Context) -> UICloudSharingController {
@@ -33,10 +40,18 @@ struct CloudSharingView: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, UICloudSharingControllerDelegate {
         private let title: String
+        private let store: NSPersistentStore
+        private let onError: (String) -> Void
         private let persistence = PersistenceController.shared
 
-        init(title: String) {
+        init(
+            title: String,
+            store: NSPersistentStore,
+            onError: @escaping (String) -> Void
+        ) {
             self.title = title
+            self.store = store
+            self.onError = onError
         }
 
         func itemTitle(for csc: UICloudSharingController) -> String? {
@@ -47,18 +62,22 @@ struct CloudSharingView: UIViewControllerRepresentable {
             _ csc: UICloudSharingController,
             failedToSaveShareWithError error: Error
         ) {
-            assertionFailure("Unable to save CloudKit share: \(error.localizedDescription)")
+            report(
+                title: "無法儲存共享邀請",
+                error: error
+            )
         }
 
         func cloudSharingControllerDidSaveShare(_ csc: UICloudSharingController) {
             guard let share = csc.share else { return }
             persistence.container.persistUpdatedShare(
                 share,
-                in: persistence.privateStore
-            ) { _, error in
+                in: store
+            ) { [weak self] _, error in
                 if let error {
-                    assertionFailure(
-                        "Unable to persist CloudKit share: \(error.localizedDescription)"
+                    self?.report(
+                        title: "無法同步共享邀請",
+                        error: error
                     )
                 }
             }
@@ -68,13 +87,21 @@ struct CloudSharingView: UIViewControllerRepresentable {
             guard let share = csc.share else { return }
             persistence.container.purgeObjectsAndRecordsInZone(
                 with: share.recordID.zoneID,
-                in: persistence.privateStore
-            ) { _, error in
+                in: store
+            ) { [weak self] _, error in
                 if let error {
-                    assertionFailure(
-                        "Unable to stop CloudKit sharing: \(error.localizedDescription)"
+                    self?.report(
+                        title: "無法停止共享",
+                        error: error
                     )
                 }
+            }
+        }
+
+        private func report(title: String, error: Error) {
+            let message = "\(title)：\(error.localizedDescription)"
+            DispatchQueue.main.async { [onError] in
+                onError(message)
             }
         }
     }
