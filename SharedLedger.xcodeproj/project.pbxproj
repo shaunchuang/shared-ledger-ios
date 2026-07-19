@@ -102,6 +102,7 @@
 		B00CDAF70000000000000006 /* BooksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BooksView.swift; sourceTree = "<group>"; };
 		B00CDAF70000000000000008 /* SharedLedgerV3.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV3.xcdatamodel; sourceTree = "<group>"; };
 		B00CDAF70000000000000009 /* SharedLedgerV4.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV4.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF7000000000000000A /* SharedLedgerV5.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV5.xcdatamodel; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -682,8 +683,9 @@
 				B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */,
 				B00CDAF70000000000000008 /* SharedLedgerV3.xcdatamodel */,
 				B00CDAF70000000000000009 /* SharedLedgerV4.xcdatamodel */,
+				B00CDAF7000000000000000A /* SharedLedgerV5.xcdatamodel */,
 			);
-			currentVersion = B00CDAF70000000000000009 /* SharedLedgerV4.xcdatamodel */;
+			currentVersion = B00CDAF7000000000000000A /* SharedLedgerV5.xcdatamodel */;
 			path = SharedLedger.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;
