@@ -44,6 +44,16 @@ struct GroupDetailView: View {
         LedgerCurrency.normalizedCode(group.currencyCode)
     }
 
+    private var canInviteMembers: Bool {
+        let persistence = PersistenceController.shared
+        guard persistence.store(for: group) === persistence.privateStore,
+              let currentMember = CurrentMemberIdentityRepository(persistence: persistence)
+                .currentMember(in: group)
+        else { return false }
+
+        return currentMember.role == MemberRole.owner.rawValue
+    }
+
     var body: some View {
         ZStack {
             LedgerBackground()
@@ -127,13 +137,15 @@ struct GroupDetailView: View {
                         }
                     }
 
-                    Button {
-                        onInvite(group)
-                    } label: {
-                        Label("邀請更多成員", systemImage: "person.badge.plus")
-                            .frame(maxWidth: .infinity)
+                    if canInviteMembers {
+                        Button {
+                            onInvite(group)
+                        } label: {
+                            Label("邀請更多成員", systemImage: "person.badge.plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(LedgerPrimaryButtonStyle())
                     }
-                    .buttonStyle(LedgerPrimaryButtonStyle())
                 }
                 .padding(.horizontal, LedgerTheme.pagePadding)
                 .padding(.bottom, 28)
