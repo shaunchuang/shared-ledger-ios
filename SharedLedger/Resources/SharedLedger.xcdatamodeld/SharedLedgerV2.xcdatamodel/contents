@@ -33,7 +33,7 @@
         <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="sortOrder" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <relationship name="children" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerCategory" inverseName="parent" inverseEntity="LedgerCategory"/>
-        <relationship name="entries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="category" inverseEntity="LedgerCategory"/>
+        <relationship name="entries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="category" inverseEntity="LedgerEntry"/>
         <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="categories" inverseEntity="LedgerGroup"/>
         <relationship name="parent" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerCategory" inverseName="children" inverseEntity="LedgerCategory"/>
     </entity>
