@@ -70,13 +70,13 @@ struct RootTabView: View {
     private func presentIdentityResolutionIfNeeded() {
         guard identityRequest == nil else { return }
         let repository = CurrentMemberIdentityRepository()
-        guard let group = groups.first(where: repository.needsResolution) else { return }
+        guard let group = groups.first(where: { repository.needsResolution(for: $0) }) else { return }
         identityRequest = MemberIdentityRequest(id: group.objectID, group: group)
     }
 }
 
 #Preview {
     let persistence = PersistenceController(inMemory: true)
-    return RootTabView()
+    RootTabView()
         .environment(\.managedObjectContext, persistence.container.viewContext)
 }
