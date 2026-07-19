@@ -43,6 +43,16 @@ struct GroupRepository {
             context.assign(member, to: persistence.privateStore)
         }
 
+        let defaultBook = LedgerBook(context: context)
+        context.assign(defaultBook, to: persistence.privateStore)
+        defaultBook.id = UUID()
+        defaultBook.name = BookDraft.defaultName
+        defaultBook.createdAt = now
+        defaultBook.updatedAt = now
+        defaultBook.isDefault = true
+        defaultBook.sortOrder = 0
+        defaultBook.group = group
+
         let audit = AuditEvent(context: context)
         audit.id = UUID()
         audit.action = "group.created"
