@@ -1,6 +1,73 @@
 import CoreData
 import SwiftUI
 
+struct CategoriesRootView: View {
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \LedgerGroup.updatedAt, ascending: false)],
+        animation: .default
+    ) private var groups: FetchedResults<LedgerGroup>
+
+    @State private var selectedGroupID: NSManagedObjectID?
+
+    private var selectedGroup: LedgerGroup? {
+        if let selectedGroupID,
+           let match = groups.first(where: { $0.objectID == selectedGroupID }) {
+            return match
+        }
+        return groups.first
+    }
+
+    var body: some View {
+        Group {
+            if let group = selectedGroup {
+                CategoriesView(group: group)
+                    .id(group.objectID)
+                    .toolbar {
+                        if groups.count > 1 {
+                            ToolbarItem(placement: .topBarLeading) {
+                                groupSelector(selectedGroup: group)
+                            }
+                        }
+                    }
+            } else {
+                ZStack {
+                    LedgerBackground()
+                    ScrollView {
+                        LedgerEmptyState(
+                            systemImage: "square.grid.2x2",
+                            title: "先建立一個群組",
+                            message: "請先到「設定」的「群組管理」建立群組，再回來管理共用分類。"
+                        )
+                        .padding(.horizontal, LedgerTheme.pagePadding)
+                        .padding(.top, 24)
+                    }
+                }
+                .navigationTitle("分類")
+            }
+        }
+    }
+
+    private func groupSelector(selectedGroup: LedgerGroup) -> some View {
+        Menu {
+            ForEach(Array(groups), id: \.objectID) { candidate in
+                Button {
+                    selectedGroupID = candidate.objectID
+                } label: {
+                    if candidate == selectedGroup {
+                        Label(candidate.name ?? "未命名群組", systemImage: "checkmark")
+                    } else {
+                        Text(candidate.name ?? "未命名群組")
+                    }
+                }
+            }
+        } label: {
+            Label(selectedGroup.name ?? "未命名群組", systemImage: "person.3.fill")
+                .labelStyle(.titleAndIcon)
+        }
+        .accessibilityLabel("切換分類群組")
+    }
+}
+
 struct CategoriesView: View {
     @ObservedObject var group: LedgerGroup
 
@@ -66,7 +133,7 @@ struct CategoriesView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("群組分類")
+        .navigationTitle("分類")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if canManage {

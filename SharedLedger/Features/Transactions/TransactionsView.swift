@@ -31,7 +31,7 @@ struct TransactionsView: View {
                     LedgerEmptyState(
                         systemImage: "person.3",
                         title: "先建立一個群組",
-                        message: "交易記錄屬於群組，請先在「群組」分頁建立群組，再回來新增交易。"
+                        message: "交易記錄屬於群組，請先到「設定」的「群組管理」建立群組，再回來新增交易。"
                     )
                     .padding(.horizontal, LedgerTheme.pagePadding)
                     .padding(.top, 24)
