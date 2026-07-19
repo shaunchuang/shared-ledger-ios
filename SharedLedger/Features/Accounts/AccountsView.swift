@@ -2,7 +2,7 @@ import CoreData
 import SwiftUI
 
 struct AccountsView: View {
-    @ObservedObject var group: LedgerGroup
+    @ObservedObject var book: LedgerBook
 
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
     private let accountRepository = AccountRepository()
@@ -13,11 +13,11 @@ struct AccountsView: View {
     @State private var accountBalances: [NSManagedObjectID: Decimal] = [:]
     @State private var hasLoadedBalances = false
 
-    init(group: LedgerGroup) {
-        self.group = group
+    init(book: LedgerBook) {
+        self.book = book
         _accounts = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerAccount.createdAt, ascending: true)],
-            predicate: NSPredicate(format: "group == %@", group),
+            predicate: NSPredicate(format: "book == %@", book),
             animation: .default
         )
     }
@@ -94,7 +94,7 @@ struct AccountsView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("帳號")
+        .navigationTitle(book.name ?? "帳號")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button {
@@ -107,7 +107,7 @@ struct AccountsView: View {
         }
         .sheet(isPresented: $isPresentingNewAccount) {
             NavigationStack {
-                NewAccountView(group: group) {
+                NewAccountView(book: book) {
                     isPresentingNewAccount = false
                 }
             }
@@ -147,7 +147,7 @@ struct AccountsView: View {
         .onReceive(
             NotificationCenter.default.publisher(
                 for: .NSManagedObjectContextObjectsDidChange,
-                object: group.managedObjectContext
+                object: book.managedObjectContext
             )
         ) { notification in
             guard shouldRefreshBalances(for: notification) else { return }

@@ -2,7 +2,7 @@ import CoreData
 import SwiftUI
 
 struct CategoriesView: View {
-    @ObservedObject var group: LedgerGroup
+    @ObservedObject var book: LedgerBook
 
     @FetchRequest private var rootCategories: FetchedResults<LedgerCategory>
 
@@ -10,11 +10,11 @@ struct CategoriesView: View {
     @State private var newCategoryParent: LedgerCategory?
     @State private var errorMessage: String?
 
-    init(group: LedgerGroup) {
-        self.group = group
+    init(book: LedgerBook) {
+        self.book = book
         _rootCategories = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerCategory.sortOrder, ascending: true)],
-            predicate: NSPredicate(format: "group == %@ AND archivedAt == nil AND parent == nil", group),
+            predicate: NSPredicate(format: "book == %@ AND archivedAt == nil AND parent == nil", book),
             animation: .default
         )
     }
@@ -54,7 +54,7 @@ struct CategoriesView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("分類")
+        .navigationTitle(book.name ?? "分類")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button {
@@ -68,7 +68,7 @@ struct CategoriesView: View {
         }
         .sheet(isPresented: $isPresentingNewCategory) {
             NavigationStack {
-                NewCategoryView(group: group, parent: newCategoryParent) {
+                NewCategoryView(book: book, parent: newCategoryParent) {
                     isPresentingNewCategory = false
                 }
             }

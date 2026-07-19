@@ -282,6 +282,48 @@ final class BookRepositoryTests: XCTestCase {
         XCTAssertTrue(replacement.isDefault)
     }
 
+    func testRenameDefaultSelectionAndReorderingArePersistedAndAudited() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let repository = BookRepository(persistence: persistence)
+        let home = try XCTUnwrap(repository.defaultBook(in: group))
+        let travel = try repository.createBook(from: BookDraft(name: "旅行"), in: group)
+        let renovation = try repository.createBook(from: BookDraft(name: "裝潢"), in: group)
+
+        try repository.renameBook(travel, using: BookDraft(name: "日本旅行"))
+        try repository.setDefaultBook(travel)
+        try repository.reorderBooks([renovation, home, travel], in: group)
+
+        XCTAssertEqual(travel.name, "日本旅行")
+        XCTAssertTrue(travel.isDefault)
+        XCTAssertFalse(home.isDefault)
+        XCTAssertEqual(repository.books(in: group), [renovation, home, travel])
+
+        let auditActions = (group.auditEvents as? Set<AuditEvent> ?? []).compactMap(\.action)
+        XCTAssertTrue(auditActions.contains("book.renamed"))
+        XCTAssertTrue(auditActions.contains("book.default.changed"))
+        XCTAssertTrue(auditActions.contains("book.reordered"))
+    }
+
+    func testOnlyActiveBookCannotBeArchived() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let repository = BookRepository(persistence: persistence)
+        let onlyBook = try XCTUnwrap(repository.defaultBook(in: group))
+
+        XCTAssertThrowsError(try repository.archiveBook(onlyBook)) { error in
+            guard case BookRepository.BookError.cannotArchiveOnlyBook = error else {
+                return XCTFail("Expected cannotArchiveOnlyBook, got \(error)")
+            }
+        }
+        XCTAssertNil(onlyBook.archivedAt)
+        XCTAssertTrue(onlyBook.isDefault)
+    }
+
     func testBackfillAssignsLegacyObjectsToDefaultBook() async throws {
         let persistence = PersistenceController(inMemory: true)
         let group = try GroupRepository(persistence: persistence).createGroup(
