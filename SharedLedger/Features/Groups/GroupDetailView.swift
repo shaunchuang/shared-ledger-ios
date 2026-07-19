@@ -32,8 +32,7 @@ struct GroupDetailView: View {
     }
 
     private var accounts: [LedgerAccount] {
-        guard let selectedBook else { return [] }
-        let set = selectedBook.accounts as? Set<LedgerAccount> ?? []
+        let set = group.accounts as? Set<LedgerAccount> ?? []
         return Array(set)
     }
 
@@ -63,22 +62,27 @@ struct GroupDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
+                        LedgerSectionHeader(title: "群組帳戶")
+                        LedgerCard(padding: 0) {
+                            NavigationLink {
+                                AccountsView(group: group)
+                            } label: {
+                                LedgerNavRow(
+                                    title: "帳戶",
+                                    detail: "所有帳本共用的現金、銀行與信用卡",
+                                    icon: "creditcard.fill",
+                                    tint: .blue
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
                         LedgerSectionHeader(title: "目前帳本設定")
                         LedgerCard(padding: 0) {
                             VStack(spacing: 0) {
                                 if let selectedBook {
-                                    NavigationLink {
-                                        AccountsView(book: selectedBook)
-                                    } label: {
-                                        LedgerNavRow(
-                                            title: "帳號",
-                                            detail: "\(selectedBook.name ?? "目前帳本")的現金、銀行帳號",
-                                            icon: "creditcard.fill",
-                                            tint: .blue
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                    Divider().padding(.leading, 68)
                                     NavigationLink {
                                         CategoriesView(book: selectedBook)
                                     } label: {
@@ -196,7 +200,7 @@ struct GroupDetailView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(group.name ?? "未命名群組")
                         .font(.title2.weight(.bold))
-                    Text("\(members.count) 位成員 · 帳本餘額 \(ledgerGroupAmount(totalAccountBalance))")
+                    Text("\(members.count) 位成員 · 共同餘額 \(ledgerGroupAmount(totalAccountBalance))")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

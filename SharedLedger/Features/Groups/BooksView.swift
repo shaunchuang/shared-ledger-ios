@@ -46,7 +46,7 @@ struct BooksView: View {
                 } header: {
                     Text("使用中的帳本")
                 } footer: {
-                    Text("目前帳本會決定帳號、分類與交易顯示的資料範圍；預設帳本則會在沒有已儲存選擇時自動開啟。")
+                    Text("目前帳本會決定分類與交易顯示的資料範圍；群組帳戶可供所有帳本共用。")
                 }
 
                 if !archivedBooks.isEmpty {
@@ -60,7 +60,7 @@ struct BooksView: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(book.name ?? "未命名帳本")
                                             .font(.subheadline.weight(.semibold))
-                                        Text("查看保留的帳號、分類與交易歷史")
+                                        Text("查看保留的分類與交易歷史")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -119,7 +119,7 @@ struct BooksView: View {
             }
             Button("取消", role: .cancel) {}
         } message: { book in
-            Text("帳本內的帳號、分類與交易都會保留，但不能再新增交易。")
+            Text("帳本內的分類與交易都會保留，但不能再新增交易；群組帳戶不受影響。")
         }
         .alert("無法更新帳本", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
@@ -274,10 +274,6 @@ private struct ArchivedBookHistoryView: View {
         )
     }
 
-    private var accountCount: Int {
-        (book.accounts as? Set<LedgerAccount>)?.count ?? 0
-    }
-
     private var categoryCount: Int {
         (book.categories as? Set<LedgerCategory>)?.count ?? 0
     }
@@ -288,7 +284,6 @@ private struct ArchivedBookHistoryView: View {
             List {
                 Section("摘要") {
                     LabeledContent("狀態", value: "已封存")
-                    LabeledContent("帳號", value: "\(accountCount)")
                     LabeledContent("分類", value: "\(categoryCount)")
                     LabeledContent("交易", value: "\(entries.count)")
                 }

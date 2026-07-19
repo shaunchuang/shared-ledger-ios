@@ -18,9 +18,6 @@ struct EntryRepository {
         members: [Member]
     ) throws -> LedgerEntry {
         let book = try BookRepository(persistence: persistence).ensureDefaultBook(in: group)
-        for account in accounts where account.book == nil && account.group == group {
-            account.book = book
-        }
         for category in categories where category.book == nil && category.group == group {
             category.book = book
         }
@@ -45,12 +42,13 @@ struct EntryRepository {
             throw EntryError.invalidDraft
         }
         guard let group = book.group else { throw EntryError.missingGroup }
+        guard book.archivedAt == nil else { throw EntryError.archivedBook }
 
-        let bookAccounts = accounts.filter { $0.book == book && $0.archivedAt == nil }
-        let bookCategories = categories.filter { $0.book == book && $0.archivedAt == nil }
+        let groupAccounts = accounts.filter { $0.group == group }
+        let bookCategories = categories.filter { $0.book == book }
         let groupMembers = members.filter { $0.group == group }
-        let sourceAccount = bookAccounts.first { $0.id == draft.sourceAccountID }
-        let destinationAccount = bookAccounts.first { $0.id == draft.destinationAccountID }
+        let sourceAccount = groupAccounts.first { $0.id == draft.sourceAccountID }
+        let destinationAccount = groupAccounts.first { $0.id == draft.destinationAccountID }
         let category = bookCategories.first { $0.id == draft.categoryID }
         let payer = groupMembers.first { $0.id == draft.payerMemberID }
         let participants = groupMembers.filter { member in
@@ -58,17 +56,24 @@ struct EntryRepository {
             return draft.splitMemberIDs.contains(id)
         }
 
+        if sourceAccount?.archivedAt != nil || destinationAccount?.archivedAt != nil {
+            throw EntryError.archivedAccount
+        }
+        if category?.archivedAt != nil {
+            throw EntryError.archivedCategory
+        }
+
         switch draft.kind {
         case .transfer:
             guard sourceAccount != nil, destinationAccount != nil else {
-                throw EntryError.crossBookReference
+                throw EntryError.crossScopeReference
             }
         case .income, .expense:
             guard sourceAccount != nil, payer != nil, !participants.isEmpty else {
-                throw EntryError.crossBookReference
+                throw EntryError.crossScopeReference
             }
             if draft.categoryID != nil, category == nil {
-                throw EntryError.crossBookReference
+                throw EntryError.crossScopeReference
             }
         case .balanceAdjustment:
             throw EntryError.invalidDraft
@@ -133,7 +138,10 @@ struct EntryRepository {
     enum EntryError: LocalizedError {
         case invalidDraft
         case missingGroup
-        case crossBookReference
+        case archivedBook
+        case archivedAccount
+        case archivedCategory
+        case crossScopeReference
 
         var errorDescription: String? {
             switch self {
@@ -141,8 +149,14 @@ struct EntryRepository {
                 return "請確認金額、帳戶與分攤成員都已填寫。"
             case .missingGroup:
                 return "找不到這個帳本所屬的群組。"
-            case .crossBookReference:
-                return "交易使用的帳號與分類必須屬於同一個帳本。"
+            case .archivedBook:
+                return "已封存的帳本不能新增交易。"
+            case .archivedAccount:
+                return "已封存的帳戶不能用於新交易。"
+            case .archivedCategory:
+                return "已封存的分類不能用於新交易。"
+            case .crossScopeReference:
+                return "交易帳戶必須屬於目前群組，分類必須屬於目前帳本。"
             }
         }
     }

@@ -37,7 +37,7 @@ GitHub repository：`https://github.com/shaunchuang/shared-ledger-ios`
 
 - 不自行擴大 `MVP.md` 定義的產品範圍；涉及優先順序或資料遷移時先取得使用者確認。
 - 不用靜態畫面、虛構資料、未接線入口或只有資料欄位宣稱功能完成。
-- 群組、帳本、帳號、分類與交易的所有權及 migration 順序以 `ARCHITECTURE.md` 為準；修改帳務功能時必須先確認目前帳本 scope，不可建立跨帳本關聯。
+- 群組、帳本、帳戶、分類、交易與餘額調整的所有權及 migration 順序以 `ARCHITECTURE.md` 為準；修改帳務功能時必須先確認群組帳戶與目前帳本的 scope，不可建立跨群組帳戶、跨帳本分類或無帳本的一般交易。
 - 遵守 `ARCHITECTURE.md` 的金額精度、Core Data、Concurrency、CloudKit、聯絡人與隱私規則。
 - 新畫面優先使用既有 Design System，並支援深色模式、Dynamic Type、VoiceOver 與足夠對比。
 - App Store 公開文案只能描述目前 build 已完成且驗證過的功能。

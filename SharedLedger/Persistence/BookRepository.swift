@@ -222,11 +222,6 @@ struct BookRepository {
                     audit.group = group
                 }
 
-                let accounts = group.accounts as? Set<LedgerAccount> ?? []
-                for account in accounts where account.book == nil {
-                    account.book = defaultBook
-                }
-
                 let categories = group.categories as? Set<LedgerCategory> ?? []
                 for category in categories where category.book == nil {
                     category.book = defaultBook

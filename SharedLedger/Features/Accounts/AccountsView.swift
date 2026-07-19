@@ -2,7 +2,7 @@ import CoreData
 import SwiftUI
 
 struct AccountsView: View {
-    @ObservedObject var book: LedgerBook
+    @ObservedObject var group: LedgerGroup
 
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
     private let accountRepository = AccountRepository()
@@ -13,11 +13,11 @@ struct AccountsView: View {
     @State private var accountBalances: [NSManagedObjectID: Decimal] = [:]
     @State private var hasLoadedBalances = false
 
-    init(book: LedgerBook) {
-        self.book = book
+    init(group: LedgerGroup) {
+        self.group = group
         _accounts = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerAccount.createdAt, ascending: true)],
-            predicate: NSPredicate(format: "book == %@", book),
+            predicate: NSPredicate(format: "group == %@", group),
             animation: .default
         )
     }
@@ -46,9 +46,9 @@ struct AccountsView: View {
                     if accounts.isEmpty {
                         LedgerEmptyState(
                             systemImage: "creditcard",
-                            title: "還沒有帳號",
-                            message: "新增現金或銀行帳號，設定期初餘額後開始記錄收支。",
-                            actionTitle: "新增帳號"
+                            title: "還沒有帳戶",
+                            message: "新增現金或銀行帳戶，設定期初餘額後開始記錄收支。",
+                            actionTitle: "新增帳戶"
                         ) {
                             isPresentingNewAccount = true
                         }
@@ -71,7 +71,7 @@ struct AccountsView: View {
 
                     if !archivedAccounts.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            LedgerSectionHeader(title: "已封存帳號")
+                            LedgerSectionHeader(title: "已封存帳戶")
                             LedgerCard(padding: 0) {
                                 VStack(spacing: 0) {
                                     ForEach(Array(archivedAccounts.enumerated()), id: \.element.objectID) { index, account in
@@ -94,7 +94,7 @@ struct AccountsView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle(book.name ?? "帳號")
+        .navigationTitle("帳戶")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button {
@@ -103,11 +103,11 @@ struct AccountsView: View {
                 Image(systemName: "plus")
                     .fontWeight(.bold)
             }
-            .accessibilityLabel("新增帳號")
+            .accessibilityLabel("新增帳戶")
         }
         .sheet(isPresented: $isPresentingNewAccount) {
             NavigationStack {
-                NewAccountView(book: book) {
+                NewAccountView(group: group) {
                     isPresentingNewAccount = false
                 }
             }
@@ -115,23 +115,23 @@ struct AccountsView: View {
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
-            "封存帳號？",
+            "封存帳戶？",
             isPresented: archiveConfirmationBinding,
             titleVisibility: .visible,
             presenting: accountPendingArchive
         ) { account in
-            Button("封存「\(account.name ?? "未命名帳號")」", role: .destructive) {
+            Button("封存「\(account.name ?? "未命名帳戶")」", role: .destructive) {
                 archive(account)
             }
             Button("取消", role: .cancel) {}
         } message: { account in
-            if accountRepository.hasTransactions(account) {
-                Text("這個帳號已有交易，封存後仍會保留所有歷史交易與餘額紀錄。")
+            if accountRepository.hasHistory(account) {
+                Text("這個帳戶已有交易或餘額調整，封存後仍會保留完整歷史。")
             } else {
-                Text("封存後不會再出現在新增交易的帳號選單中。")
+                Text("封存後不會再出現在新增交易的帳戶選單中。")
             }
         }
-        .alert("無法更新帳號", isPresented: errorBinding) {
+        .alert("無法更新帳戶", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "請稍後再試。")
@@ -147,7 +147,7 @@ struct AccountsView: View {
         .onReceive(
             NotificationCenter.default.publisher(
                 for: .NSManagedObjectContextObjectsDidChange,
-                object: book.managedObjectContext
+                object: group.managedObjectContext
             )
         ) { notification in
             guard shouldRefreshBalances(for: notification) else { return }
@@ -204,6 +204,10 @@ struct AccountsView: View {
                     return true
                 }
             }
+            if let adjustment = object as? AccountAdjustment,
+               let accountID = adjustment.account?.objectID {
+                return accountIDs.contains(accountID)
+            }
             return false
         }
     }
@@ -226,7 +230,7 @@ private struct AccountRow: View {
                 HStack(spacing: 14) {
                     LedgerIconBadge(systemImage: type.systemImage)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(account.name ?? "未命名帳號")
+                        Text(account.name ?? "未命名帳戶")
                             .font(.subheadline.weight(.semibold))
                         Text(account.archivedAt == nil ? type.displayName : "\(type.displayName) · 已封存")
                             .font(.caption)
@@ -252,13 +256,13 @@ private struct AccountRow: View {
             if let onArchive {
                 Menu {
                     Button(role: .destructive, action: onArchive) {
-                        Label("封存帳號", systemImage: "archivebox")
+                        Label("封存帳戶", systemImage: "archivebox")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
                         .frame(width: 32, height: 44)
                 }
-                .accessibilityLabel("帳號選項")
+                .accessibilityLabel("帳戶選項")
             }
         }
         .padding(.horizontal, 16)
@@ -272,6 +276,7 @@ private struct AccountDetailView: View {
     private let accountRepository = AccountRepository()
 
     @FetchRequest private var entries: FetchedResults<LedgerEntry>
+    @FetchRequest private var adjustments: FetchedResults<AccountAdjustment>
 
     @State private var isAdjustingBalance = false
     @State private var isConfirmingReconciliation = false
@@ -292,6 +297,13 @@ private struct AccountDetailView: View {
             ),
             animation: .default
         )
+        _adjustments = FetchRequest(
+            sortDescriptors: [
+                NSSortDescriptor(keyPath: \AccountAdjustment.createdAt, ascending: false)
+            ],
+            predicate: NSPredicate(format: "account == %@", account),
+            animation: .default
+        )
     }
 
     var body: some View {
@@ -310,7 +322,7 @@ private struct AccountDetailView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle(account.name ?? "帳號明細")
+        .navigationTitle(account.name ?? "帳戶明細")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if account.archivedAt == nil {
@@ -322,13 +334,13 @@ private struct AccountDetailView: View {
                         isConfirmingReconciliation = true
                     }
                     Divider()
-                    Button("封存帳號", systemImage: "archivebox", role: .destructive) {
+                    Button("封存帳戶", systemImage: "archivebox", role: .destructive) {
                         isConfirmingArchive = true
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .accessibilityLabel("帳號操作")
+                .accessibilityLabel("帳戶操作")
             }
         }
         .sheet(isPresented: $isAdjustingBalance) {
@@ -351,18 +363,18 @@ private struct AccountDetailView: View {
             Text("系統會保存目前餘額 \(ledgerAmount(currentBalance)) 與對帳時間。")
         }
         .confirmationDialog(
-            "封存帳號？",
+            "封存帳戶？",
             isPresented: $isConfirmingArchive,
             titleVisibility: .visible
         ) {
-            Button("封存帳號", role: .destructive) { archive() }
+            Button("封存帳戶", role: .destructive) { archive() }
             Button("取消", role: .cancel) {}
         } message: {
-            Text(entries.isEmpty
-                 ? "封存後不會再出現在新增交易的帳號選單中。"
+            Text(historyItems.isEmpty
+                 ? "封存後不會再出現在新增交易的帳戶選單中。"
                  : "所有歷史交易與餘額調整都會保留，不會被刪除。")
         }
-        .alert("無法更新帳號", isPresented: errorBinding) {
+        .alert("無法更新帳戶", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "請稍後再試。")
@@ -416,8 +428,8 @@ private struct AccountDetailView: View {
 
     private var transactionHistory: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "帳號明細")
-            if entries.isEmpty {
+            LedgerSectionHeader(title: "帳戶明細")
+            if historyItems.isEmpty {
                 LedgerEmptyState(
                     systemImage: "list.bullet.rectangle",
                     title: "尚無交易",
@@ -425,12 +437,23 @@ private struct AccountDetailView: View {
                 )
             } else {
                 LazyVStack(spacing: 12) {
-                    ForEach(entries, id: \.objectID) { entry in
-                        AccountEntryRow(entry: entry, account: account)
+                    ForEach(historyItems) { item in
+                        switch item {
+                        case .entry(let entry):
+                            AccountEntryRow(entry: entry, account: account)
+                        case .adjustment(let adjustment):
+                            AccountAdjustmentRow(adjustment: adjustment)
+                        }
                     }
                 }
             }
         }
+    }
+
+    private var historyItems: [AccountHistoryItem] {
+        let entryItems = entries.map(AccountHistoryItem.entry)
+        let adjustmentItems = adjustments.map(AccountHistoryItem.adjustment)
+        return (entryItems + adjustmentItems).sorted { $0.date > $1.date }
     }
 
     private var errorBinding: Binding<Bool> {
@@ -535,6 +558,61 @@ private struct BalanceAdjustmentView: View {
     }
 }
 
+private enum AccountHistoryItem: Identifiable {
+    case entry(LedgerEntry)
+    case adjustment(AccountAdjustment)
+
+    var id: NSManagedObjectID {
+        switch self {
+        case .entry(let entry):
+            return entry.objectID
+        case .adjustment(let adjustment):
+            return adjustment.objectID
+        }
+    }
+
+    var date: Date {
+        switch self {
+        case .entry(let entry):
+            return entry.date ?? entry.createdAt ?? .distantPast
+        case .adjustment(let adjustment):
+            return adjustment.createdAt ?? .distantPast
+        }
+    }
+}
+
+private struct AccountAdjustmentRow: View {
+    @ObservedObject var adjustment: AccountAdjustment
+
+    private var amount: Decimal {
+        (adjustment.amount as Decimal?) ?? 0
+    }
+
+    private var title: String {
+        guard let note = adjustment.note, !note.isEmpty else { return "餘額調整" }
+        return note
+    }
+
+    var body: some View {
+        LedgerCard {
+            HStack(spacing: 14) {
+                LedgerIconBadge(systemImage: "slider.horizontal.3", tint: .blue)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(adjustment.createdAt?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(signedLedgerAmount(amount))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(amount < 0 ? LedgerTheme.coral : LedgerTheme.primary)
+            }
+        }
+    }
+}
+
 private struct AccountEntryRow: View {
     @ObservedObject var entry: LedgerEntry
     @ObservedObject var account: LedgerAccount
@@ -557,14 +635,20 @@ private struct AccountEntryRow: View {
     private var title: String {
         if kind == .transfer {
             if entry.sourceAccount == account {
-                return "轉至 \(entry.destinationAccount?.name ?? "其他帳號")"
+                return "轉至 \(entry.destinationAccount?.name ?? "其他帳戶")"
             }
-            return "轉自 \(entry.sourceAccount?.name ?? "其他帳號")"
+            return "轉自 \(entry.sourceAccount?.name ?? "其他帳戶")"
         }
         if let note = entry.note, !note.isEmpty {
             return note
         }
         return entry.category?.name ?? kind.displayName
+    }
+
+    private var subtitle: String {
+        let date = entry.date?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定"
+        guard let bookName = entry.book?.name, !bookName.isEmpty else { return date }
+        return "\(date) · \(bookName)"
     }
 
     var body: some View {
@@ -574,7 +658,7 @@ private struct AccountEntryRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
-                    Text(entry.date?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定")
+                    Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -1,3 +1,4 @@
+import CoreData
 import XCTest
 @testable import SharedLedger
 
@@ -171,9 +172,13 @@ final class AccountBalanceRepositoryTests: XCTestCase {
         XCTAssertEqual(repository.currentBalance(for: destination), 40)
 
         let adjustment = try repository.adjustBalance(of: source, to: 125, note: "依帳單調整")
-        XCTAssertEqual(adjustment?.kind, EntryKind.balanceAdjustment.rawValue)
         XCTAssertEqual(adjustment?.amount as Decimal?, 25)
+        XCTAssertEqual(adjustment?.account, source)
+        XCTAssertEqual(adjustment?.note, "依帳單調整")
         XCTAssertEqual(repository.currentBalance(for: source), 125)
+
+        let entries = group.entries as? Set<LedgerEntry> ?? []
+        XCTAssertFalse(entries.contains { $0.kind == EntryKind.balanceAdjustment.rawValue })
 
         let reconciliationDate = Date(timeIntervalSince1970: 1_700_000_000)
         try repository.reconcile(source, at: reconciliationDate)
@@ -183,6 +188,50 @@ final class AccountBalanceRepositoryTests: XCTestCase {
         let auditActions = (group.auditEvents as? Set<AuditEvent> ?? []).compactMap(\.action)
         XCTAssertTrue(auditActions.contains("account.balance.adjusted"))
         XCTAssertTrue(auditActions.contains("account.reconciled"))
+    }
+
+    func testLegacyBalanceAdjustmentMigrationIsIdempotentAndPreservesBalance() async throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let repository = AccountRepository(persistence: persistence)
+        let account = try repository.createAccount(
+            from: AccountDraft(name: "現金", openingBalanceText: "100"),
+            in: group
+        )
+        let context = persistence.container.viewContext
+        let legacyID = UUID()
+        let legacyEntry = LedgerEntry(context: context)
+        context.assign(legacyEntry, to: persistence.store(for: account))
+        legacyEntry.id = legacyID
+        legacyEntry.amount = 25
+        legacyEntry.date = Date(timeIntervalSince1970: 1_700_000_000)
+        legacyEntry.createdAt = legacyEntry.date
+        legacyEntry.updatedAt = legacyEntry.date
+        legacyEntry.kind = EntryKind.balanceAdjustment.rawValue
+        legacyEntry.note = "舊版調整"
+        legacyEntry.group = group
+        legacyEntry.sourceAccount = account
+        try context.save()
+
+        XCTAssertEqual(repository.currentBalance(for: account), 125)
+
+        try await repository.migrateLegacyBalanceAdjustments()
+        try await repository.migrateLegacyBalanceAdjustments()
+        context.refresh(account, mergeChanges: false)
+
+        let entryRequest = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+        entryRequest.predicate = NSPredicate(format: "kind == %@", EntryKind.balanceAdjustment.rawValue)
+        XCTAssertTrue(try context.fetch(entryRequest).isEmpty)
+
+        let adjustmentRequest = NSFetchRequest<AccountAdjustment>(entityName: "AccountAdjustment")
+        let adjustments = try context.fetch(adjustmentRequest)
+        XCTAssertEqual(adjustments.count, 1)
+        XCTAssertEqual(adjustments.first?.id, legacyID)
+        XCTAssertEqual(adjustments.first?.amount as Decimal?, 25)
+        XCTAssertEqual(adjustments.first?.account, account)
+        XCTAssertEqual(repository.currentBalance(for: account), 125)
     }
 }
 
@@ -200,7 +249,7 @@ final class BookRepositoryTests: XCTestCase {
         XCTAssertEqual(books.first?.isDefault, true)
     }
 
-    func testAccountsCategoriesAndEntriesAreScopedToBook() throws {
+    func testAccountsAreGroupScopedWhileCategoriesAndEntriesRemainBookScoped() throws {
         let persistence = PersistenceController(inMemory: true)
         let group = try GroupRepository(persistence: persistence).createGroup(
             from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
@@ -212,15 +261,16 @@ final class BookRepositoryTests: XCTestCase {
             in: group
         )
         let accountRepository = AccountRepository(persistence: persistence)
-        let homeAccount = try accountRepository.createAccount(
-            from: AccountDraft(name: "家庭現金"),
-            in: defaultBook
+        let sharedAccount = try accountRepository.createAccount(
+            from: AccountDraft(name: "共用現金"),
+            in: group
         )
-        let travelAccount = try accountRepository.createAccount(
-            from: AccountDraft(name: "旅費現金"),
-            in: travelBook
+        let homeCategory = try CategoryRepository(persistence: persistence).createCategory(
+            from: CategoryDraft(name: "家用"),
+            in: defaultBook,
+            parent: nil
         )
-        let category = try CategoryRepository(persistence: persistence).createCategory(
+        let travelCategory = try CategoryRepository(persistence: persistence).createCategory(
             from: CategoryDraft(name: "交通"),
             in: travelBook,
             parent: nil
@@ -230,40 +280,119 @@ final class BookRepositoryTests: XCTestCase {
         let draft = TransactionDraft(
             kind: .expense,
             amountText: "500",
-            categoryID: category.id,
-            sourceAccountID: travelAccount.id,
+            categoryID: travelCategory.id,
+            sourceAccountID: sharedAccount.id,
             payerMemberID: ownerID,
             splitMemberIDs: [ownerID]
         )
         let entry = try EntryRepository(persistence: persistence).createEntry(
             from: draft,
             in: travelBook,
-            accounts: [homeAccount, travelAccount],
-            categories: [category],
+            accounts: [sharedAccount],
+            categories: [homeCategory, travelCategory],
             members: members
         )
 
-        XCTAssertEqual(homeAccount.book, defaultBook)
-        XCTAssertEqual(travelAccount.book, travelBook)
-        XCTAssertEqual(category.book, travelBook)
+        XCTAssertEqual(sharedAccount.group, group)
+        XCTAssertEqual(travelCategory.book, travelBook)
         XCTAssertEqual(entry.book, travelBook)
-        XCTAssertEqual(entry.sourceAccount, travelAccount)
+        XCTAssertEqual(entry.sourceAccount, sharedAccount)
 
         XCTAssertThrowsError(
             try EntryRepository(persistence: persistence).createEntry(
                 from: TransactionDraft(
                     kind: .expense,
                     amountText: "100",
-                    sourceAccountID: homeAccount.id,
+                    categoryID: homeCategory.id,
+                    sourceAccountID: sharedAccount.id,
                     payerMemberID: ownerID,
                     splitMemberIDs: [ownerID]
                 ),
                 in: travelBook,
-                accounts: [homeAccount, travelAccount],
+                accounts: [sharedAccount],
+                categories: [homeCategory, travelCategory],
+                members: members
+            )
+        ) { error in
+            guard case EntryRepository.EntryError.crossScopeReference = error else {
+                return XCTFail("Expected crossScopeReference, got \(error)")
+            }
+        }
+
+        let otherGroup = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "室友", ownerDisplayName: "小華")
+        )
+        let foreignAccount = try accountRepository.createAccount(
+            from: AccountDraft(name: "室友現金"),
+            in: otherGroup
+        )
+
+        XCTAssertThrowsError(
+            try EntryRepository(persistence: persistence).createEntry(
+                from: TransactionDraft(
+                    kind: .expense,
+                    amountText: "100",
+                    sourceAccountID: foreignAccount.id,
+                    payerMemberID: ownerID,
+                    splitMemberIDs: [ownerID]
+                ),
+                in: travelBook,
+                accounts: [sharedAccount, foreignAccount],
                 categories: [],
                 members: members
             )
+        ) { error in
+            guard case EntryRepository.EntryError.crossScopeReference = error else {
+                return XCTFail("Expected crossScopeReference, got \(error)")
+            }
+        }
+    }
+
+    func testGroupAccountBalanceIncludesEntriesFromMultipleBooks() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
         )
+        let bookRepository = BookRepository(persistence: persistence)
+        let defaultBook = try XCTUnwrap(bookRepository.defaultBook(in: group))
+        let travelBook = try bookRepository.createBook(from: BookDraft(name: "旅行"), in: group)
+        let accountRepository = AccountRepository(persistence: persistence)
+        let account = try accountRepository.createAccount(
+            from: AccountDraft(name: "銀行", openingBalanceText: "100"),
+            in: group
+        )
+        let members = Array(group.members as? Set<Member> ?? [])
+        let ownerID = try XCTUnwrap(members.first?.id)
+        let entryRepository = EntryRepository(persistence: persistence)
+
+        try entryRepository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "20",
+                sourceAccountID: account.id,
+                payerMemberID: ownerID,
+                splitMemberIDs: [ownerID]
+            ),
+            in: defaultBook,
+            accounts: [account],
+            categories: [],
+            members: members
+        )
+        try entryRepository.createEntry(
+            from: TransactionDraft(
+                kind: .income,
+                amountText: "50",
+                sourceAccountID: account.id,
+                payerMemberID: ownerID,
+                splitMemberIDs: [ownerID]
+            ),
+            in: travelBook,
+            accounts: [account],
+            categories: [],
+            members: members
+        )
+
+        XCTAssertEqual(accountRepository.currentBalance(for: account), 130)
     }
 
     func testArchivingDefaultBookPromotesAnotherBook() throws {
@@ -324,21 +453,101 @@ final class BookRepositoryTests: XCTestCase {
         XCTAssertTrue(onlyBook.isDefault)
     }
 
-    func testBackfillAssignsLegacyObjectsToDefaultBook() async throws {
+    func testArchivedBookAndAccountCannotReceiveNewEntries() throws {
         let persistence = PersistenceController(inMemory: true)
         let group = try GroupRepository(persistence: persistence).createGroup(
             from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
         )
-        let account = try AccountRepository(persistence: persistence).createAccount(
+        let bookRepository = BookRepository(persistence: persistence)
+        let archivedBook = try XCTUnwrap(bookRepository.defaultBook(in: group))
+        let activeBook = try bookRepository.createBook(from: BookDraft(name: "旅行"), in: group)
+        let accountRepository = AccountRepository(persistence: persistence)
+        let account = try accountRepository.createAccount(
             from: AccountDraft(name: "現金"),
             in: group
         )
-        account.book = nil
+        let members = Array(group.members as? Set<Member> ?? [])
+        let ownerID = try XCTUnwrap(members.first?.id)
+        let draft = TransactionDraft(
+            kind: .expense,
+            amountText: "100",
+            sourceAccountID: account.id,
+            payerMemberID: ownerID,
+            splitMemberIDs: [ownerID]
+        )
+        let entryRepository = EntryRepository(persistence: persistence)
+
+        try bookRepository.archiveBook(archivedBook)
+        XCTAssertThrowsError(
+            try entryRepository.createEntry(
+                from: draft,
+                in: archivedBook,
+                accounts: [account],
+                categories: [],
+                members: members
+            )
+        ) { error in
+            guard case EntryRepository.EntryError.archivedBook = error else {
+                return XCTFail("Expected archivedBook, got \(error)")
+            }
+        }
+
+        let categoryRepository = CategoryRepository(persistence: persistence)
+        let category = try categoryRepository.createCategory(
+            from: CategoryDraft(name: "交通"),
+            in: activeBook,
+            parent: nil
+        )
+        try categoryRepository.archiveCategory(category)
+        var archivedCategoryDraft = draft
+        archivedCategoryDraft.categoryID = category.id
+        XCTAssertThrowsError(
+            try entryRepository.createEntry(
+                from: archivedCategoryDraft,
+                in: activeBook,
+                accounts: [account],
+                categories: [category],
+                members: members
+            )
+        ) { error in
+            guard case EntryRepository.EntryError.archivedCategory = error else {
+                return XCTFail("Expected archivedCategory, got \(error)")
+            }
+        }
+
+        try accountRepository.archiveAccount(account)
+        XCTAssertThrowsError(
+            try entryRepository.createEntry(
+                from: draft,
+                in: activeBook,
+                accounts: [account],
+                categories: [],
+                members: members
+            )
+        ) { error in
+            guard case EntryRepository.EntryError.archivedAccount = error else {
+                return XCTFail("Expected archivedAccount, got \(error)")
+            }
+        }
+    }
+
+    func testBackfillAssignsLegacyBookOwnedObjectsToDefaultBook() async throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let defaultBook = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
+        let category = try CategoryRepository(persistence: persistence).createCategory(
+            from: CategoryDraft(name: "餐飲"),
+            in: defaultBook,
+            parent: nil
+        )
+        category.book = nil
         try persistence.container.viewContext.save()
 
         try await BookRepository(persistence: persistence).backfillMissingBookRelationships()
-        persistence.container.viewContext.refresh(account, mergeChanges: false)
+        persistence.container.viewContext.refresh(category, mergeChanges: false)
 
-        XCTAssertEqual(account.book, BookRepository(persistence: persistence).defaultBook(in: group))
+        XCTAssertEqual(category.book, defaultBook)
     }
 }

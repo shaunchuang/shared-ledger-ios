@@ -11,19 +11,12 @@ struct AccountRepository {
 
     @discardableResult
     func createAccount(from draft: AccountDraft, in group: LedgerGroup) throws -> LedgerAccount {
-        let book = try BookRepository(persistence: persistence).ensureDefaultBook(in: group)
-        return try createAccount(from: draft, in: book)
-    }
-
-    @discardableResult
-    func createAccount(from draft: AccountDraft, in book: LedgerBook) throws -> LedgerAccount {
         guard draft.canCreate, let openingBalance = draft.openingBalanceValue else {
             throw AccountError.invalidDraft
         }
-        guard let group = book.group else { throw AccountError.missingGroup }
 
         let context = persistence.container.viewContext
-        let store = persistence.store(for: book)
+        let store = persistence.store(for: group)
 
         let account = LedgerAccount(context: context)
         context.assign(account, to: store)
@@ -33,7 +26,6 @@ struct AccountRepository {
         account.openingBalance = openingBalance as NSDecimalNumber
         account.createdAt = Date()
         account.group = group
-        account.book = book
 
         do {
             try context.save()
@@ -46,6 +38,7 @@ struct AccountRepository {
 
     func archiveAccount(_ account: LedgerAccount) throws {
         guard let group = account.group else { throw AccountError.missingGroup }
+        guard account.archivedAt == nil else { return }
 
         let context = persistence.container.viewContext
         let now = Date()
@@ -56,7 +49,7 @@ struct AccountRepository {
         audit.action = "account.archived"
         audit.actorDisplayName = currentActorName(in: group)
         audit.createdAt = now
-        audit.summary = "封存帳號「\(account.name ?? "未命名帳號")」，歷史交易保持不變"
+        audit.summary = "封存帳戶「\(account.name ?? "未命名帳戶")」，歷史交易與餘額調整保持不變"
         audit.group = group
         context.assign(audit, to: persistence.store(for: account))
 
@@ -83,10 +76,11 @@ struct AccountRepository {
                 isDestinationAccount: entry.destinationAccount == account
             )
         }
-        return AccountBalanceCalculator.balance(
+        let transactionBalance = AccountBalanceCalculator.balance(
             openingBalance: (account.openingBalance as Decimal?) ?? 0,
             movements: movements
         )
+        return transactionBalance + adjustmentTotal(for: account)
     }
 
     func totalBalance(for accounts: [LedgerAccount]) -> Decimal {
@@ -94,6 +88,9 @@ struct AccountRepository {
 
         let openingBalance = accounts.reduce(Decimal.zero) { partialResult, account in
             partialResult + ((account.openingBalance as Decimal?) ?? 0)
+        }
+        let adjustmentTotal = accounts.reduce(Decimal.zero) { partialResult, account in
+            partialResult + self.adjustmentTotal(for: account)
         }
 
         let context = persistence.container.viewContext
@@ -124,10 +121,10 @@ struct AccountRepository {
                 )
                 return partialResult + AccountBalanceCalculator.effect(of: movement)
             }
-            return openingBalance + movementTotal
+            return openingBalance + movementTotal + adjustmentTotal
         } catch {
             NSLog("Failed to fetch entries for account total balance: \(error.localizedDescription)")
-            return openingBalance
+            return openingBalance + adjustmentTotal
         }
     }
 
@@ -136,7 +133,7 @@ struct AccountRepository {
         of account: LedgerAccount,
         to targetBalance: Decimal,
         note: String
-    ) throws -> LedgerEntry? {
+    ) throws -> AccountAdjustment? {
         guard account.archivedAt == nil else { throw AccountError.archivedAccount }
 
         let currentBalance = currentBalance(for: account)
@@ -147,18 +144,14 @@ struct AccountRepository {
         let context = persistence.container.viewContext
         let now = Date()
         let store = persistence.store(for: account)
-        let entry = LedgerEntry(context: context)
-        entry.id = UUID()
-        entry.amount = difference as NSDecimalNumber
-        entry.date = now
-        entry.kind = EntryKind.balanceAdjustment.rawValue
+        let adjustment = AccountAdjustment(context: context)
+        context.assign(adjustment, to: store)
+        adjustment.id = UUID()
+        adjustment.amount = difference as NSDecimalNumber
+        adjustment.createdAt = now
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        entry.note = trimmedNote.isEmpty ? "帳號餘額調整" : trimmedNote
-        entry.createdAt = now
-        entry.updatedAt = now
-        entry.group = group
-        entry.sourceAccount = account
-        context.assign(entry, to: store)
+        adjustment.note = trimmedNote.isEmpty ? "帳戶餘額調整" : trimmedNote
+        adjustment.account = account
 
         let actorName = currentActorName(in: group)
         let audit = AuditEvent(context: context)
@@ -166,13 +159,13 @@ struct AccountRepository {
         audit.action = "account.balance.adjusted"
         audit.actorDisplayName = actorName
         audit.createdAt = now
-        audit.summary = "將帳號「\(account.name ?? "未命名帳號")」餘額由 \(currentBalance) 調整為 \(targetBalance)"
+        audit.summary = "將帳戶「\(account.name ?? "未命名帳戶")」餘額由 \(currentBalance) 調整為 \(targetBalance)"
         audit.group = group
         context.assign(audit, to: store)
 
         do {
             try context.save()
-            return entry
+            return adjustment
         } catch {
             context.rollback()
             throw error
@@ -193,7 +186,7 @@ struct AccountRepository {
         audit.action = "account.reconciled"
         audit.actorDisplayName = currentActorName(in: group)
         audit.createdAt = date
-        audit.summary = "完成帳號「\(account.name ?? "未命名帳號")」對帳，餘額為 \(balance)"
+        audit.summary = "完成帳戶「\(account.name ?? "未命名帳戶")」對帳，餘額為 \(balance)"
         audit.group = group
         context.assign(audit, to: persistence.store(for: account))
 
@@ -211,6 +204,67 @@ struct AccountRepository {
         return sourceCount + destinationCount > 0
     }
 
+    func hasHistory(_ account: LedgerAccount) -> Bool {
+        hasTransactions(account) || !adjustments(for: account).isEmpty
+    }
+
+    /// Converts the V2 representation (a bookless balance-adjustment entry)
+    /// into the V3 account-owned entity. The conversion is atomic and safe to
+    /// repeat after CloudKit remote changes.
+    func migrateLegacyBalanceAdjustments() async throws {
+        let context = persistence.container.newBackgroundContext()
+        context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+
+        try await context.perform {
+            let adjustmentRequest = NSFetchRequest<AccountAdjustment>(entityName: "AccountAdjustment")
+            var existingIDs = Set(try context.fetch(adjustmentRequest).compactMap(\.id))
+
+            let entryRequest = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+            entryRequest.predicate = NSPredicate(
+                format: "kind == %@",
+                EntryKind.balanceAdjustment.rawValue
+            )
+
+            for entry in try context.fetch(entryRequest) {
+                guard let account = entry.sourceAccount ?? entry.destinationAccount,
+                      let store = entry.objectID.persistentStore ?? account.objectID.persistentStore
+                else { continue }
+
+                let identifier = entry.id ?? UUID()
+                if !existingIDs.contains(identifier) {
+                    let adjustment = AccountAdjustment(context: context)
+                    context.assign(adjustment, to: store)
+                    adjustment.id = identifier
+                    adjustment.amount = entry.amount
+                    adjustment.createdAt = entry.date ?? entry.createdAt
+                    adjustment.note = entry.note ?? "帳戶餘額調整"
+                    adjustment.account = account
+                    existingIDs.insert(identifier)
+                }
+                context.delete(entry)
+            }
+
+            if context.hasChanges {
+                do {
+                    try context.save()
+                } catch {
+                    context.rollback()
+                    throw error
+                }
+            }
+        }
+    }
+
+    private func adjustments(for account: LedgerAccount) -> Set<AccountAdjustment> {
+        account.adjustments as? Set<AccountAdjustment> ?? []
+    }
+
+    private func adjustmentTotal(for account: LedgerAccount) -> Decimal {
+        adjustments(for: account).reduce(Decimal.zero) { partialResult, adjustment in
+            partialResult + ((adjustment.amount as Decimal?) ?? 0)
+        }
+    }
+
     private func currentActorName(in group: LedgerGroup) -> String {
         let members = group.members as? Set<Member> ?? []
         return members.first(where: \.isCurrentUser)?.displayName ?? "目前使用者"
@@ -224,11 +278,11 @@ struct AccountRepository {
         var errorDescription: String? {
             switch self {
             case .invalidDraft:
-                return "請輸入帳號名稱與有效的期初餘額。"
+                return "請輸入帳戶名稱與有效的期初餘額。"
             case .missingGroup:
-                return "找不到這個帳本所屬的群組。"
+                return "找不到這個帳戶所屬的群組。"
             case .archivedAccount:
-                return "已封存的帳號不能再調整餘額或對帳。"
+                return "已封存的帳戶不能再調整餘額或對帳。"
             }
         }
     }

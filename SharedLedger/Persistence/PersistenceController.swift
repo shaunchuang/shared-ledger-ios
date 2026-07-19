@@ -8,6 +8,8 @@ final class PersistenceController {
     private(set) var privateStore: NSPersistentStore!
     private(set) var sharedStore: NSPersistentStore!
     private var remoteChangeObserver: NSObjectProtocol?
+    private var isRepairingData = false
+    private var shouldRepeatDataRepair = false
 
     init(inMemory: Bool = false) {
         container = NSPersistentCloudKitContainer(name: "SharedLedger")
@@ -70,14 +72,14 @@ final class PersistenceController {
 
         storeLoadGroup.notify(queue: .main) { [weak self] in
             guard let self else { return }
-            self.scheduleBookBackfill()
+            self.scheduleDataRepair()
             if !inMemory {
                 self.remoteChangeObserver = NotificationCenter.default.addObserver(
                     forName: .NSPersistentStoreRemoteChange,
                     object: self.container.persistentStoreCoordinator,
                     queue: .main
                 ) { [weak self] _ in
-                    self?.scheduleBookBackfill()
+                    self?.scheduleDataRepair()
                 }
             }
         }
@@ -111,14 +113,25 @@ final class PersistenceController {
         object.objectID.persistentStore ?? privateStore
     }
 
-    private func scheduleBookBackfill() {
+    private func scheduleDataRepair() {
+        if isRepairingData {
+            shouldRepeatDataRepair = true
+            return
+        }
+        isRepairingData = true
+
         Task { @MainActor [weak self] in
             guard let self else { return }
-            do {
-                try await BookRepository(persistence: self).backfillMissingBookRelationships()
-            } catch {
-                assertionFailure("Unable to backfill ledger books: \(error.localizedDescription)")
-            }
+            defer { self.isRepairingData = false }
+            repeat {
+                self.shouldRepeatDataRepair = false
+                do {
+                    try await BookRepository(persistence: self).backfillMissingBookRelationships()
+                    try await AccountRepository(persistence: self).migrateLegacyBalanceAdjustments()
+                } catch {
+                    assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
+                }
+            } while self.shouldRepeatDataRepair
         }
     }
 

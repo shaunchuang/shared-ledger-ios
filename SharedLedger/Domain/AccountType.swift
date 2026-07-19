@@ -11,7 +11,7 @@ enum AccountType: String, CaseIterable, Identifiable, Codable, Sendable {
     var displayName: String {
         switch self {
         case .cash: return "現金"
-        case .bank: return "銀行帳號"
+        case .bank: return "銀行帳戶"
         case .creditCard: return "信用卡"
         case .other: return "其他"
         }

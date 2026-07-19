@@ -22,7 +22,9 @@ struct CategoryRepository {
     func createCategory(from draft: CategoryDraft, in book: LedgerBook, parent: LedgerCategory?) throws -> LedgerCategory {
         guard draft.canCreate else { throw CategoryError.invalidDraft }
         guard let group = book.group else { throw CategoryError.missingGroup }
+        guard book.archivedAt == nil else { throw CategoryError.archivedBook }
         guard parent == nil || parent?.book == book else { throw CategoryError.crossBookParent }
+        guard parent?.archivedAt == nil else { throw CategoryError.archivedParent }
 
         let context = persistence.container.viewContext
         let store = persistence.store(for: book)
@@ -46,6 +48,10 @@ struct CategoryRepository {
     }
 
     func archiveCategory(_ category: LedgerCategory) throws {
+        guard let book = category.book else { throw CategoryError.missingBook }
+        guard book.archivedAt == nil else { throw CategoryError.archivedBook }
+        guard category.archivedAt == nil else { return }
+
         let context = persistence.container.viewContext
         category.archivedAt = Date()
 
@@ -69,6 +75,9 @@ struct CategoryRepository {
     enum CategoryError: LocalizedError {
         case invalidDraft
         case missingGroup
+        case missingBook
+        case archivedBook
+        case archivedParent
         case crossBookParent
 
         var errorDescription: String? {
@@ -77,6 +86,12 @@ struct CategoryRepository {
                 return "請輸入分類名稱。"
             case .missingGroup:
                 return "找不到這個帳本所屬的群組。"
+            case .missingBook:
+                return "找不到這個分類所屬的帳本。"
+            case .archivedBook:
+                return "已封存的帳本不能修改分類。"
+            case .archivedParent:
+                return "已封存的分類不能新增子分類。"
             case .crossBookParent:
                 return "子分類與父分類必須屬於同一個帳本。"
             }

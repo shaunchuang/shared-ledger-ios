@@ -100,6 +100,7 @@
 		B00CDAF70000000000000003 /* BookRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookRepository.swift; sourceTree = "<group>"; };
 		B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV2.xcdatamodel; sourceTree = "<group>"; };
 		B00CDAF70000000000000006 /* BooksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BooksView.swift; sourceTree = "<group>"; };
+		B00CDAF70000000000000008 /* SharedLedgerV3.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV3.xcdatamodel; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -678,8 +679,9 @@
 			children = (
 				1986EBF2EE44CCC904C2A47E /* SharedLedger.xcdatamodel */,
 				B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */,
+				B00CDAF70000000000000008 /* SharedLedgerV3.xcdatamodel */,
 			);
-			currentVersion = B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */;
+			currentVersion = B00CDAF70000000000000008 /* SharedLedgerV3.xcdatamodel */;
 			path = SharedLedger.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;
