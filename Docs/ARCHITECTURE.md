@@ -59,14 +59,14 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | `LedgerAccount` | `AccountAdjustment` | 餘額調整直接屬於帳戶，不是沒有帳本的交易 |
 | `LedgerCategory` | 子 `LedgerCategory` | 分類以同一群組內的自我關聯形成共用分類樹 |
 | `BookCategoryAssignment` | 無 | 明確連接同群組的帳本與分類，保存帳本內的啟用狀態與顯示順序 |
-| `LedgerEntry` | `EntrySplit` | 交易代表收入、支出或轉帳；split 記錄群組成員應負擔金額 |
+| `LedgerEntry` | `EntrySplit`、`EntryPayment` | 交易代表收入、支出或轉帳；split 記錄群組成員應負擔金額，payment 記錄實際付款成員與金額 |
 | private store | `LocalMemberIdentity` | 保存目前 Apple Account 在各群組對應的 `Member` 識別；只存 `groupID`／`memberID`，不建立跨 store relationship，也不分享給其他參與者 |
 
 - 每個群組必須至少有一個啟用中的帳本，且啟用中的帳本必須有唯一的預設帳本。
 - 建立群組時同步建立名為「主要帳本」的預設帳本。
 - 建立帳戶、分類與餘額調整的 repository API 分別以 `LedgerGroup`／`LedgerGroup`／`LedgerAccount` 為 scope；交易與帳本分類啟用關聯以 `LedgerBook` 為 scope。
 - 交易引用的來源與目的帳戶必須屬於帳本所屬群組；分類必須屬於同一群組，且在交易帳本存在有效的 `BookCategoryAssignment`。分類的 parent 與 child 也必須屬於同一群組。
-- 付款人與 split 成員仍以群組為 scope，但必須與帳本所屬群組一致。
+- 付款人與 split 成員仍以群組為 scope，但必須與帳本所屬群組一致且未封存；重複付款人由 repository 拒絕。
 - 帳戶餘額由期初餘額、群組內所有帳本引用該帳戶的交易，以及帳戶直屬的 `AccountAdjustment` 共同推導；帳戶明細需標示每筆交易所屬帳本。
 - 單筆交易只屬於一個帳本且不得以 `book == nil` 儲存；同群組帳戶間的轉帳記錄於目前帳本，不建立跨帳本交易關聯，並排除於收入／支出統計。
 - `AuditEvent` 保存變更摘要、操作者與時間；交易與設定修改不可靜默覆寫歷史。
@@ -104,8 +104,8 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 ### 分攤與付款模型方向
 
 - `EntrySplit.amount` 是每位成員最後實際負擔金額，也是淨額與結算引擎的計算來源；比例與指定金額的原始輸入需另行保存，不能只靠最後金額反推。
-- 後續 model version 應在 `LedgerEntry` 保存穩定的分攤模式 `equal`／`percentage`／`fixedAmount`，並為 split 保存對應的比例或輸入金額快照。
-- 多人付款不可繼續擴充單一 `LedgerEntry.payer`；應新增交易直屬的付款明細 entity，每筆包含付款成員與付款金額，並以 migration 將既有 `payer` 轉為一筆全額付款。
+- V7 在 `LedgerEntry.splitMode` 保存穩定的 `equal`／`percentage`／`fixedAmount`，並以 `EntrySplit.inputValue` 保存比例或指定金額的原始輸入快照；equal 的 input value 保持 nil。
+- 多人付款使用交易直屬的 `EntryPayment`，每筆包含付款成員、付款金額及穩定順序。legacy `LedgerEntry.payer` 暫時保留作 migration 輸入與單一付款相容欄位；新交易的帳務真實來源是 payments。
 - 分攤與付款驗證集中在 Domain service，由新增、編輯、匯入與同步修復共用；View 不自行決定尾差或合法性。
 - 尾差使用交易貨幣的 fraction digits 與穩定排序分配，確保相同輸入在不同裝置產生完全一致的 split，避免 CloudKit 同步衝突。
 
@@ -119,8 +119,9 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | V4 | 分類提升為群組 scope，新增 `BookCategoryAssignment`；交易維持帳本 scope | 先保留 optional legacy `LedgerCategory.book` 供過渡修復；每個既有分類建立對原帳本的 assignment，不依名稱自動合併。完成 private/shared stores 與混合版本同步驗證後，後續 model version 才移除 legacy 關聯 |
 | V5 | 移除會隨群組分享的 `Member.isCurrentUser`，新增只存在 private configuration 的 `LocalMemberIdentity` | 以 lightweight migration 移除舊欄位；共享群組首次開啟時由目前使用者確認待邀請的 member／viewer，或建立新的 member，再把 `groupID`／`memberID` 對應寫入 private store |
 | V6 | 在 `LedgerGroup` 新增非 optional ISO 4217 `currencyCode` | 以 lightweight migration 和 schema 預設 `TWD` 回填既有群組；新群組由建立者選擇或採裝置地區預設 |
+| V7 | 新增 `EntryPayment`、`LedgerEntry.splitMode`、`EntrySplit.inputValue` 與 `Member.archivedAt` | 以 lightweight migration 建立欄位與 entity；啟動及 remote change 後，將仍只有 legacy `payer` 的既有交易冪等轉成一筆全額付款，不改寫既有 split amount |
 
-V1→V2→V3→V4→V5→V6 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。
+V1→V2→V3→V4→V5→V6→V7 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。
 
 V4 資料修復對每個既有分類採以下規則：
 
@@ -130,7 +131,7 @@ V4 資料修復對每個既有分類採以下規則：
 4. 新程式碼完成修復後不再寫入 legacy `category.book`；舊版裝置或延遲 CloudKit 記錄仍可能帶入此欄位，因此每次 remote change 後需再次冪等修復。
 5. 所有新建 category、assignment、book 與 group 必須位於相同 store；private 與 shared stores 分別驗證，不跨 store 搬移 object。
 
-帳本回填、舊版餘額調整轉換與分類 assignment 修復都必須可重複執行且結果一致：App 啟動載入 stores 後執行一次，收到 CloudKit remote change 後也要重新檢查，以涵蓋稍後同步進來的舊資料。修復在 background context 進行，只傳遞 object ID；完成後由 persistent history／context merge 更新畫面。
+帳本回填、舊版餘額調整轉換、分類 assignment 修復與 legacy payer 付款轉換都必須可重複執行且結果一致：App 啟動載入 stores 後執行一次，收到 CloudKit remote change 後也要重新檢查，以涵蓋稍後同步進來的舊資料。修復在 background context 進行，只傳遞 object ID；完成後由 persistent history／context merge 更新畫面。
 
 ## Core Data 與 Concurrency
 

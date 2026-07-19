@@ -1,5 +1,6 @@
 import CoreData
 import SwiftUI
+import UIKit
 
 struct NewTransactionView: View {
     @Environment(\.dismiss) private var dismiss
@@ -33,7 +34,9 @@ struct NewTransactionView: View {
 
     private var members: [Member] {
         let set = book.group?.members as? Set<Member> ?? []
-        return set.sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
+        return set
+            .filter { $0.archivedAt == nil }
+            .sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
     }
 
     private var currencyCode: String {
@@ -122,38 +125,76 @@ struct NewTransactionView: View {
                     }
                 }
 
-                Section("付款人") {
-                    Picker("誰付的", selection: $draft.payerMemberID) {
-                        Text("請選擇").tag(UUID?.none)
-                        ForEach(members, id: \.objectID) { member in
-                            Text(member.displayName ?? "未命名成員").tag(member.id)
-                        }
-                    }
-                }
-
                 Section {
                     ForEach(members, id: \.objectID) { member in
-                        Button {
-                            toggleSplit(member)
-                        } label: {
-                            HStack {
-                                Text(member.displayName ?? "未命名成員")
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                if let id = member.id, draft.splitMemberIDs.contains(id) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(LedgerTheme.primary)
-                                } else {
-                                    Image(systemName: "circle")
-                                        .foregroundStyle(.tertiary)
+                        HStack(spacing: 12) {
+                            Button {
+                                togglePayment(member)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    paymentSelectionIcon(for: member)
+                                    Text(member.displayName ?? "未命名成員")
+                                        .foregroundStyle(.primary)
                                 }
+                            }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+
+                            if isPayingMember(member) {
+                                TextField("0", text: paymentAmountBinding(for: member))
+                                    .keyboardType(amountKeyboardType)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(maxWidth: 120)
+                                Text(currencyCode)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
                 } header: {
-                    Text("平分對象")
+                    Text("付款人")
                 } footer: {
-                    Text("金額會平均分攤給勾選的成員。")
+                    Text(paymentSummary)
+                }
+
+                Section {
+                    Picker("方式", selection: $draft.splitMode) {
+                        ForEach(SplitMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+
+                    ForEach(members, id: \.objectID) { member in
+                        HStack(spacing: 12) {
+                            Button {
+                                toggleSplit(member)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    splitSelectionIcon(for: member)
+                                    Text(member.displayName ?? "未命名成員")
+                                        .foregroundStyle(.primary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+
+                            if isSplitMember(member), draft.splitMode != .equal {
+                                TextField("0", text: splitValueBinding(for: member))
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(maxWidth: 120)
+                                Text(draft.splitMode == .percentage ? "%" : currencyCode)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("分攤")
+                } footer: {
+                    Text(splitSummary)
                 }
             }
 
@@ -174,6 +215,10 @@ struct NewTransactionView: View {
             }
         }
         .onAppear(perform: prefillDefaults)
+        .onChange(of: draft.amountText) { oldValue, newValue in
+            syncSinglePaymentAmount(oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: draft.splitMode) { _, _ in prefillSplitValues() }
         .alert("無法儲存交易", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
         } message: {
@@ -192,10 +237,14 @@ struct NewTransactionView: View {
         if draft.splitMemberIDs.isEmpty {
             draft.splitMemberIDs = Set(members.compactMap(\.id))
         }
-        if draft.payerMemberID == nil {
-            draft.payerMemberID = book.group.flatMap {
+        if draft.paymentDrafts.isEmpty {
+            let memberID = book.group.flatMap {
                 CurrentMemberIdentityRepository().currentMember(in: $0)?.id
             } ?? members.first?.id
+            draft.payerMemberID = memberID
+            draft.paymentDrafts = [
+                TransactionPaymentDraft(memberID: memberID, amountText: draft.amountText)
+            ]
         }
         if draft.sourceAccountID == nil {
             draft.sourceAccountID = accounts.first?.id
@@ -208,6 +257,147 @@ struct NewTransactionView: View {
             draft.splitMemberIDs.remove(id)
         } else {
             draft.splitMemberIDs.insert(id)
+        }
+        prefillSplitValues()
+    }
+
+    private var amountKeyboardType: UIKeyboardType {
+        LedgerCurrency.fractionDigits(for: currencyCode) == 0 ? .numberPad : .decimalPad
+    }
+
+    private func isSplitMember(_ member: Member) -> Bool {
+        member.id.map(draft.splitMemberIDs.contains) == true
+    }
+
+    @ViewBuilder
+    private func splitSelectionIcon(for member: Member) -> some View {
+        if isSplitMember(member) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(LedgerTheme.primary)
+        } else {
+            Image(systemName: "circle")
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func splitValueBinding(for member: Member) -> Binding<String> {
+        guard let id = member.id else { return .constant("") }
+        return Binding(
+            get: { draft.splitValueTexts[id, default: ""] },
+            set: { draft.splitValueTexts[id] = $0 }
+        )
+    }
+
+    private func prefillSplitValues() {
+        guard draft.splitMode != .equal else {
+            draft.splitValueTexts.removeAll()
+            return
+        }
+        let ids = draft.splitMemberIDs.sorted { $0.uuidString < $1.uuidString }
+        guard !ids.isEmpty else { return }
+
+        switch draft.splitMode {
+        case .equal:
+            break
+        case .percentage:
+            let totalUnits = 10_000
+            let baseUnits = totalUnits / ids.count
+            var remainder = totalUnits % ids.count
+            draft.splitValueTexts = Dictionary(uniqueKeysWithValues: ids.map { id in
+                let units = baseUnits + (remainder > 0 ? 1 : 0)
+                remainder = max(0, remainder - 1)
+                let value = NSDecimalNumber(value: units)
+                    .multiplying(byPowerOf10: -2)
+                    .stringValue
+                return (id, value)
+            })
+        case .fixedAmount:
+            guard let amount = draft.amountValue,
+                  let allocations = try? AllocationCalculator.calculateSplits(
+                    total: amount,
+                    mode: .equal,
+                    inputs: ids.map { SplitInput(memberID: $0, value: nil) },
+                    currencyCode: currencyCode
+                  )
+            else { return }
+            draft.splitValueTexts = Dictionary(uniqueKeysWithValues: allocations.map {
+                ($0.memberID, NSDecimalNumber(decimal: $0.amount).stringValue)
+            })
+        }
+    }
+
+    private func isPayingMember(_ member: Member) -> Bool {
+        guard let id = member.id else { return false }
+        return draft.paymentDrafts.contains { $0.memberID == id }
+    }
+
+    @ViewBuilder
+    private func paymentSelectionIcon(for member: Member) -> some View {
+        if isPayingMember(member) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(LedgerTheme.primary)
+        } else {
+            Image(systemName: "circle")
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func paymentAmountBinding(for member: Member) -> Binding<String> {
+        guard let memberID = member.id else { return .constant("") }
+        return Binding(
+            get: {
+                draft.paymentDrafts.first { $0.memberID == memberID }?.amountText ?? ""
+            },
+            set: { value in
+                guard let index = draft.paymentDrafts.firstIndex(where: { $0.memberID == memberID })
+                else { return }
+                draft.paymentDrafts[index].amountText = value
+            }
+        )
+    }
+
+    private func togglePayment(_ member: Member) {
+        guard let memberID = member.id else { return }
+        if let index = draft.paymentDrafts.firstIndex(where: { $0.memberID == memberID }) {
+            draft.paymentDrafts.remove(at: index)
+        } else {
+            let amountText = draft.paymentDrafts.isEmpty ? draft.amountText : ""
+            draft.paymentDrafts.append(
+                TransactionPaymentDraft(memberID: memberID, amountText: amountText)
+            )
+        }
+        draft.payerMemberID = draft.paymentDrafts.count == 1
+            ? draft.paymentDrafts.first?.memberID
+            : nil
+    }
+
+    private func syncSinglePaymentAmount(oldValue: String, newValue: String) {
+        guard draft.paymentDrafts.count == 1 else { return }
+        let currentValue = draft.paymentDrafts[0].amountText
+        if currentValue.isEmpty || currentValue == oldValue {
+            draft.paymentDrafts[0].amountText = newValue
+        }
+    }
+
+    private var paymentSummary: String {
+        let total = draft.paymentDrafts.compactMap(\.amountValue).reduce(0, +)
+        return "付款合計 \(LedgerCurrency.format(total, currencyCode: currencyCode))；必須等於交易金額。"
+    }
+
+    private var splitSummary: String {
+        switch draft.splitMode {
+        case .equal:
+            return "金額會依貨幣最小單位平均分攤，尾差以固定順序分配。"
+        case .percentage:
+            let total = draft.splitMemberIDs.compactMap {
+                draft.splitValueTexts[$0].flatMap(TransactionDraft.decimalValue(from:))
+            }.reduce(0, +)
+            return "比例合計 \(NSDecimalNumber(decimal: total).stringValue)%；必須等於 100%。"
+        case .fixedAmount:
+            let total = draft.splitMemberIDs.compactMap {
+                draft.splitValueTexts[$0].flatMap(TransactionDraft.decimalValue(from:))
+            }.reduce(0, +)
+            return "分攤合計 \(LedgerCurrency.format(total, currencyCode: currencyCode))；必須等於交易金額。"
         }
     }
 
@@ -235,6 +425,16 @@ struct NewTransactionView: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private extension SplitMode {
+    var displayName: String {
+        switch self {
+        case .equal: "平均"
+        case .percentage: "比例"
+        case .fixedAmount: "指定金額"
         }
     }
 }

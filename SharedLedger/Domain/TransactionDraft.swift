@@ -10,6 +10,9 @@ struct TransactionDraft: Equatable, Sendable {
     var destinationAccountID: UUID?
     var payerMemberID: UUID?
     var splitMemberIDs: Set<UUID> = []
+    var splitMode: SplitMode = .equal
+    var splitValueTexts: [UUID: String] = [:]
+    var paymentDrafts: [TransactionPaymentDraft] = []
 
     var amountValue: Decimal? {
         Decimal(string: amountText.trimmingCharacters(in: .whitespaces))
@@ -28,10 +31,41 @@ struct TransactionDraft: Equatable, Sendable {
                 && sourceAccountID != destinationAccountID
         case .income, .expense:
             return sourceAccountID != nil
-                && payerMemberID != nil
+                && hasPaymentDetails
                 && !splitMemberIDs.isEmpty
+                && hasSplitDetails
         case .balanceAdjustment:
             return false
         }
+    }
+
+    private var hasPaymentDetails: Bool {
+        if paymentDrafts.isEmpty {
+            return payerMemberID != nil
+        }
+        return paymentDrafts.allSatisfy {
+            $0.memberID != nil && $0.amountValue.map { $0 > 0 } == true
+        }
+    }
+
+    private var hasSplitDetails: Bool {
+        guard splitMode != .equal else { return true }
+        return splitMemberIDs.allSatisfy {
+            splitValueTexts[$0].flatMap(Self.decimalValue(from:)) != nil
+        }
+    }
+
+    static func decimalValue(from text: String) -> Decimal? {
+        Decimal(string: text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
+struct TransactionPaymentDraft: Identifiable, Equatable, Sendable {
+    var id = UUID()
+    var memberID: UUID?
+    var amountText = ""
+
+    var amountValue: Decimal? {
+        TransactionDraft.decimalValue(from: amountText)
     }
 }
