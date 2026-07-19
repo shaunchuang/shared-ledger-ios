@@ -58,6 +58,61 @@ final class GroupDraftTests: XCTestCase {
     }
 }
 
+final class LedgerCurrencyTests: XCTestCase {
+    func testCurrencyPrecisionUsesISOFractionDigits() throws {
+        XCTAssertEqual(LedgerCurrency.fractionDigits(for: "JPY"), 0)
+        XCTAssertEqual(LedgerCurrency.fractionDigits(for: "KWD"), 3)
+        XCTAssertFalse(
+            LedgerCurrency.isValidAmount(
+                try XCTUnwrap(Decimal(string: "1.5")),
+                currencyCode: "JPY"
+            )
+        )
+        XCTAssertTrue(
+            LedgerCurrency.isValidAmount(
+                try XCTUnwrap(Decimal(string: "1.234")),
+                currencyCode: "KWD"
+            )
+        )
+    }
+
+    func testCurrencyRoundingUsesRequestedPrecision() throws {
+        XCTAssertEqual(
+            LedgerCurrency.rounded(
+                try XCTUnwrap(Decimal(string: "1.2345")),
+                currencyCode: "KWD"
+            ),
+            try XCTUnwrap(Decimal(string: "1.235"))
+        )
+    }
+}
+
+@MainActor
+final class CurrencyPersistenceTests: XCTestCase {
+    func testGroupPersistsSelectedCurrencyAndRejectsInvalidMinorUnits() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(
+                name: "日本旅行",
+                ownerDisplayName: "小明",
+                currencyCode: "JPY"
+            )
+        )
+
+        XCTAssertEqual(group.currencyCode, "JPY")
+        XCTAssertThrowsError(
+            try AccountRepository(persistence: persistence).createAccount(
+                from: AccountDraft(name: "現金", openingBalanceText: "1.5"),
+                in: group
+            )
+        ) { error in
+            guard case AccountRepository.AccountError.invalidCurrencyAmount("JPY") = error else {
+                return XCTFail("Expected JPY precision error, got \(error)")
+            }
+        }
+    }
+}
+
 @MainActor
 final class CloudSharingTests: XCTestCase {
     func testPrepareShareReusesExistingShare() async throws {
@@ -924,6 +979,12 @@ final class CoreDataModelMigrationTests: XCTestCase {
                 destinationModel: destinationModel
             )
         )
+        let currencyAttribute = try XCTUnwrap(
+            destinationModel.entitiesByName["LedgerGroup"]?
+                .attributesByName["currencyCode"]
+        )
+        XCTAssertFalse(currencyAttribute.isOptional)
+        XCTAssertEqual(currencyAttribute.defaultValue as? String, "TWD")
     }
 
     func testV3ToV4LightweightMappingCanBeInferred() throws {
