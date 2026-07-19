@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22522" systemVersion="23E224" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" userDefinedModelVersionIdentifier="">
+    <entity name="AccountAdjustment" representedClassName="AccountAdjustment" syncable="YES" codeGenerationType="class">
+        <attribute name="amount" optional="NO" attributeType="Decimal" defaultValueString="0"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="note" optional="NO" attributeType="String" defaultValueString=""/>
+        <relationship name="account" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerAccount" inverseName="adjustments" inverseEntity="LedgerAccount"/>
+    </entity>
     <entity name="AuditEvent" representedClassName="AuditEvent" syncable="YES" codeGenerationType="class">
         <attribute name="action" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="actorDisplayName" optional="NO" attributeType="String" defaultValueString=""/>
@@ -23,6 +30,7 @@
         <attribute name="lastReconciledBalance" optional="YES" attributeType="Decimal"/>
         <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="openingBalance" optional="NO" attributeType="Decimal" defaultValueString="0"/>
+        <relationship name="adjustments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AccountAdjustment" inverseName="account" inverseEntity="AccountAdjustment"/>
         <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerGroup" inverseName="accounts" inverseEntity="LedgerGroup"/>
         <relationship name="sourceEntries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="sourceAccount" inverseEntity="LedgerEntry"/>
         <relationship name="destinationEntries" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LedgerEntry" inverseName="destinationAccount" inverseEntity="LedgerEntry"/>
@@ -90,6 +98,7 @@
         <relationship name="splits" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="EntrySplit" inverseName="member" inverseEntity="EntrySplit"/>
     </entity>
     <configuration name="Private" usedWithCloudKit="YES">
+        <memberEntity name="AccountAdjustment"/>
         <memberEntity name="AuditEvent"/>
         <memberEntity name="EntrySplit"/>
         <memberEntity name="LedgerAccount"/>
@@ -100,6 +109,7 @@
         <memberEntity name="Member"/>
     </configuration>
     <configuration name="Shared" usedWithCloudKit="YES">
+        <memberEntity name="AccountAdjustment"/>
         <memberEntity name="AuditEvent"/>
         <memberEntity name="EntrySplit"/>
         <memberEntity name="LedgerAccount"/>

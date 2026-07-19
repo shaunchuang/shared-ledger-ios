@@ -46,7 +46,7 @@ struct BooksView: View {
                 } header: {
                     Text("使用中的帳本")
                 } footer: {
-                    Text("目前帳本會決定分類與交易顯示的資料範圍；群組帳號可供所有帳本共用。")
+                    Text("目前帳本會決定分類與交易顯示的資料範圍；群組帳戶可供所有帳本共用。")
                 }
 
                 if !archivedBooks.isEmpty {
@@ -119,7 +119,7 @@ struct BooksView: View {
             }
             Button("取消", role: .cancel) {}
         } message: { book in
-            Text("帳本內的分類與交易都會保留，但不能再新增交易；群組帳號不受影響。")
+            Text("帳本內的分類與交易都會保留，但不能再新增交易；群組帳戶不受影響。")
         }
         .alert("無法更新帳本", isPresented: errorBinding) {
             Button("好", role: .cancel) {}

@@ -62,13 +62,13 @@ struct GroupDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        LedgerSectionHeader(title: "群組帳號")
+                        LedgerSectionHeader(title: "群組帳戶")
                         LedgerCard(padding: 0) {
                             NavigationLink {
                                 AccountsView(group: group)
                             } label: {
                                 LedgerNavRow(
-                                    title: "帳號",
+                                    title: "帳戶",
                                     detail: "所有帳本共用的現金、銀行與信用卡",
                                     icon: "creditcard.fill",
                                     tint: .blue

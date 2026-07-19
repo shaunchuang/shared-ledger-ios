@@ -123,7 +123,7 @@ struct DashboardView: View {
                 VStack(spacing: 0) {
                     OnboardingStep(number: "1", title: "建立群組", detail: "加入家人、朋友或旅伴")
                     Divider().padding(.leading, 52)
-                    OnboardingStep(number: "2", title: "新增帳號", detail: "現金、銀行或共同基金")
+                    OnboardingStep(number: "2", title: "新增帳戶", detail: "現金、銀行或共同基金")
                     Divider().padding(.leading, 52)
                     OnboardingStep(number: "3", title: "記錄第一筆", detail: "選擇付款人與分攤方式")
                 }
@@ -186,4 +186,3 @@ private struct OnboardingStep: View {
 #Preview {
     NavigationStack { DashboardView() }
 }
-

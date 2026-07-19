@@ -42,9 +42,10 @@ struct EntryRepository {
             throw EntryError.invalidDraft
         }
         guard let group = book.group else { throw EntryError.missingGroup }
+        guard book.archivedAt == nil else { throw EntryError.archivedBook }
 
-        let groupAccounts = accounts.filter { $0.group == group && $0.archivedAt == nil }
-        let bookCategories = categories.filter { $0.book == book && $0.archivedAt == nil }
+        let groupAccounts = accounts.filter { $0.group == group }
+        let bookCategories = categories.filter { $0.book == book }
         let groupMembers = members.filter { $0.group == group }
         let sourceAccount = groupAccounts.first { $0.id == draft.sourceAccountID }
         let destinationAccount = groupAccounts.first { $0.id == draft.destinationAccountID }
@@ -53,6 +54,13 @@ struct EntryRepository {
         let participants = groupMembers.filter { member in
             guard let id = member.id else { return false }
             return draft.splitMemberIDs.contains(id)
+        }
+
+        if sourceAccount?.archivedAt != nil || destinationAccount?.archivedAt != nil {
+            throw EntryError.archivedAccount
+        }
+        if category?.archivedAt != nil {
+            throw EntryError.archivedCategory
         }
 
         switch draft.kind {
@@ -130,6 +138,9 @@ struct EntryRepository {
     enum EntryError: LocalizedError {
         case invalidDraft
         case missingGroup
+        case archivedBook
+        case archivedAccount
+        case archivedCategory
         case crossScopeReference
 
         var errorDescription: String? {
@@ -138,8 +149,14 @@ struct EntryRepository {
                 return "請確認金額、帳戶與分攤成員都已填寫。"
             case .missingGroup:
                 return "找不到這個帳本所屬的群組。"
+            case .archivedBook:
+                return "已封存的帳本不能新增交易。"
+            case .archivedAccount:
+                return "已封存的帳戶不能用於新交易。"
+            case .archivedCategory:
+                return "已封存的分類不能用於新交易。"
             case .crossScopeReference:
-                return "交易帳號必須屬於目前群組，分類必須屬於目前帳本。"
+                return "交易帳戶必須屬於目前群組，分類必須屬於目前帳本。"
             }
         }
     }
