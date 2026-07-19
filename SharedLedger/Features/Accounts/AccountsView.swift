@@ -11,6 +11,7 @@ struct AccountsView: View {
     @State private var accountPendingArchive: LedgerAccount?
     @State private var errorMessage: String?
     @State private var accountBalances: [NSManagedObjectID: Decimal] = [:]
+    @State private var hasLoadedBalances = false
 
     init(group: LedgerGroup) {
         self.group = group
@@ -135,7 +136,12 @@ struct AccountsView: View {
         } message: {
             Text(errorMessage ?? "請稍後再試。")
         }
-        .task {
+        .onAppear {
+            guard !hasLoadedBalances else { return }
+            hasLoadedBalances = true
+            refreshBalances()
+        }
+        .onChange(of: accounts.count) { _ in
             refreshBalances()
         }
         .onReceive(
@@ -191,9 +197,6 @@ struct AccountsView: View {
                 return accountIDs.contains(ledgerAccount.objectID)
             }
             if let entry = object as? LedgerEntry {
-                if entry.group == group {
-                    return true
-                }
                 if let sourceID = entry.sourceAccount?.objectID, accountIDs.contains(sourceID) {
                     return true
                 }
