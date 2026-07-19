@@ -3,15 +3,22 @@ import CloudKit
 
 final class PersistenceController {
     static let shared = PersistenceController()
+    private static let cloudKitContainerIdentifier = "iCloud.com.shaunchuang.SharedLedger"
+
+    typealias ShareFetcher = (
+        [NSManagedObjectID]
+    ) throws -> [NSManagedObjectID: CKShare]
 
     let container: NSPersistentCloudKitContainer
     private(set) var privateStore: NSPersistentStore!
     private(set) var sharedStore: NSPersistentStore!
+    private let shareFetcher: ShareFetcher?
     private var remoteChangeObserver: NSObjectProtocol?
     private var isRepairingData = false
     private var shouldRepeatDataRepair = false
 
-    init(inMemory: Bool = false) {
+    init(inMemory: Bool = false, shareFetcher: ShareFetcher? = nil) {
+        self.shareFetcher = shareFetcher
         container = NSPersistentCloudKitContainer(name: "SharedLedger")
 
         if inMemory {
@@ -94,6 +101,24 @@ final class PersistenceController {
     @MainActor
     func prepareShare(for group: LedgerGroup) async throws -> (CKShare, CKContainer) {
         let shareTitle = group.name ?? "Shared Ledger 群組"
+        let objectID = group.objectID
+
+        let existingShare: CKShare?
+        if objectID.isTemporaryID {
+            existingShare = nil
+        } else if let shareFetcher {
+            existingShare = try shareFetcher([objectID])[objectID]
+        } else {
+            existingShare = try container.fetchShares(matching: [objectID])[objectID]
+        }
+
+        if let existingShare {
+            existingShare[CKShare.SystemFieldKey.title] = shareTitle
+            return (
+                existingShare,
+                CKContainer(identifier: Self.cloudKitContainerIdentifier)
+            )
+        }
 
         return try await withCheckedThrowingContinuation { continuation in
             container.share([group], to: nil) { _, share, cloudContainer, error in
@@ -145,7 +170,7 @@ final class PersistenceController {
         description.shouldMigrateStoreAutomatically = true
         description.shouldInferMappingModelAutomatically = true
         let options = NSPersistentCloudKitContainerOptions(
-            containerIdentifier: "iCloud.com.shaunchuang.SharedLedger"
+            containerIdentifier: cloudKitContainerIdentifier
         )
         options.databaseScope = databaseScope
         description.cloudKitContainerOptions = options
