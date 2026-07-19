@@ -9,6 +9,7 @@ struct AccountsView: View {
     @State private var isPresentingNewAccount = false
     @State private var accountPendingArchive: LedgerAccount?
     @State private var errorMessage: String?
+    @State private var accountBalances: [NSManagedObjectID: Decimal] = [:]
 
     init(group: LedgerGroup) {
         self.group = group
@@ -36,10 +37,6 @@ struct AccountsView: View {
     }
 
     var body: some View {
-        let repository = AccountRepository()
-        let activeAccountBalances = balances(for: activeAccounts, repository: repository)
-        let archivedAccountBalances = balances(for: archivedAccounts, repository: repository)
-
         ZStack {
             LedgerBackground()
             ScrollView {
@@ -59,7 +56,7 @@ struct AccountsView: View {
                                 ForEach(Array(activeAccounts.enumerated()), id: \.element.objectID) { index, account in
                                     AccountRow(
                                         account: account,
-                                        balance: activeAccountBalances[account.objectID] ?? 0,
+                                        balance: accountBalances[account.objectID] ?? 0,
                                         onArchive: { accountPendingArchive = account }
                                     )
                                     if index < activeAccounts.count - 1 {
@@ -78,7 +75,7 @@ struct AccountsView: View {
                                     ForEach(Array(archivedAccounts.enumerated()), id: \.element.objectID) { index, account in
                                         AccountRow(
                                             account: account,
-                                            balance: archivedAccountBalances[account.objectID] ?? 0,
+                                            balance: accountBalances[account.objectID] ?? 0,
                                             onArchive: nil
                                         )
                                         if index < archivedAccounts.count - 1 {
@@ -137,6 +134,18 @@ struct AccountsView: View {
         } message: {
             Text(errorMessage ?? "請稍後再試。")
         }
+        .onAppear(perform: refreshBalances)
+        .onChange(of: accounts.map(\.objectID)) { _ in
+            refreshBalances()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: group.managedObjectContext
+            )
+        ) { _ in
+            refreshBalances()
+        }
     }
 
     private var archiveConfirmationBinding: Binding<Bool> {
@@ -160,6 +169,10 @@ struct AccountsView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func refreshBalances() {
+        accountBalances = balances(for: Array(accounts), repository: AccountRepository())
     }
 }
 

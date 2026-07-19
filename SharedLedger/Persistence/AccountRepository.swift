@@ -126,9 +126,7 @@ struct AccountRepository {
             }
             return openingBalance + movementTotal
         } catch {
-            return accounts.reduce(Decimal.zero) { partialResult, account in
-                partialResult + currentBalance(for: account)
-            }
+            return openingBalance
         }
     }
 
