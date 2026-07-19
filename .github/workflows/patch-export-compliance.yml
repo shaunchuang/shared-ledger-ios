@@ -1,0 +1,46 @@
+name: Patch export compliance
+
+on:
+  push:
+    branches:
+      - agent/declare-non-exempt-encryption
+    paths:
+      - .github/workflows/patch-export-compliance.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Add export compliance declaration
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          project = Path("SharedLedger.xcodeproj/project.pbxproj")
+          content = project.read_text()
+          marker = '\t\t\t\tINFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";'
+          replacement = marker + '\n\t\t\t\tINFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;'
+
+          occurrences = content.count(marker)
+          if occurrences != 2:
+              raise SystemExit(f"Expected 2 app build configurations, found {occurrences}")
+          if "INFOPLIST_KEY_ITSAppUsesNonExemptEncryption" in content:
+              raise SystemExit("Export compliance declaration already exists")
+
+          project.write_text(content.replace(marker, replacement))
+          PY
+
+      - name: Commit project update
+        run: |
+          rm .github/workflows/patch-export-compliance.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add SharedLedger.xcodeproj/project.pbxproj .github/workflows/patch-export-compliance.yml
+          git commit -m "Declare exempt encryption usage"
+          git push
