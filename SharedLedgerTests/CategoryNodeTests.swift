@@ -957,6 +957,36 @@ final class BookRepositoryTests: XCTestCase {
 }
 
 final class CoreDataModelMigrationTests: XCTestCase {
+    func testV5ToV6LightweightMappingCanBeInferred() throws {
+        let bundle = Bundle(for: PersistenceController.self)
+        let modelDirectory = try XCTUnwrap(
+            bundle.url(forResource: "SharedLedger", withExtension: "momd")
+        )
+        let sourceModel = try XCTUnwrap(
+            NSManagedObjectModel(
+                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV5.mom")
+            )
+        )
+        let destinationModel = try XCTUnwrap(
+            NSManagedObjectModel(
+                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV6.mom")
+            )
+        )
+
+        XCTAssertNoThrow(
+            try NSMappingModel.inferredMappingModel(
+                forSourceModel: sourceModel,
+                destinationModel: destinationModel
+            )
+        )
+        let currencyAttribute = try XCTUnwrap(
+            destinationModel.entitiesByName["LedgerGroup"]?
+                .attributesByName["currencyCode"]
+        )
+        XCTAssertFalse(currencyAttribute.isOptional)
+        XCTAssertEqual(currencyAttribute.defaultValue as? String, "TWD")
+    }
+
     func testV4ToV5LightweightMappingCanBeInferred() throws {
         let bundle = Bundle(for: PersistenceController.self)
         let modelDirectory = try XCTUnwrap(
@@ -979,12 +1009,6 @@ final class CoreDataModelMigrationTests: XCTestCase {
                 destinationModel: destinationModel
             )
         )
-        let currencyAttribute = try XCTUnwrap(
-            destinationModel.entitiesByName["LedgerGroup"]?
-                .attributesByName["currencyCode"]
-        )
-        XCTAssertFalse(currencyAttribute.isOptional)
-        XCTAssertEqual(currencyAttribute.defaultValue as? String, "TWD")
     }
 
     func testV3ToV4LightweightMappingCanBeInferred() throws {
