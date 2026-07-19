@@ -136,7 +136,7 @@ private struct BookTransactionsView: View {
             }
         }
         .onAppear(perform: normalizeSelectedBook)
-        .onChange(of: activeBooks.count) { _ in
+        .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
         }
     }
