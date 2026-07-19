@@ -117,9 +117,10 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | V2 | 新增 `LedgerBook`，讓帳戶、分類與交易歸屬帳本，並加入帳戶期初餘額與對帳欄位 | 為每個既有群組建立或取得「主要帳本」，再回填所有缺少 `book` 的 V1 物件 |
 | V3 | 帳戶回歸群組 scope，新增帳戶直屬 `AccountAdjustment`，移除 `LedgerAccount.book`／`LedgerBook.accounts`；分類與交易維持帳本 scope | 輕量 migration 保留帳戶既有 `group`、交易、期初餘額與對帳資料；啟動後將舊版無帳本的 `balanceAdjustment` entry 冪等轉為 `AccountAdjustment`，分類與交易缺少 `book` 時回填主要帳本 |
 | V4 | 分類提升為群組 scope，新增 `BookCategoryAssignment`；交易維持帳本 scope | 先保留 optional legacy `LedgerCategory.book` 供過渡修復；每個既有分類建立對原帳本的 assignment，不依名稱自動合併。完成 private/shared stores 與混合版本同步驗證後，後續 model version 才移除 legacy 關聯 |
-| V5 | 移除會隨群組分享的 `Member.isCurrentUser`，新增只存在 private configuration 的 `LocalMemberIdentity`；在 `LedgerGroup` 新增非 optional `currencyCode` | 以 lightweight migration 移除舊欄位並以 `TWD` 回填既有群組貨幣；共享群組首次開啟時由目前使用者確認待邀請的 member／viewer，或建立新的 member，再把 `groupID`／`memberID` 對應寫入 private store |
+| V5 | 移除會隨群組分享的 `Member.isCurrentUser`，新增只存在 private configuration 的 `LocalMemberIdentity` | 以 lightweight migration 移除舊欄位；共享群組首次開啟時由目前使用者確認待邀請的 member／viewer，或建立新的 member，再把 `groupID`／`memberID` 對應寫入 private store |
+| V6 | 在 `LedgerGroup` 新增非 optional ISO 4217 `currencyCode` | 以 lightweight migration 和 schema 預設 `TWD` 回填既有群組；新群組由建立者選擇或採裝置地區預設 |
 
-V1→V2→V3→V4→V5 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。同一版也為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可為舊資料推導 mapping；新群組仍由建立者明確選擇或採裝置地區預設。
+V1→V2→V3→V4→V5→V6 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。
 
 V4 資料修復對每個既有分類採以下規則：
 
