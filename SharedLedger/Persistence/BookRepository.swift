@@ -226,10 +226,7 @@ struct BookRepository {
                     context.assign(audit, to: store)
                     audit.id = UUID()
                     audit.action = "book.migrated"
-                    audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
-                        .currentMember(in: group)?
-                        .displayName
-                        ?? "目前使用者"
+                    audit.actorDisplayName = "資料遷移"
                     audit.createdAt = now
                     audit.summary = "為既有群組建立預設帳本「\(BookDraft.defaultName)」"
                     audit.group = group

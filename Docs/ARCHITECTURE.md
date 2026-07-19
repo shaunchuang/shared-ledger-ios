@@ -37,7 +37,7 @@ INFOPLIST_KEY_CKSharingSupported = YES;
 INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 ```
 
-Apple Developer Team 屬於 signing 設定，不可在不知道完整 Team ID 時猜測或任意改寫。
+Apple Developer Team 屬於 signing 設定，不可在不知道完整 Team ID 時猜測或任意改寫。App target 使用 Automatic Signing，不在 Debug／Release 寫死 `CODE_SIGN_IDENTITY`；本機開發與 Xcode Cloud／App Store 發布應由 Xcode 依 provisioning profile 分別選擇開發或發行憑證。
 
 ## 模組方向
 

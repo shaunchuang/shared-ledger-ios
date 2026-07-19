@@ -141,7 +141,7 @@ struct AccountsView: View {
             hasLoadedBalances = true
             refreshBalances()
         }
-        .onChange(of: accounts.count) { _ in
+        .onChange(of: accounts.count) {
             refreshBalances()
         }
         .onReceive(
