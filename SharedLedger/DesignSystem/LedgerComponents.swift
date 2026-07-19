@@ -162,6 +162,31 @@ struct LedgerPrimaryButtonStyle: ButtonStyle {
     }
 }
 
+struct LedgerNavRow: View {
+    let title: String
+    let detail: String
+    let icon: String
+    var tint: Color = LedgerTheme.primary
+
+    var body: some View {
+        HStack(spacing: 14) {
+            LedgerIconBadge(systemImage: icon, tint: tint)
+            Text(title)
+                .font(.subheadline.weight(.medium))
+            Spacer()
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+}
+
 struct LedgerIconBadge: View {
     let systemImage: String
     var tint: Color = LedgerTheme.primary
