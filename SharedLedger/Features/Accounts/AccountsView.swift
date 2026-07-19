@@ -135,8 +135,7 @@ struct AccountsView: View {
         } message: {
             Text(errorMessage ?? "請稍後再試。")
         }
-        .onAppear(perform: refreshBalances)
-        .onChange(of: accounts.count) { _ in
+        .task(id: accounts.count) {
             refreshBalances()
         }
         .onReceive(
@@ -252,6 +251,7 @@ private struct AccountRow: View {
 private struct AccountDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var account: LedgerAccount
+    private let accountRepository = AccountRepository()
 
     @FetchRequest private var entries: FetchedResults<LedgerEntry>
 
@@ -277,7 +277,7 @@ private struct AccountDetailView: View {
     }
 
     var body: some View {
-        let currentBalance = AccountRepository().currentBalance(for: account)
+        let currentBalance = accountRepository.currentBalance(for: account)
 
         ZStack {
             LedgerBackground()
