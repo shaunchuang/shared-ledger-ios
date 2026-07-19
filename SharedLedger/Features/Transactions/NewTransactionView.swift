@@ -25,13 +25,24 @@ struct NewTransactionView: View {
         )
         _categories = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerCategory.sortOrder, ascending: true)],
-            predicate: NSPredicate(format: "book == %@ AND archivedAt == nil", book)
+            predicate: book.group.map {
+                NSPredicate(format: "group == %@ AND archivedAt == nil", $0)
+            } ?? NSPredicate(value: false)
         )
     }
 
     private var members: [Member] {
         let set = book.group?.members as? Set<Member> ?? []
         return set.sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
+    }
+
+    private var availableCategories: [LedgerCategory] {
+        let availableIDs = Set(
+            CategoryRepository()
+                .availableCategories(in: book)
+                .map(\.objectID)
+        )
+        return categories.filter { availableIDs.contains($0.objectID) }
     }
 
     var body: some View {
@@ -94,7 +105,7 @@ struct NewTransactionView: View {
                     }
                     Picker("分類", selection: $draft.categoryID) {
                         Text("未分類").tag(UUID?.none)
-                        ForEach(Array(categories), id: \.objectID) { category in
+                        ForEach(availableCategories, id: \.objectID) { category in
                             Text(categoryLabel(category)).tag(category.id)
                         }
                     }
@@ -204,7 +215,7 @@ struct NewTransactionView: View {
                 from: draft,
                 in: book,
                 accounts: Array(accounts),
-                categories: Array(categories),
+                categories: availableCategories,
                 members: members
             )
             onSaved()

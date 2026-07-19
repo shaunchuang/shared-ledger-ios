@@ -1,6 +1,12 @@
 import CoreData
 import Foundation
 
+enum BookCategorySource {
+    case allGroupCategories
+    case copy(LedgerBook)
+    case empty
+}
+
 @MainActor
 struct BookRepository {
     private let persistence: PersistenceController
@@ -27,7 +33,11 @@ struct BookRepository {
     }
 
     @discardableResult
-    func createBook(from draft: BookDraft, in group: LedgerGroup) throws -> LedgerBook {
+    func createBook(
+        from draft: BookDraft,
+        in group: LedgerGroup,
+        categorySource: BookCategorySource = .allGroupCategories
+    ) throws -> LedgerBook {
         guard draft.canCreate else { throw BookError.invalidDraft }
 
         let activeBooks = books(in: group)
@@ -39,6 +49,7 @@ struct BookRepository {
             isDefault: activeBooks.isEmpty,
             sortOrder: nextSortOrder
         )
+        try insertCategoryAssignments(for: book, from: categorySource, in: group)
         group.updatedAt = Date()
         insertAudit(
             action: "book.created",
@@ -222,11 +233,6 @@ struct BookRepository {
                     audit.group = group
                 }
 
-                let categories = group.categories as? Set<LedgerCategory> ?? []
-                for category in categories where category.book == nil {
-                    category.book = defaultBook
-                }
-
                 let entries = group.entries as? Set<LedgerEntry> ?? []
                 for entry in entries where entry.book == nil {
                     entry.book = defaultBook
@@ -265,6 +271,47 @@ struct BookRepository {
         return book
     }
 
+    private func insertCategoryAssignments(
+        for book: LedgerBook,
+        from source: BookCategorySource,
+        in group: LedgerGroup
+    ) throws {
+        let categories: [LedgerCategory]
+        switch source {
+        case .allGroupCategories:
+            categories = (group.categories as? Set<LedgerCategory> ?? [])
+                .filter { $0.archivedAt == nil }
+                .sorted {
+                    if $0.sortOrder == $1.sortOrder {
+                        return ($0.name ?? "") < ($1.name ?? "")
+                    }
+                    return $0.sortOrder < $1.sortOrder
+                }
+        case let .copy(sourceBook):
+            guard sourceBook.group == group else { throw BookError.crossGroupCategorySource }
+            categories = (sourceBook.categoryAssignments as? Set<BookCategoryAssignment> ?? [])
+                .filter { $0.isEnabled && $0.category?.archivedAt == nil }
+                .sorted { $0.sortOrder < $1.sortOrder }
+                .compactMap(\.category)
+        case .empty:
+            categories = []
+        }
+
+        let context = persistence.container.viewContext
+        let store = persistence.store(for: group)
+        for (index, category) in categories.enumerated() {
+            guard category.group == group else { throw BookError.crossGroupCategorySource }
+            let assignment = BookCategoryAssignment(context: context)
+            context.assign(assignment, to: store)
+            assignment.id = UUID()
+            assignment.createdAt = Date()
+            assignment.isEnabled = true
+            assignment.sortOrder = Int32(index)
+            assignment.book = book
+            assignment.category = category
+        }
+    }
+
     private func insertAudit(
         action: String,
         summary: String,
@@ -299,6 +346,7 @@ struct BookRepository {
         case cannotArchiveOnlyBook
         case archivedBook
         case invalidOrder
+        case crossGroupCategorySource
 
         var errorDescription: String? {
             switch self {
@@ -312,6 +360,8 @@ struct BookRepository {
                 return "已封存的帳本不能再修改。"
             case .invalidOrder:
                 return "帳本排序資料不完整，請重新整理後再試。"
+            case .crossGroupCategorySource:
+                return "只能沿用同一群組內帳本的分類設定。"
             }
         }
     }

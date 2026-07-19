@@ -18,9 +18,6 @@ struct EntryRepository {
         members: [Member]
     ) throws -> LedgerEntry {
         let book = try BookRepository(persistence: persistence).ensureDefaultBook(in: group)
-        for category in categories where category.book == nil && category.group == group {
-            category.book = book
-        }
         return try createEntry(
             from: draft,
             in: book,
@@ -45,11 +42,14 @@ struct EntryRepository {
         guard book.archivedAt == nil else { throw EntryError.archivedBook }
 
         let groupAccounts = accounts.filter { $0.group == group }
-        let bookCategories = categories.filter { $0.book == book }
+        let groupCategories = categories.filter { $0.group == group }
         let groupMembers = members.filter { $0.group == group }
         let sourceAccount = groupAccounts.first { $0.id == draft.sourceAccountID }
         let destinationAccount = groupAccounts.first { $0.id == draft.destinationAccountID }
-        let category = bookCategories.first { $0.id == draft.categoryID }
+        let requestedCategory = groupCategories.first { $0.id == draft.categoryID }
+        let category = requestedCategory.flatMap {
+            CategoryRepository(persistence: persistence).isCategoryAvailable($0, in: book) ? $0 : nil
+        }
         let payer = groupMembers.first { $0.id == draft.payerMemberID }
         let participants = groupMembers.filter { member in
             guard let id = member.id else { return false }
@@ -59,7 +59,7 @@ struct EntryRepository {
         if sourceAccount?.archivedAt != nil || destinationAccount?.archivedAt != nil {
             throw EntryError.archivedAccount
         }
-        if category?.archivedAt != nil {
+        if requestedCategory?.archivedAt != nil {
             throw EntryError.archivedCategory
         }
 
@@ -156,7 +156,7 @@ struct EntryRepository {
             case .archivedCategory:
                 return "已封存的分類不能用於新交易。"
             case .crossScopeReference:
-                return "交易帳戶必須屬於目前群組，分類必須屬於目前帳本。"
+                return "交易帳戶與分類必須屬於目前群組，且分類需已在目前帳本啟用。"
             }
         }
     }

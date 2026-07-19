@@ -13,10 +13,13 @@ enum MemberRole: String, CaseIterable, Codable, Sendable {
     var canManageMembers: Bool {
         self == .owner || self == .administrator
     }
+
+    var canManageLedgerSettings: Bool {
+        self == .owner || self == .administrator
+    }
 }
 
 enum InvitationStatus: String, CaseIterable, Codable, Sendable {
     case accepted
     case pending
 }
-
