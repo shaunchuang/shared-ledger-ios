@@ -14,6 +14,11 @@ if [ -z "$CI_BUILD_NUMBER" ]; then
     exit 0
 fi
 
+if [ -z "$CI_PRIMARY_REPOSITORY_PATH" ]; then
+    echo "CI_PRIMARY_REPOSITORY_PATH is not set; cannot change directory."
+    exit 0
+fi
+
 # Xcode Cloud checks the repository out at CI_PRIMARY_REPOSITORY_PATH.
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
