@@ -159,6 +159,18 @@ App 必須呈現未登入 iCloud、暫時不可用、同步中、同步成功、
 
 Debug／Release 產生的 Info.plist 都必須包含 `CKSharingSupported = YES`，讓系統能把邀請連結交回 App。TestFlight 與 App Store 使用 CloudKit Production environment；每次 model version 新增 record type 或欄位後，必須先在 Development 驗證，再將 schema 部署到 Production。
 
+### CloudKit schema 部署
+
+CloudKit 的 Production 環境不允許在執行期新增 record type 或欄位；只有 Development 環境會由 `NSPersistentCloudKitContainer` 自動建立 schema。若 Core Data 模型新增了 entity（例如 `AuditEvent`）而未部署到 Production，TestFlight／App Store 版本的 mirroring delegate 會以 `CKError "Invalid Arguments" (12/2006): Cannot create new type CD_<Entity> in production schema` 初始化失敗，同步與共享邀請全部停擺。
+
+每次修改 `SharedLedger.xcdatamodeld` 後，發佈前必須：
+
+1. 以 Debug 組態加上啟動參數 `-initialize-cloudkit-schema` 執行 App（Scheme → Run → Arguments Passed On Launch），`PersistenceController` 會呼叫 `initializeCloudKitSchema(options:)` 把目前模型寫入 Development schema。此模式只載入 private store（`initializeCloudKitSchema` 不支援 `.shared` scope），完成後移除該參數再正常執行。
+2. 到 [CloudKit Console](https://icloud.developer.apple.com/) → 容器 `iCloud.com.shaunchuang.SharedLedger` → Development 環境確認 `CD_<Entity>` record types 齊全，再執行「Deploy Schema Changes…」部署到 Production。
+3. 部署完成後再送 TestFlight／App Store 建置版本。
+
+參考：Apple 文件 [Deploying an iCloud Container's Schema](https://developer.apple.com/documentation/cloudkit/deploying-an-icloud-container-s-schema) 與 [`initializeCloudKitSchema(options:)`](https://developer.apple.com/documentation/coredata/nspersistentcloudkitcontainer/initializecloudkitschema(options:))。
+
 ## 聯絡人與隱私
 
 - 只使用系統聯絡人選擇器處理使用者主動選取的聯絡人。
