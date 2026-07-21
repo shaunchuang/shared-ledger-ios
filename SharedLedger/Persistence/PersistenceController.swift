@@ -4,6 +4,17 @@ import CloudKit
 final class PersistenceController {
     static let shared = PersistenceController()
 
+    /// 以 `-initialize-cloudkit-schema` 啟動參數執行時，會把目前 Core Data 模型的
+    /// record types 寫入 CloudKit Development schema；之後仍須在 CloudKit Console
+    /// 手動將 Development schema 部署到 Production，正式版才能同步新 entity。
+    static var shouldInitializeCloudKitSchema: Bool {
+        #if DEBUG
+        CommandLine.arguments.contains("-initialize-cloudkit-schema")
+        #else
+        false
+        #endif
+    }
+
     let container: NSPersistentCloudKitContainer
     private(set) var privateStore: NSPersistentStore!
     private(set) var sharedStore: NSPersistentStore!
@@ -22,12 +33,18 @@ final class PersistenceController {
                 configuration: "Private",
                 databaseScope: .private
             )
-            let sharedDescription = Self.storeDescription(
-                url: storeDirectory.appendingPathComponent("SharedLedger-shared.sqlite"),
-                configuration: "Shared",
-                databaseScope: .shared
-            )
-            container.persistentStoreDescriptions = [privateDescription, sharedDescription]
+            if Self.shouldInitializeCloudKitSchema {
+                // initializeCloudKitSchema(options:) 不支援 .shared scope 的 store，
+                // 初始化 schema 時只載入 private store。
+                container.persistentStoreDescriptions = [privateDescription]
+            } else {
+                let sharedDescription = Self.storeDescription(
+                    url: storeDirectory.appendingPathComponent("SharedLedger-shared.sqlite"),
+                    configuration: "Shared",
+                    databaseScope: .shared
+                )
+                container.persistentStoreDescriptions = [privateDescription, sharedDescription]
+            }
         }
 
         container.persistentStoreDescriptions.forEach { description in
@@ -56,6 +73,15 @@ final class PersistenceController {
         if inMemory {
             privateStore = container.persistentStoreCoordinator.persistentStores.first
             sharedStore = privateStore
+        }
+
+        if Self.shouldInitializeCloudKitSchema {
+            sharedStore = privateStore
+            do {
+                try container.initializeCloudKitSchema(options: [])
+            } catch {
+                assertionFailure("CloudKit schema initialization failed: \(error)")
+            }
         }
 
         container.viewContext.automaticallyMergesChangesFromParent = true
