@@ -10,6 +10,7 @@ struct GroupsView: View {
     @State private var isCreatingGroup = false
     @State private var sharePayload: CloudSharePayload?
     @State private var sharingError: String?
+    @State private var isPreparingShare = false
 
     var body: some View {
         ZStack {
@@ -52,7 +53,10 @@ struct GroupsView: View {
             }
         }
         .sheet(item: $sharePayload) { payload in
-            CloudSharingView(payload: payload)
+            CloudSharingView(payload: payload) { message in
+                sharePayload = nil
+                sharingError = message
+            }
         }
         .alert("無法建立邀請", isPresented: sharingErrorBinding) {
             Button("好", role: .cancel) {}
@@ -108,18 +112,117 @@ struct GroupsView: View {
         )
     }
 
+    @MainActor
     private func prepareShare(_ group: LedgerGroup) {
-        Task {
+        guard !isPreparingShare else { return }
+        isPreparingShare = true
+
+        Task { @MainActor in
+            defer { isPreparingShare = false }
+
             do {
-                let (share, container) = try await PersistenceController.shared.prepareShare(for: group)
+                let persistence = PersistenceController.shared
+                let (share, container) = try await persistence.prepareShare(for: group)
                 sharePayload = CloudSharePayload(
                     share: share,
                     container: container,
+                    store: persistence.store(for: group),
                     title: group.name ?? "Shared Ledger 群組"
                 )
             } catch {
                 sharingError = error.localizedDescription
             }
+        }
+    }
+}
+
+
+struct MemberIdentitySelectionView: View {
+    @ObservedObject var group: LedgerGroup
+    let onResolved: () -> Void
+
+    @State private var displayName = ""
+    @State private var errorMessage: String?
+
+    private var pendingMembers: [Member] {
+        let members = group.members as? Set<Member> ?? []
+        return members
+            .filter {
+                $0.invitationStatus == InvitationStatus.pending.rawValue
+                    && ($0.role == MemberRole.member.rawValue
+                        || $0.role == MemberRole.viewer.rawValue)
+            }
+            .sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Text("為了讓付款人、分攤與權限正確，請確認你在「\(group.name ?? "共享群組")」中的成員身分。這項對應只會保存到你的私人 iCloud 資料。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !pendingMembers.isEmpty {
+                Section("選擇邀請你的名稱") {
+                    ForEach(pendingMembers, id: \.objectID) { member in
+                        Button {
+                            claim(member)
+                        } label: {
+                            HStack {
+                                Text(member.displayName ?? "未命名成員")
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: "checkmark.circle")
+                                    .foregroundStyle(LedgerTheme.primary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("找不到你的名稱？") {
+                TextField("你的顯示名稱", text: $displayName)
+                Button("以新成員加入") {
+                    joinAsNewMember()
+                }
+                .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .navigationTitle("確認成員身分")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("無法確認身分", isPresented: errorBinding) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "請稍後再試。")
+        }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )
+    }
+
+    private func claim(_ member: Member) {
+        do {
+            try GroupRepository().claimCurrentMember(member, in: group)
+            onResolved()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func joinAsNewMember() {
+        do {
+            try GroupRepository().joinSharedGroup(
+                displayName: displayName,
+                group: group
+            )
+            onResolved()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }
@@ -153,6 +256,8 @@ private struct GroupCard: View {
                         .foregroundStyle(.primary)
                     HStack(spacing: 8) {
                         Label("\(members.count) 位成員", systemImage: "person.2")
+                        Text("·")
+                        Text(LedgerCurrency.normalizedCode(group.currencyCode))
                         if pendingCount > 0 {
                             Text("·")
                             Text("\(pendingCount) 位待邀請")

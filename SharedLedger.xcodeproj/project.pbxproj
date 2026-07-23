@@ -16,6 +16,7 @@
 		2D4C20C4C48AF5D503BA3043 /* ContactPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */; };
 		39F1BDD0AB285B51FDA06776 /* GroupRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23001F74E857C5902E92E07F /* GroupRepository.swift */; };
 		3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D239A715784171742AA525A4 /* CategoryNodeTests.swift */; };
+		C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000004 /* AllocationCalculatorTests.swift */; };
 		3FD7B477EA974043CC7FE384 /* TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AC72E8EDCB58760C5C8FFB /* TransactionsView.swift */; };
 		470E635931EBCEA9E01495A0 /* GroupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C08A6952271AAF2C12550BD /* GroupsView.swift */; };
 		62957ADC31008DFE4BD2D1B6 /* CloudSharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61221ACA806160210D38B952 /* CloudSharingView.swift */; };
@@ -33,6 +34,7 @@
 		C64BB8937B76F219A5869183 /* AccountDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87EB3F50D248BDD68128A10F /* AccountDraft.swift */; };
 		16859F85217C3D05F288B601 /* CategoryDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0603C49AD318F5738BBEB20A /* CategoryDraft.swift */; };
 		177FCD6E5BD423C7EFD4876D /* TransactionDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B51DD7078AB1050B15B6EB /* TransactionDraft.swift */; };
+		C0DE00000000000000000001 /* AllocationCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000002 /* AllocationCalculator.swift */; };
 		B3A5759CBAB1E792D2E0E31D /* AccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 783D94A8B191EA3C68BDCC8E /* AccountRepository.swift */; };
 		A9356702DCCEE55DB3958BA9 /* CategoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E6EBEA69AD91742929038A3 /* CategoryRepository.swift */; };
 		307C56EAA122FFEB377E2D30 /* EntryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1788D61353B381E92004D40 /* EntryRepository.swift */; };
@@ -42,6 +44,9 @@
 		294014D28D1484A557694285 /* NewCategoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8513BBF65E390435C125337A /* NewCategoryView.swift */; };
 		4109D620E2FDD335ACF2B722 /* NewTransactionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E0587D01B5AC7D2297C150 /* NewTransactionView.swift */; };
 		EC5F148C8E521294E047D6DD /* EntryKind+Presentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E6F6CD76DCD3D541266091 /* EntryKind+Presentation.swift */; };
+		B00CDAF70000000000000002 /* BookDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00CDAF70000000000000001 /* BookDraft.swift */; };
+		B00CDAF70000000000000004 /* BookRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00CDAF70000000000000003 /* BookRepository.swift */; };
+		B00CDAF70000000000000007 /* BooksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00CDAF70000000000000006 /* BooksView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +81,7 @@
 		B96365B99D5F8B14F65FD5FF /* SharedLedgerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SharedLedgerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB146D37C90F74773B7CD2ED /* SharedLedger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SharedLedger.entitlements; sourceTree = "<group>"; };
 		D239A715784171742AA525A4 /* CategoryNodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryNodeTests.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000004 /* AllocationCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllocationCalculatorTests.swift; sourceTree = "<group>"; };
 		EE02B5318E1A4FEC2A36631B /* GroupDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupDetailView.swift; sourceTree = "<group>"; };
 		F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactPicker.swift; sourceTree = "<group>"; };
 		F88B235208B24B8948B97717 /* MemberRole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRole.swift; sourceTree = "<group>"; };
@@ -84,6 +90,7 @@
 		87EB3F50D248BDD68128A10F /* AccountDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDraft.swift; sourceTree = "<group>"; };
 		0603C49AD318F5738BBEB20A /* CategoryDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDraft.swift; sourceTree = "<group>"; };
 		B9B51DD7078AB1050B15B6EB /* TransactionDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionDraft.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000002 /* AllocationCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllocationCalculator.swift; sourceTree = "<group>"; };
 		783D94A8B191EA3C68BDCC8E /* AccountRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRepository.swift; sourceTree = "<group>"; };
 		3E6EBEA69AD91742929038A3 /* CategoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryRepository.swift; sourceTree = "<group>"; };
 		B1788D61353B381E92004D40 /* EntryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryRepository.swift; sourceTree = "<group>"; };
@@ -93,6 +100,15 @@
 		8513BBF65E390435C125337A /* NewCategoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewCategoryView.swift; sourceTree = "<group>"; };
 		F7E0587D01B5AC7D2297C150 /* NewTransactionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewTransactionView.swift; sourceTree = "<group>"; };
 		D4E6F6CD76DCD3D541266091 /* EntryKind+Presentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryKind+Presentation.swift"; sourceTree = "<group>"; };
+		B00CDAF70000000000000001 /* BookDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookDraft.swift; sourceTree = "<group>"; };
+		B00CDAF70000000000000003 /* BookRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookRepository.swift; sourceTree = "<group>"; };
+		B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV2.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF70000000000000006 /* BooksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BooksView.swift; sourceTree = "<group>"; };
+		B00CDAF70000000000000008 /* SharedLedgerV3.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV3.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF70000000000000009 /* SharedLedgerV4.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV4.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF7000000000000000A /* SharedLedgerV5.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV5.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF7000000000000000B /* SharedLedgerV6.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV6.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF7000000000000000C /* SharedLedgerV7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV7.xcdatamodel; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -113,6 +129,7 @@
 		34790F4DC57A5B3E5D19935B /* Groups */ = {
 			isa = PBXGroup;
 			children = (
+				B00CDAF70000000000000006 /* BooksView.swift */,
 				61221ACA806160210D38B952 /* CloudSharingView.swift */,
 				F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */,
 				A4274F215C3BD8A5CE9B33CB /* CreateGroupView.swift */,
@@ -135,6 +152,7 @@
 			isa = PBXGroup;
 			children = (
 				783D94A8B191EA3C68BDCC8E /* AccountRepository.swift */,
+				B00CDAF70000000000000003 /* BookRepository.swift */,
 				3E6EBEA69AD91742929038A3 /* CategoryRepository.swift */,
 				B1788D61353B381E92004D40 /* EntryRepository.swift */,
 				23001F74E857C5902E92E07F /* GroupRepository.swift */,
@@ -154,8 +172,10 @@
 		4E2AAC912D128933C96BBF6E /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000002 /* AllocationCalculator.swift */,
 				87EB3F50D248BDD68128A10F /* AccountDraft.swift */,
 				71CF7E85A2BE64B7FDC4A29E /* AccountType.swift */,
+				B00CDAF70000000000000001 /* BookDraft.swift */,
 				2337C09D411E2A550FCB5198 /* CategoryNode.swift */,
 				0603C49AD318F5738BBEB20A /* CategoryDraft.swift */,
 				17603CF7F718E4B15A463C90 /* EntryKind.swift */,
@@ -245,6 +265,7 @@
 		C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000004 /* AllocationCalculatorTests.swift */,
 				D239A715784171742AA525A4 /* CategoryNodeTests.swift */,
 			);
 			path = SharedLedgerTests;
@@ -353,6 +374,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */,
 				3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -365,6 +387,9 @@
 				6441D1FBF057593839DC7E0E /* AccountType.swift in Sources */,
 				C64BB8937B76F219A5869183 /* AccountDraft.swift in Sources */,
 				B3A5759CBAB1E792D2E0E31D /* AccountRepository.swift in Sources */,
+				B00CDAF70000000000000002 /* BookDraft.swift in Sources */,
+				B00CDAF70000000000000004 /* BookRepository.swift in Sources */,
+				B00CDAF70000000000000007 /* BooksView.swift in Sources */,
 				608CAF6A129AD49F9CA7C13A /* AccountsView.swift in Sources */,
 				7B077DA6C35F4211288E510E /* NewAccountView.swift in Sources */,
 				63831BBF5E64C0539073D693 /* CategoryNode.swift in Sources */,
@@ -377,6 +402,7 @@
 				9F3D66DC17C60326F2946A06 /* CreateGroupView.swift in Sources */,
 				B6A0077BA7771D6970689B44 /* DashboardView.swift in Sources */,
 				D95DEF26FB265C382832C223 /* EntryKind.swift in Sources */,
+				C0DE00000000000000000001 /* AllocationCalculator.swift in Sources */,
 				EC5F148C8E521294E047D6DD /* EntryKind+Presentation.swift in Sources */,
 				307C56EAA122FFEB377E2D30 /* EntryRepository.swift in Sources */,
 				0E812BB89B2B79F01F9B75F4 /* GroupDetailView.swift in Sources */,
@@ -473,16 +499,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SharedLedger/SharedLedger.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XC43HRR4X2;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SharedLedger/Info.plist;
 				MARKETING_VERSION = 1.0;
+				VERSIONING_SYSTEM = "apple-generic";
 				INFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";
+				INFOPLIST_KEY_CKSharingSupported = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCONTACTSUSAGEDESCRIPTION = "選擇要邀請加入共享記帳群組的聯絡人。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -602,16 +630,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = SharedLedger/SharedLedger.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XC43HRR4X2;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SharedLedger/Info.plist;
 				MARKETING_VERSION = 1.0;
+				VERSIONING_SYSTEM = "apple-generic";
 				INFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";
+				INFOPLIST_KEY_CKSharingSupported = YES;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCONTACTSUSAGEDESCRIPTION = "選擇要邀請加入共享記帳群組的聯絡人。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -662,8 +692,14 @@
 			isa = XCVersionGroup;
 			children = (
 				1986EBF2EE44CCC904C2A47E /* SharedLedger.xcdatamodel */,
+				B00CDAF70000000000000005 /* SharedLedgerV2.xcdatamodel */,
+				B00CDAF70000000000000008 /* SharedLedgerV3.xcdatamodel */,
+				B00CDAF70000000000000009 /* SharedLedgerV4.xcdatamodel */,
+				B00CDAF7000000000000000A /* SharedLedgerV5.xcdatamodel */,
+				B00CDAF7000000000000000B /* SharedLedgerV6.xcdatamodel */,
+				B00CDAF7000000000000000C /* SharedLedgerV7.xcdatamodel */,
 			);
-			currentVersion = 1986EBF2EE44CCC904C2A47E /* SharedLedger.xcdatamodel */;
+			currentVersion = B00CDAF7000000000000000C /* SharedLedgerV7.xcdatamodel */;
 			path = SharedLedger.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

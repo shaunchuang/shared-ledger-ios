@@ -9,10 +9,14 @@ struct NewAccountView: View {
     @State private var draft = AccountDraft()
     @State private var errorMessage: String?
 
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(group.currencyCode)
+    }
+
     var body: some View {
         Form {
             Section {
-                TextField("帳號名稱，例如：現金錢包", text: $draft.name)
+                TextField("帳戶名稱，例如：現金錢包", text: $draft.name)
             } header: {
                 Text("名稱")
             }
@@ -24,10 +28,25 @@ struct NewAccountView: View {
                     }
                 }
             } header: {
-                Text("帳號類型")
+                Text("帳戶類型")
+            }
+
+            Section {
+                HStack {
+                    Text(currencyCode)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    TextField("0", text: $draft.openingBalanceText)
+                        .keyboardType(.numbersAndPunctuation)
+                        .multilineTextAlignment(.trailing)
+                }
+            } header: {
+                Text("期初餘額")
+            } footer: {
+                Text("建立後若帳面與實際餘額不同，請使用餘額調整保留紀錄。")
             }
         }
-        .navigationTitle("新增帳號")
+        .navigationTitle("新增帳戶")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -38,7 +57,7 @@ struct NewAccountView: View {
                     .disabled(!draft.canCreate)
             }
         }
-        .alert("無法新增帳號", isPresented: errorBinding) {
+        .alert("無法新增帳戶", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "請稍後再試。")

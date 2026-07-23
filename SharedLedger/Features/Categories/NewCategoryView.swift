@@ -20,9 +20,11 @@ struct NewCategoryView: View {
                 } else {
                     Text("分類名稱")
                 }
+            } footer: {
+                Text("新分類會加入群組目錄，並預設啟用於所有使用中的帳本。")
             }
         }
-        .navigationTitle("新增分類")
+        .navigationTitle("新增群組分類")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
