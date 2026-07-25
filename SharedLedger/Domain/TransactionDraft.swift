@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 
 struct TransactionDraft: Equatable, Sendable {
@@ -13,6 +14,79 @@ struct TransactionDraft: Equatable, Sendable {
     var splitMode: SplitMode = .equal
     var splitValueTexts: [UUID: String] = [:]
     var paymentDrafts: [TransactionPaymentDraft] = []
+
+    init(
+        kind: EntryKind = .expense,
+        amountText: String = "",
+        date: Date = Date(),
+        note: String = "",
+        categoryID: UUID? = nil,
+        sourceAccountID: UUID? = nil,
+        destinationAccountID: UUID? = nil,
+        payerMemberID: UUID? = nil,
+        splitMemberIDs: Set<UUID> = [],
+        splitMode: SplitMode = .equal,
+        splitValueTexts: [UUID: String] = [:],
+        paymentDrafts: [TransactionPaymentDraft] = []
+    ) {
+        self.kind = kind
+        self.amountText = amountText
+        self.date = date
+        self.note = note
+        self.categoryID = categoryID
+        self.sourceAccountID = sourceAccountID
+        self.destinationAccountID = destinationAccountID
+        self.payerMemberID = payerMemberID
+        self.splitMemberIDs = splitMemberIDs
+        self.splitMode = splitMode
+        self.splitValueTexts = splitValueTexts
+        self.paymentDrafts = paymentDrafts
+    }
+
+    init(entry: LedgerEntry) {
+        kind = EntryKind(rawValue: entry.kind ?? "") ?? .expense
+        amountText = Self.decimalString(entry.amount as Decimal?)
+        date = entry.date ?? Date()
+        note = entry.note ?? ""
+        categoryID = entry.category?.id
+        sourceAccountID = entry.sourceAccount?.id
+        destinationAccountID = entry.destinationAccount?.id
+        splitMode = SplitMode(rawValue: entry.splitMode ?? "") ?? .equal
+
+        let splits = (entry.splits as? Set<EntrySplit> ?? [])
+            .compactMap { split -> (UUID, EntrySplit)? in
+                guard let memberID = split.member?.id else { return nil }
+                return (memberID, split)
+            }
+            .sorted { $0.0.uuidString < $1.0.uuidString }
+        splitMemberIDs = Set(splits.map(\.0))
+        splitValueTexts = Dictionary(uniqueKeysWithValues: splits.compactMap { memberID, split in
+            guard splitMode != .equal, let input = split.inputValue as Decimal? else { return nil }
+            return (memberID, Self.decimalString(input))
+        })
+
+        let payments = (entry.payments as? Set<EntryPayment> ?? [])
+            .sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+                return (lhs.member?.id?.uuidString ?? "") < (rhs.member?.id?.uuidString ?? "")
+            }
+        paymentDrafts = payments.compactMap { payment in
+            guard let memberID = payment.member?.id else { return nil }
+            return TransactionPaymentDraft(
+                memberID: memberID,
+                amountText: Self.decimalString(payment.amount as Decimal?)
+            )
+        }
+
+        if paymentDrafts.isEmpty, let payerID = entry.payer?.id {
+            payerMemberID = payerID
+            paymentDrafts = [
+                TransactionPaymentDraft(memberID: payerID, amountText: amountText)
+            ]
+        } else {
+            payerMemberID = paymentDrafts.count == 1 ? paymentDrafts.first?.memberID : nil
+        }
+    }
 
     var amountValue: Decimal? {
         Decimal(string: amountText.trimmingCharacters(in: .whitespaces))
@@ -57,6 +131,11 @@ struct TransactionDraft: Equatable, Sendable {
 
     static func decimalValue(from text: String) -> Decimal? {
         Decimal(string: text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func decimalString(_ value: Decimal?) -> String {
+        guard let value else { return "" }
+        return NSDecimalNumber(decimal: value).stringValue
     }
 }
 
