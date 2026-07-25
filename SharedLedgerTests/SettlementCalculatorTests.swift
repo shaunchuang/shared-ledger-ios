@@ -133,15 +133,18 @@ final class SettlementCalculatorTests: XCTestCase {
         // clear every balance, and must not exceed n - 1 transfers.
         let memberIDs = (0..<24).map { _ in UUID() }
         let payer = memberIDs[0]
+        var splits: [SettlementShareInput] = []
+        for memberID in memberIDs {
+            splits.append(SettlementShareInput(memberID: memberID, amount: 100))
+        }
 
+        let transaction = SettlementTransactionInput(
+            kind: .expense,
+            payments: [PaymentInput(memberID: payer, amount: 2400)],
+            splits: splits
+        )
         let result = try SettlementCalculator.calculate(
-            transactions: [
-                SettlementTransactionInput(
-                    kind: .expense,
-                    payments: [PaymentInput(memberID: payer, amount: 2400)],
-                    splits: memberIDs.map { SettlementShareInput(memberID: $0, amount: 100) }
-                )
-            ],
+            transactions: [transaction],
             currencyCode: "TWD"
         )
 
@@ -155,14 +158,20 @@ final class SettlementCalculatorTests: XCTestCase {
         // Mixed debtors and creditors of differing sizes, so greedy has to split a
         // single creditor across several debtors.
         let memberIDs = (0..<16).map { _ in UUID() }
-        let payers = Array(memberIDs.prefix(3))
-        let transactions = payers.enumerated().map { index, payer in
-            SettlementTransactionInput(
-                kind: .expense,
-                payments: [PaymentInput(memberID: payer, amount: Decimal(160 * (index + 1)))],
-                splits: memberIDs.map {
-                    SettlementShareInput(memberID: $0, amount: Decimal(10 * (index + 1)))
-                }
+        var transactions: [SettlementTransactionInput] = []
+        for index in 0..<3 {
+            let paidAmount = Decimal(160 * (index + 1))
+            let shareAmount = Decimal(10 * (index + 1))
+            var splits: [SettlementShareInput] = []
+            for memberID in memberIDs {
+                splits.append(SettlementShareInput(memberID: memberID, amount: shareAmount))
+            }
+            transactions.append(
+                SettlementTransactionInput(
+                    kind: .expense,
+                    payments: [PaymentInput(memberID: memberIDs[index], amount: paidAmount)],
+                    splits: splits
+                )
             )
         }
 

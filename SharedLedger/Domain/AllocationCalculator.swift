@@ -347,6 +347,12 @@ enum SettlementCalculator {
         let units: Int64
     }
 
+    /// A member's remaining debt or credit while the greedy pass drains it.
+    private struct OutstandingBalance {
+        let index: Int
+        var units: Int64
+    }
+
     /// Above this many members with a non-zero balance the exact minimum-transfer
     /// search becomes exponential, so the deterministic greedy fallback is used
     /// instead. Greedy still yields at most `n - 1` transfers.
@@ -448,15 +454,24 @@ enum SettlementCalculator {
     /// produces at most `n - 1` transfers in `O(n log n)` and stays responsive for
     /// group sizes where the exact search is not affordable on the main thread.
     private static func greedyTransfers(from initialState: [Int64]) -> [UnitTransfer] {
-        // Ties break on index so the suggestion list stays stable between reloads.
-        var debtors = initialState.enumerated()
-            .filter { $0.element < 0 }
-            .map { (index: $0.offset, units: -$0.element) }
-            .sorted { $0.units == $1.units ? $0.index < $1.index : $0.units > $1.units }
-        var creditors = initialState.enumerated()
-            .filter { $0.element > 0 }
-            .map { (index: $0.offset, units: $0.element) }
-            .sorted { $0.units == $1.units ? $0.index < $1.index : $0.units > $1.units }
+        var debtors: [OutstandingBalance] = []
+        var creditors: [OutstandingBalance] = []
+        for (index, units) in initialState.enumerated() {
+            if units < 0 {
+                debtors.append(OutstandingBalance(index: index, units: -units))
+            } else if units > 0 {
+                creditors.append(OutstandingBalance(index: index, units: units))
+            }
+        }
+
+        // Largest balance first; ties break on index so the suggestion list stays
+        // stable between reloads.
+        let byDescendingUnits: (OutstandingBalance, OutstandingBalance) -> Bool = { lhs, rhs in
+            if lhs.units != rhs.units { return lhs.units > rhs.units }
+            return lhs.index < rhs.index
+        }
+        debtors.sort(by: byDescendingUnits)
+        creditors.sort(by: byDescendingUnits)
 
         var transfers: [UnitTransfer] = []
         var debtorIndex = 0
