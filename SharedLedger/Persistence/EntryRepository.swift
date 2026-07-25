@@ -180,21 +180,25 @@ struct EntryRepository {
         let now = Date()
         let store = persistence.store(for: entry)
         let before = snapshot(from: entry, isVoided: false)
-        var after = before
-        after = TransactionAuditPayload.Snapshot(
-            kind: after.kind,
-            amount: after.amount,
-            date: after.date,
-            note: after.note,
-            bookID: after.bookID,
-            categoryID: after.categoryID,
-            sourceAccountID: after.sourceAccountID,
-            destinationAccountID: after.destinationAccountID,
-            splitMode: after.splitMode,
-            payments: after.payments,
-            splits: after.splits,
+        let after = TransactionAuditPayload.Snapshot(
+            kind: before.kind,
+            amount: before.amount,
+            date: before.date,
+            note: before.note,
+            bookID: before.bookID,
+            categoryID: before.categoryID,
+            sourceAccountID: before.sourceAccountID,
+            destinationAccountID: before.destinationAccountID,
+            splitMode: before.splitMode,
+            payments: before.payments,
+            splits: before.splits,
             isVoided: true
         )
+
+        // Keep the record and all split/payment history, but neutralize its
+        // financial movement so existing balance calculations stop counting it.
+        // The immutable audit payload above preserves the original amount.
+        entry.amount = NSDecimalNumber.zero
         entry.updatedAt = now
         insertAudit(
             action: "transaction.voided",
@@ -470,7 +474,7 @@ struct EntryRepository {
                 return .init(
                     memberID: memberID,
                     amount: decimalString(split.amount as Decimal?),
-                    inputValue: (split.inputValue as Decimal?).map(decimalString)
+                    inputValue: (split.inputValue as Decimal?).map { decimalString($0) }
                 )
             }
             .sorted { $0.memberID.uuidString < $1.memberID.uuidString }
@@ -505,7 +509,7 @@ struct EntryRepository {
             TransactionAuditPayload.Snapshot.Split(
                 memberID: $0.memberID,
                 amount: decimalString($0.amount),
-                inputValue: $0.inputValue.map(decimalString)
+                inputValue: $0.inputValue.map { decimalString($0) }
             )
         }.sorted { $0.memberID.uuidString < $1.memberID.uuidString }
 
