@@ -261,30 +261,16 @@ enum SettlementCalculator {
         for transaction in transactions {
             guard transaction.kind == .expense || transaction.kind == .income else { continue }
 
-            let payments = try transaction.payments.map { payment -> (UUID, Int64) in
-                let units = try minorUnits(for: payment.amount, currencyCode: currencyCode)
-                guard units > 0 else { throw SettlementError.invalidTransactionAmount }
-                return (payment.memberID, units)
-            }
-            let splits = try transaction.splits.map { split -> (UUID, Int64) in
-                let units = try minorUnits(for: split.amount, currencyCode: currencyCode)
-                guard units >= 0 else { throw SettlementError.invalidTransactionAmount }
-                return (split.memberID, units)
-            }
-
-            guard payments.reduce(Int64.zero, { $0 + $1.1 })
-                    == splits.reduce(Int64.zero, { $0 + $1.1 }) else {
-                throw SettlementError.transactionTotalsMismatch
-            }
+            let normalized = try normalize(transaction, currencyCode: currencyCode)
 
             // Expenses credit members who actually paid and debit the members who
             // should bear the cost. Income/refunds move the obligation in the
             // opposite direction so a shared refund reduces outstanding debt.
             let paymentDirection: Int64 = transaction.kind == .expense ? 1 : -1
-            for (memberID, units) in payments {
+            for (memberID, units) in normalized.payments {
                 unitsByMember[memberID, default: 0] += paymentDirection * units
             }
-            for (memberID, units) in splits {
+            for (memberID, units) in normalized.splits {
                 unitsByMember[memberID, default: 0] -= paymentDirection * units
             }
         }
@@ -321,11 +307,50 @@ enum SettlementCalculator {
         return SettlementResult(balances: orderedBalances, suggestedTransfers: transfers)
     }
 
+    /// Throws the same errors `calculate` would raise for this single transaction.
+    ///
+    /// Callers that read transactions out of a partially synchronised store use this
+    /// to quarantine an individual inconsistent entry instead of failing the whole book.
+    static func validate(
+        _ transaction: SettlementTransactionInput,
+        currencyCode: String
+    ) throws {
+        guard transaction.kind == .expense || transaction.kind == .income else { return }
+        _ = try normalize(transaction, currencyCode: currencyCode)
+    }
+
+    private static func normalize(
+        _ transaction: SettlementTransactionInput,
+        currencyCode: String
+    ) throws -> (payments: [(UUID, Int64)], splits: [(UUID, Int64)]) {
+        let payments = try transaction.payments.map { payment -> (UUID, Int64) in
+            let units = try minorUnits(for: payment.amount, currencyCode: currencyCode)
+            guard units > 0 else { throw SettlementError.invalidTransactionAmount }
+            return (payment.memberID, units)
+        }
+        let splits = try transaction.splits.map { split -> (UUID, Int64) in
+            let units = try minorUnits(for: split.amount, currencyCode: currencyCode)
+            guard units >= 0 else { throw SettlementError.invalidTransactionAmount }
+            return (split.memberID, units)
+        }
+
+        guard payments.reduce(Int64.zero, { $0 + $1.1 })
+                == splits.reduce(Int64.zero, { $0 + $1.1 }) else {
+            throw SettlementError.transactionTotalsMismatch
+        }
+        return (payments, splits)
+    }
+
     private struct UnitTransfer: Equatable {
-        let fromMemberID: UUID
-        let toMemberID: UUID
+        let fromIndex: Int
+        let toIndex: Int
         let units: Int64
     }
+
+    /// Above this many members with a non-zero balance the exact minimum-transfer
+    /// search becomes exponential, so the deterministic greedy fallback is used
+    /// instead. Greedy still yields at most `n - 1` transfers.
+    private static let exactSearchMemberLimit = 10
 
     private static func minimalTransfers(
         unitsByMember: [UUID: Int64],
@@ -338,23 +363,44 @@ enum SettlementCalculator {
 
         let memberIDs = members.map(\.key)
         let initialState = members.map(\.value)
-        var memo: [String: [UnitTransfer]] = [:]
 
-        func stateKey(_ state: [Int64]) -> String {
-            state.map(String.init).joined(separator: ",")
+        // `memberIDs` is sorted by UUID string, so index order is already the stable
+        // tie-break order and transfers can be compared numerically by index.
+        let unitTransfers = memberIDs.count <= exactSearchMemberLimit
+            ? exactMinimalTransfers(from: initialState)
+            : greedyTransfers(from: initialState)
+
+        guard unitTransfers.allSatisfy({ $0.units > 0 }) else {
+            throw SettlementError.unbalancedResult
         }
+        return unitTransfers.map {
+            SettlementTransfer(
+                fromMemberID: memberIDs[$0.fromIndex],
+                toMemberID: memberIDs[$0.toIndex],
+                amount: amount(fromMinorUnits: $0.units, currencyCode: currencyCode)
+            )
+        }
+    }
 
-        func transferKey(_ transfers: [UnitTransfer]) -> String {
-            transfers.map {
-                "\($0.fromMemberID.uuidString)>\($0.toMemberID.uuidString):\($0.units)"
-            }.joined(separator: "|")
+    private static func exactMinimalTransfers(from initialState: [Int64]) -> [UnitTransfer] {
+        // Keying the memo on the state array avoids rebuilding a joined string for
+        // every visited state, which dominated the previous implementation's cost.
+        var memo: [[Int64]: [UnitTransfer]] = [:]
+
+        func isBetter(_ candidate: [UnitTransfer], than current: [UnitTransfer]) -> Bool {
+            if candidate.count != current.count { return candidate.count < current.count }
+            for (lhs, rhs) in zip(candidate, current) {
+                if lhs.fromIndex != rhs.fromIndex { return lhs.fromIndex < rhs.fromIndex }
+                if lhs.toIndex != rhs.toIndex { return lhs.toIndex < rhs.toIndex }
+                if lhs.units != rhs.units { return lhs.units < rhs.units }
+            }
+            return false
         }
 
         func search(_ state: [Int64]) -> [UnitTransfer] {
-            let key = stateKey(state)
-            if let cached = memo[key] { return cached }
+            if let cached = memo[state] { return cached }
             guard let firstIndex = state.firstIndex(where: { $0 != 0 }) else {
-                memo[key] = []
+                memo[state] = []
                 return []
             }
 
@@ -375,49 +421,65 @@ enum SettlementCalculator {
                 if state[firstIndex] < 0 {
                     next[firstIndex] += units
                     next[index] -= units
-                    transfer = UnitTransfer(
-                        fromMemberID: memberIDs[firstIndex],
-                        toMemberID: memberIDs[index],
-                        units: units
-                    )
+                    transfer = UnitTransfer(fromIndex: firstIndex, toIndex: index, units: units)
                 } else {
                     next[firstIndex] -= units
                     next[index] += units
-                    transfer = UnitTransfer(
-                        fromMemberID: memberIDs[index],
-                        toMemberID: memberIDs[firstIndex],
-                        units: units
-                    )
+                    transfer = UnitTransfer(fromIndex: index, toIndex: firstIndex, units: units)
                 }
 
                 let candidate = [transfer] + search(next)
                 if let currentBest = best {
-                    if candidate.count < currentBest.count
-                        || (candidate.count == currentBest.count
-                            && transferKey(candidate) < transferKey(currentBest)) {
-                        best = candidate
-                    }
+                    if isBetter(candidate, than: currentBest) { best = candidate }
                 } else {
                     best = candidate
                 }
             }
 
             let resolved = best ?? []
-            memo[key] = resolved
+            memo[state] = resolved
             return resolved
         }
 
-        let unitTransfers = search(initialState)
-        guard unitTransfers.allSatisfy({ $0.units > 0 }) else {
-            throw SettlementError.unbalancedResult
+        return search(initialState)
+    }
+
+    /// Repeatedly settles the largest debtor against the largest creditor. This
+    /// produces at most `n - 1` transfers in `O(n log n)` and stays responsive for
+    /// group sizes where the exact search is not affordable on the main thread.
+    private static func greedyTransfers(from initialState: [Int64]) -> [UnitTransfer] {
+        // Ties break on index so the suggestion list stays stable between reloads.
+        var debtors = initialState.enumerated()
+            .filter { $0.element < 0 }
+            .map { (index: $0.offset, units: -$0.element) }
+            .sorted { $0.units == $1.units ? $0.index < $1.index : $0.units > $1.units }
+        var creditors = initialState.enumerated()
+            .filter { $0.element > 0 }
+            .map { (index: $0.offset, units: $0.element) }
+            .sorted { $0.units == $1.units ? $0.index < $1.index : $0.units > $1.units }
+
+        var transfers: [UnitTransfer] = []
+        var debtorIndex = 0
+        var creditorIndex = 0
+
+        while debtorIndex < debtors.count, creditorIndex < creditors.count {
+            let debtor = debtors[debtorIndex]
+            let creditor = creditors[creditorIndex]
+            let units = min(debtor.units, creditor.units)
+
+            if units > 0 {
+                transfers.append(
+                    UnitTransfer(fromIndex: debtor.index, toIndex: creditor.index, units: units)
+                )
+            }
+
+            debtors[debtorIndex].units -= units
+            creditors[creditorIndex].units -= units
+            if debtors[debtorIndex].units == 0 { debtorIndex += 1 }
+            if creditors[creditorIndex].units == 0 { creditorIndex += 1 }
         }
-        return unitTransfers.map {
-            SettlementTransfer(
-                fromMemberID: $0.fromMemberID,
-                toMemberID: $0.toMemberID,
-                amount: amount(fromMinorUnits: $0.units, currencyCode: currencyCode)
-            )
-        }
+
+        return transfers
     }
 
     private static func minorUnits(for amount: Decimal, currencyCode: String) throws -> Int64 {

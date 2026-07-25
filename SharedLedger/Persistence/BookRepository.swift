@@ -389,6 +389,17 @@ struct SettlementHistoryItem: Identifiable, Equatable, Sendable {
     var isReversed: Bool { reversedAt != nil }
 }
 
+struct SettlementSnapshot: Equatable, Sendable {
+    let result: SettlementResult
+    /// Entries in the book that could not be interpreted yet, typically because the
+    /// shared store has not finished importing their payment/split/member records.
+    let skippedEntryCount: Int
+
+    static let empty = SettlementSnapshot(result: .empty, skippedEntryCount: 0)
+
+    var hasSkippedEntries: Bool { skippedEntryCount > 0 }
+}
+
 private struct SettlementAuditPayload: Codable, Equatable {
     let settlementID: UUID
     let bookID: UUID
@@ -419,27 +430,47 @@ struct SettlementRepository {
     }
 
     func result(in book: LedgerBook) throws -> SettlementResult {
+        try snapshot(in: book).result
+    }
+
+    /// Builds the settlement view of a book, quarantining entries that cannot be
+    /// interpreted yet instead of failing the whole book.
+    ///
+    /// A shared store syncs `LedgerEntry`, `EntryPayment`, `EntrySplit` and `Member`
+    /// records independently, so a freshly imported entry can legitimately be missing
+    /// some of its payment/split rows — or the `Member` they point at — for a while.
+    /// Those entries are skipped and reported through `skippedEntryCount` so the
+    /// remaining balances stay usable while CloudKit catches up.
+    func snapshot(in book: LedgerBook) throws -> SettlementSnapshot {
         guard let group = book.group else { throw RepositoryError.missingGroup }
         let currencyCode = LedgerCurrency.normalizedCode(group.currencyCode)
         let voidedEntryIDs = EntryRepository(persistence: persistence).voidedEntryIDs(in: group)
         let entries = book.entries as? Set<LedgerEntry> ?? []
 
-        let transactions = try entries.compactMap { entry -> SettlementTransactionInput? in
+        var transactions: [SettlementTransactionInput] = []
+        var skippedEntryCount = 0
+
+        for entry in entries {
             guard entry.id.map({ !voidedEntryIDs.contains($0) }) ?? true,
                   let rawKind = entry.kind,
                   let kind = EntryKind(rawValue: rawKind),
                   kind == .expense || kind == .income else {
-                return nil
+                continue
             }
 
-            var payments = (entry.payments as? Set<EntryPayment> ?? []).compactMap { payment -> PaymentInput? in
+            let storedPayments = entry.payments as? Set<EntryPayment> ?? []
+            var payments = storedPayments.compactMap { payment -> PaymentInput? in
                 guard let memberID = payment.member?.id else { return nil }
                 return PaymentInput(
                     memberID: memberID,
                     amount: (payment.amount as Decimal?) ?? 0
                 )
             }
-            if payments.isEmpty, let payerID = entry.payer?.id {
+            // A dropped row means the referenced Member has not arrived yet; the
+            // remaining rows would silently under-count this entry.
+            let hasUnresolvedPayment = payments.count != storedPayments.count
+
+            if payments.isEmpty, !hasUnresolvedPayment, let payerID = entry.payer?.id {
                 payments = [
                     PaymentInput(
                         memberID: payerID,
@@ -448,19 +479,33 @@ struct SettlementRepository {
                 ]
             }
 
-            let splits = (entry.splits as? Set<EntrySplit> ?? []).compactMap { split -> SettlementShareInput? in
+            let storedSplits = entry.splits as? Set<EntrySplit> ?? []
+            let splits = storedSplits.compactMap { split -> SettlementShareInput? in
                 guard let memberID = split.member?.id else { return nil }
                 return SettlementShareInput(
                     memberID: memberID,
                     amount: (split.amount as Decimal?) ?? 0
                 )
             }
+            let hasUnresolvedSplit = splits.count != storedSplits.count
 
-            return SettlementTransactionInput(
+            let transaction = SettlementTransactionInput(
                 kind: kind,
                 payments: payments,
                 splits: splits
             )
+
+            guard !hasUnresolvedPayment, !hasUnresolvedSplit else {
+                skippedEntryCount += 1
+                continue
+            }
+            do {
+                try SettlementCalculator.validate(transaction, currencyCode: currencyCode)
+            } catch {
+                skippedEntryCount += 1
+                continue
+            }
+            transactions.append(transaction)
         }
 
         let activeSettlements = history(in: book)
@@ -474,11 +519,12 @@ struct SettlementRepository {
                 )
             }
 
-        return try SettlementCalculator.calculate(
+        let result = try SettlementCalculator.calculate(
             transactions: transactions,
             settlements: activeSettlements,
             currencyCode: currencyCode
         )
+        return SettlementSnapshot(result: result, skippedEntryCount: skippedEntryCount)
     }
 
     func history(in book: LedgerBook) -> [SettlementHistoryItem] {

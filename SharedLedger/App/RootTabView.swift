@@ -91,7 +91,7 @@ private struct SettlementRootView: View {
 
     @State private var selectedGroupID: NSManagedObjectID?
     @State private var selectedBookID: NSManagedObjectID?
-    @State private var result = SettlementResult.empty
+    @State private var snapshot = SettlementSnapshot.empty
     @State private var history: [SettlementHistoryItem] = []
     @State private var selectedTransfer: SettlementTransfer?
     @State private var settlementToReverse: SettlementHistoryItem?
@@ -118,6 +118,8 @@ private struct SettlementRootView: View {
         return activeBooks.first(where: \.isDefault) ?? activeBooks.first
     }
 
+    private var result: SettlementResult { snapshot.result }
+
     private var currencyCode: String {
         LedgerCurrency.normalizedCode(selectedGroup?.currencyCode)
     }
@@ -141,6 +143,20 @@ private struct SettlementRootView: View {
                 List {
                     Section {
                         groupAndBookSelector(group: selectedGroup, book: selectedBook)
+                    }
+
+                    if snapshot.hasSkippedEntries {
+                        Section {
+                            Label(
+                                """
+                                有 \(snapshot.skippedEntryCount) 筆交易的付款或分攤資料尚未同步完成，\
+                                已暫時不列入結算。等 iCloud 同步完成後會自動重新計算。
+                                """,
+                                systemImage: "exclamationmark.arrow.triangle.2.circlepath"
+                            )
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        }
                     }
 
                     Section("成員淨額") {
@@ -420,16 +436,16 @@ private struct SettlementRootView: View {
 
     private func reload() {
         guard let selectedBook else {
-            result = .empty
+            snapshot = .empty
             history = []
             return
         }
         do {
             let repository = SettlementRepository()
-            result = try repository.result(in: selectedBook)
+            snapshot = try repository.snapshot(in: selectedBook)
             history = repository.history(in: selectedBook)
         } catch {
-            result = .empty
+            snapshot = .empty
             history = []
             errorMessage = error.localizedDescription
         }

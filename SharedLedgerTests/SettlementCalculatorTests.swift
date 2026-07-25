@@ -128,6 +128,72 @@ final class SettlementCalculatorTests: XCTestCase {
         }
     }
 
+    func testLargeGroupSettlesEveryBalanceWithBoundedTransfers() throws {
+        // Above the exact-search limit the greedy fallback takes over. It must still
+        // clear every balance, and must not exceed n - 1 transfers.
+        let memberIDs = (0..<24).map { _ in UUID() }
+        let payer = memberIDs[0]
+
+        let result = try SettlementCalculator.calculate(
+            transactions: [
+                SettlementTransactionInput(
+                    kind: .expense,
+                    payments: [PaymentInput(memberID: payer, amount: 2400)],
+                    splits: memberIDs.map { SettlementShareInput(memberID: $0, amount: 100) }
+                )
+            ],
+            currencyCode: "TWD"
+        )
+
+        XCTAssertEqual(balance(for: payer, in: result), 2300)
+        XCTAssertLessThanOrEqual(result.suggestedTransfers.count, memberIDs.count - 1)
+        XCTAssertTrue(result.suggestedTransfers.allSatisfy { $0.amount > 0 })
+        assertTransfersClearAllBalances(result)
+    }
+
+    func testUnevenLargeGroupIsFullyClearedByGreedyFallback() throws {
+        // Mixed debtors and creditors of differing sizes, so greedy has to split a
+        // single creditor across several debtors.
+        let memberIDs = (0..<16).map { _ in UUID() }
+        let payers = Array(memberIDs.prefix(3))
+        let transactions = payers.enumerated().map { index, payer in
+            SettlementTransactionInput(
+                kind: .expense,
+                payments: [PaymentInput(memberID: payer, amount: Decimal(160 * (index + 1)))],
+                splits: memberIDs.map {
+                    SettlementShareInput(memberID: $0, amount: Decimal(10 * (index + 1)))
+                }
+            )
+        }
+
+        let result = try SettlementCalculator.calculate(
+            transactions: transactions,
+            currencyCode: "TWD"
+        )
+
+        XCTAssertLessThanOrEqual(result.suggestedTransfers.count, memberIDs.count - 1)
+        XCTAssertTrue(result.suggestedTransfers.allSatisfy { $0.amount > 0 })
+        assertTransfersClearAllBalances(result)
+    }
+
+    /// Applying every suggested transfer must drive all member balances to zero.
+    private func assertTransfersClearAllBalances(
+        _ result: SettlementResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        var remaining = Dictionary(
+            uniqueKeysWithValues: result.balances.map { ($0.memberID, $0.amount) }
+        )
+        for transfer in result.suggestedTransfers {
+            remaining[transfer.fromMemberID, default: 0] += transfer.amount
+            remaining[transfer.toMemberID, default: 0] -= transfer.amount
+        }
+        for (memberID, amount) in remaining {
+            XCTAssertEqual(amount, 0, "member \(memberID) left with \(amount)", file: file, line: line)
+        }
+    }
+
     private func balance(for memberID: UUID, in result: SettlementResult) -> Decimal? {
         result.balances.first { $0.memberID == memberID }?.amount
     }
@@ -223,6 +289,61 @@ final class SettlementRepositoryTests: XCTestCase {
                 return XCTFail("Expected permissionDenied, got \(error)")
             }
         }
+    }
+
+    func testEntryWithUnsyncedSplitMemberIsSkippedWithoutFailingTheBook() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let friendID = try XCTUnwrap(fixture.friend.id)
+        let entryRepository = EntryRepository(persistence: fixture.persistence)
+
+        _ = try entryRepository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "100",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "100")
+                ]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        let pending = try entryRepository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "60",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: friendID, amountText: "60")
+                ]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        // Simulate the shared store having imported the entry before the Member that
+        // one of its splits points at.
+        let pendingSplit = try XCTUnwrap((pending.splits as? Set<EntrySplit>)?.first)
+        pendingSplit.member = nil
+        try fixture.persistence.container.viewContext.save()
+
+        let repository = SettlementRepository(persistence: fixture.persistence)
+        let snapshot = try repository.snapshot(in: fixture.book)
+
+        XCTAssertEqual(snapshot.skippedEntryCount, 1)
+        XCTAssertTrue(snapshot.hasSkippedEntries)
+        // The intact 100 expense still settles normally.
+        XCTAssertEqual(snapshot.result.balances.first { $0.memberID == ownerID }?.amount, 50)
+        XCTAssertEqual(snapshot.result.balances.first { $0.memberID == friendID }?.amount, -50)
+        XCTAssertEqual(snapshot.result.suggestedTransfers.count, 1)
     }
 
     private func makeFixture() throws -> SettlementFixture {
