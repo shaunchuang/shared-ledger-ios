@@ -28,7 +28,12 @@ jobs:
           path = Path("SharedLedger.xcodeproj/project.pbxproj")
           text = path.read_text()
 
-          if "SettlementCalculatorTests.swift in Sources" not in text:
+          build_decl = "C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */ = {isa = PBXBuildFile;"
+          file_decl = "C0DE00000000000000000006 /* SettlementCalculatorTests.swift */ = {isa = PBXFileReference;"
+          group_member = "C0DE00000000000000000006 /* SettlementCalculatorTests.swift */,"
+          source_member = "C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */,"
+
+          if build_decl not in text:
               replacements = [
                   (
                       "\t\tC0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000004 /* AllocationCalculatorTests.swift */; };",
@@ -54,10 +59,9 @@ jobs:
                   text = text.replace(old, new, 1)
               path.write_text(text)
 
-          if text.count("SettlementCalculatorTests.swift in Sources") != 2:
-              raise SystemExit("Settlement test build-file declaration and Sources membership are incomplete")
-          if text.count("SettlementCalculatorTests.swift */") != 2:
-              raise SystemExit("Settlement test file reference and group membership are incomplete")
+          for marker in (build_decl, file_decl, group_member, source_member):
+              if marker not in text:
+                  raise SystemExit(f"Missing settlement test target marker: {marker}")
 
       - name: Persist test target membership
         run: |
