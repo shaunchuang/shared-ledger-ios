@@ -123,7 +123,10 @@ enum AllocationCalculator {
         guard inputs.reduce(Decimal.zero, { $0 + $1.amount }) == total else {
             throw AllocationError.paymentTotalMismatch
         }
-        return inputs.sorted { $0.memberID.uuidString < $1.memberID.uuidString }
+        // 回傳順序即使用者輸入的付款人順序：呼叫端據此寫入 EntryPayment.sortOrder，
+        // 而 sortOrder 決定多付款人清單的顯示順序與編輯時的草稿還原順序。
+        // 稽核快照不依賴這裡的順序，它在建立時會自行依 memberID 排序。
+        return inputs
     }
 
     private static func adjustedAllocations(
