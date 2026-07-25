@@ -143,7 +143,13 @@ final class PersistenceController {
 
         storeLoadGroup.notify(queue: .main) { [weak self] in
             guard let self else { return }
-            self.scheduleDataRepair()
+            // 背景資料修復會在 main actor 上非同步改動 Core Data，並在失敗時觸發
+            // assertionFailure。跑測試時這等於有一條隨機時機的執行緒在改共用狀態，
+            // 崩潰還會算到當下剛好在執行的測試頭上。測試都各自明確驅動需要的
+            // migration，所以這裡直接不啟動。
+            if !Self.isRunningTests {
+                self.scheduleDataRepair()
+            }
             if !inMemory {
                 self.remoteChangeObserver = NotificationCenter.default.addObserver(
                     forName: .NSPersistentStoreRemoteChange,
