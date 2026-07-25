@@ -17,6 +17,7 @@
 		39F1BDD0AB285B51FDA06776 /* GroupRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23001F74E857C5902E92E07F /* GroupRepository.swift */; };
 		3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D239A715784171742AA525A4 /* CategoryNodeTests.swift */; };
 		C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000004 /* AllocationCalculatorTests.swift */; };
+		C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000006 /* SettlementCalculatorTests.swift */; };
 		3FD7B477EA974043CC7FE384 /* TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AC72E8EDCB58760C5C8FFB /* TransactionsView.swift */; };
 		470E635931EBCEA9E01495A0 /* GroupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C08A6952271AAF2C12550BD /* GroupsView.swift */; };
 		62957ADC31008DFE4BD2D1B6 /* CloudSharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61221ACA806160210D38B952 /* CloudSharingView.swift */; };
@@ -84,6 +85,7 @@
 		BB146D37C90F74773B7CD2ED /* SharedLedger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SharedLedger.entitlements; sourceTree = "<group>"; };
 		D239A715784171742AA525A4 /* CategoryNodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryNodeTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000004 /* AllocationCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllocationCalculatorTests.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000006 /* SettlementCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementCalculatorTests.swift; sourceTree = "<group>"; };
 		EE02B5318E1A4FEC2A36631B /* GroupDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupDetailView.swift; sourceTree = "<group>"; };
 		F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactPicker.swift; sourceTree = "<group>"; };
 		F88B235208B24B8948B97717 /* MemberRole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRole.swift; sourceTree = "<group>"; };
@@ -268,6 +270,7 @@
 			isa = PBXGroup;
 			children = (
 				C0DE00000000000000000004 /* AllocationCalculatorTests.swift */,
+				C0DE00000000000000000006 /* SettlementCalculatorTests.swift */,
 				D239A715784171742AA525A4 /* CategoryNodeTests.swift */,
 			);
 			path = SharedLedgerTests;
@@ -378,6 +381,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */,
+				C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */,
 				3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
