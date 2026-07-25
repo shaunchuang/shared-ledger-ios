@@ -354,3 +354,197 @@ final class SplitPaymentModelMigrationTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+final class GroupMemberLifecycleTests: XCTestCase {
+    func testOwnerCanRenameRevokeAndReinvitePendingMemberWithAudits() throws {
+        let invitee = InviteeContact(contactIdentifier: "friend", displayName: "小美")
+        let persistence = PersistenceController(inMemory: true)
+        let repository = GroupRepository(persistence: persistence)
+        let group = try repository.createGroup(
+            from: GroupDraft(
+                name: "家庭",
+                ownerDisplayName: "小明",
+                invitees: [invitee]
+            )
+        )
+        let pending = try XCTUnwrap(
+            (group.members as? Set<Member>)?.first {
+                $0.invitationStatus == InvitationStatus.pending.rawValue
+            }
+        )
+
+        try repository.renameGroup(group, to: "共同生活")
+        try repository.revokeInvitation(pending, in: group)
+
+        XCTAssertEqual(group.name, "共同生活")
+        XCTAssertEqual(pending.invitationStatus, InvitationStatus.revoked.rawValue)
+        XCTAssertNotNil(pending.archivedAt)
+
+        try repository.resendInvitation(pending, in: group)
+
+        XCTAssertEqual(pending.invitationStatus, InvitationStatus.pending.rawValue)
+        XCTAssertNil(pending.archivedAt)
+        let actions = Set((group.auditEvents as? Set<AuditEvent> ?? []).compactMap(\.action))
+        XCTAssertTrue(actions.contains("group.renamed"))
+        XCTAssertTrue(actions.contains("member.invitation.revoked"))
+        XCTAssertTrue(actions.contains("member.invitation.resent"))
+    }
+
+    func testRemovingMemberPreservesHistoricalPaymentAndSplitRelationships() throws {
+        let fixture = try makeLifecycleFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let friendID = try XCTUnwrap(fixture.friend.id)
+        let entry = try EntryRepository(persistence: fixture.persistence).createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "100",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "100")
+                ]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        try fixture.groupRepository.removeMember(fixture.friend, from: fixture.group)
+
+        XCTAssertNotNil(fixture.friend.archivedAt)
+        XCTAssertTrue((entry.splits as? Set<EntrySplit> ?? []).contains { $0.member == fixture.friend })
+        XCTAssertEqual(entry.payer, fixture.owner)
+        XCTAssertTrue(
+            (fixture.group.auditEvents as? Set<AuditEvent> ?? [])
+                .contains { $0.action == "member.removed" }
+        )
+
+        try fixture.groupRepository.resendInvitation(fixture.friend, in: fixture.group)
+        XCTAssertNil(fixture.friend.archivedAt)
+        XCTAssertEqual(fixture.friend.invitationStatus, InvitationStatus.pending.rawValue)
+    }
+
+    func testOwnerCannotLeaveButMemberLeaveCreatesInactiveIdentityTombstone() throws {
+        let fixture = try makeLifecycleFixture()
+
+        XCTAssertThrowsError(try fixture.groupRepository.leaveGroup(fixture.group)) { error in
+            guard case GroupRepository.GroupError.ownerMustTransferBeforeLeaving = error else {
+                return XCTFail("Expected ownerMustTransferBeforeLeaving, got \(error)")
+            }
+        }
+
+        let identityRepository = CurrentMemberIdentityRepository(persistence: fixture.persistence)
+        identityRepository.setCurrentMember(fixture.friend, in: fixture.group)
+        try fixture.persistence.container.viewContext.save()
+        try fixture.groupRepository.leaveGroup(fixture.group)
+
+        XCTAssertNotNil(fixture.friend.archivedAt)
+        XCTAssertNil(identityRepository.currentMember(in: fixture.group))
+        XCTAssertEqual(identityRepository.mappedMember(in: fixture.group), fixture.friend)
+        XCTAssertTrue(identityRepository.hasInactiveIdentity(in: fixture.group))
+        XCTAssertFalse(identityRepository.needsResolution(for: fixture.group))
+
+        XCTAssertThrowsError(
+            try fixture.groupRepository.joinSharedGroup(
+                displayName: "另一個身分",
+                group: fixture.group
+            )
+        ) { error in
+            guard case GroupRepository.GroupError.removedMemberCannotRejoin = error else {
+                return XCTFail("Expected removedMemberCannotRejoin, got \(error)")
+            }
+        }
+    }
+
+    func testRegularMemberCannotRemoveAnotherMember() throws {
+        let fixture = try makeLifecycleFixture()
+        let context = fixture.persistence.container.viewContext
+        let third = Member(context: context)
+        context.assign(third, to: fixture.persistence.store(for: fixture.group))
+        third.id = UUID()
+        third.displayName = "小華"
+        third.role = MemberRole.member.rawValue
+        third.invitationStatus = InvitationStatus.accepted.rawValue
+        third.group = fixture.group
+        try context.save()
+
+        CurrentMemberIdentityRepository(persistence: fixture.persistence)
+            .setCurrentMember(fixture.friend, in: fixture.group)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try fixture.groupRepository.removeMember(third, from: fixture.group)
+        ) { error in
+            guard case GroupRepository.GroupError.permissionDenied = error else {
+                return XCTFail("Expected permissionDenied, got \(error)")
+            }
+        }
+        XCTAssertNil(third.archivedAt)
+    }
+
+    func testCrossGroupMemberCannotBeManaged() throws {
+        let fixture = try makeLifecycleFixture()
+        let otherGroup = try fixture.groupRepository.createGroup(
+            from: GroupDraft(name: "室友", ownerDisplayName: "小華")
+        )
+        let foreignMember = try XCTUnwrap((otherGroup.members as? Set<Member>)?.first)
+
+        CurrentMemberIdentityRepository(persistence: fixture.persistence)
+            .setCurrentMember(fixture.owner, in: fixture.group)
+        try fixture.persistence.container.viewContext.save()
+
+        XCTAssertThrowsError(
+            try fixture.groupRepository.removeMember(foreignMember, from: fixture.group)
+        ) { error in
+            guard case GroupRepository.GroupError.crossGroupMember = error else {
+                return XCTFail("Expected crossGroupMember, got \(error)")
+            }
+        }
+    }
+
+    private func makeLifecycleFixture() throws -> GroupLifecycleFixture {
+        let persistence = PersistenceController(inMemory: true)
+        let groupRepository = GroupRepository(persistence: persistence)
+        let group = try groupRepository.createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let owner = try XCTUnwrap((group.members as? Set<Member>)?.first)
+        let context = persistence.container.viewContext
+        let friend = Member(context: context)
+        context.assign(friend, to: persistence.store(for: group))
+        friend.id = UUID()
+        friend.displayName = "小美"
+        friend.role = MemberRole.member.rawValue
+        friend.invitationStatus = InvitationStatus.accepted.rawValue
+        friend.joinedAt = Date()
+        friend.group = group
+        let book = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
+        let account = try AccountRepository(persistence: persistence).createAccount(
+            from: AccountDraft(name: "現金"),
+            in: group
+        )
+        try context.save()
+        return GroupLifecycleFixture(
+            persistence: persistence,
+            groupRepository: groupRepository,
+            group: group,
+            owner: owner,
+            friend: friend,
+            book: book,
+            account: account
+        )
+    }
+}
+
+@MainActor
+private struct GroupLifecycleFixture {
+    let persistence: PersistenceController
+    let groupRepository: GroupRepository
+    let group: LedgerGroup
+    let owner: Member
+    let friend: Member
+    let book: LedgerBook
+    let account: LedgerAccount
+}
