@@ -12,16 +12,21 @@ struct GroupsView: View {
     @State private var sharingError: String?
     @State private var isPreparingShare = false
 
+    private var visibleGroups: [LedgerGroup] {
+        let identities = CurrentMemberIdentityRepository()
+        return groups.filter { !identities.hasInactiveIdentity(in: $0) }
+    }
+
     var body: some View {
         ZStack {
             LedgerBackground()
             ScrollView {
                 LazyVStack(spacing: 16) {
-                    if groups.isEmpty {
+                    if visibleGroups.isEmpty {
                         emptyState
                     } else {
                         groupSummary
-                        ForEach(groups, id: \.objectID) { group in
+                        ForEach(visibleGroups, id: \.objectID) { group in
                             NavigationLink {
                                 GroupDetailView(group: group, onInvite: prepareShare)
                             } label: {
@@ -95,7 +100,7 @@ struct GroupsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("你的共享空間")
                     .font(.title3.weight(.bold))
-                Text("共 \(groups.count) 個群組")
+                Text("共 \(visibleGroups.count) 個群組")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -136,7 +141,6 @@ struct GroupsView: View {
     }
 }
 
-
 struct MemberIdentitySelectionView: View {
     @ObservedObject var group: LedgerGroup
     let onResolved: () -> Void
@@ -144,11 +148,16 @@ struct MemberIdentitySelectionView: View {
     @State private var displayName = ""
     @State private var errorMessage: String?
 
+    private var inactiveIdentity: Bool {
+        CurrentMemberIdentityRepository().hasInactiveIdentity(in: group)
+    }
+
     private var pendingMembers: [Member] {
         let members = group.members as? Set<Member> ?? []
         return members
             .filter {
-                $0.invitationStatus == InvitationStatus.pending.rawValue
+                $0.archivedAt == nil
+                    && $0.invitationStatus == InvitationStatus.pending.rawValue
                     && ($0.role == MemberRole.member.rawValue
                         || $0.role == MemberRole.viewer.rawValue)
             }
@@ -163,30 +172,38 @@ struct MemberIdentitySelectionView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !pendingMembers.isEmpty {
-                Section("選擇邀請你的名稱") {
-                    ForEach(pendingMembers, id: \.objectID) { member in
-                        Button {
-                            claim(member)
-                        } label: {
-                            HStack {
-                                Text(member.displayName ?? "未命名成員")
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "checkmark.circle")
-                                    .foregroundStyle(LedgerTheme.primary)
+            if inactiveIdentity {
+                Section {
+                    Text("你已離開或被移出這個群組。請由群組管理者重新啟用原本的成員身分並重新邀請，不能直接建立另一個新成員繞過移除狀態。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                if !pendingMembers.isEmpty {
+                    Section("選擇邀請你的名稱") {
+                        ForEach(pendingMembers, id: \.objectID) { member in
+                            Button {
+                                claim(member)
+                            } label: {
+                                HStack {
+                                    Text(member.displayName ?? "未命名成員")
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle")
+                                        .foregroundStyle(LedgerTheme.primary)
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            Section("找不到你的名稱？") {
-                TextField("你的顯示名稱", text: $displayName)
-                Button("以新成員加入") {
-                    joinAsNewMember()
+                Section("找不到你的名稱？") {
+                    TextField("你的顯示名稱", text: $displayName)
+                    Button("以新成員加入") {
+                        joinAsNewMember()
+                    }
+                    .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .navigationTitle("確認成員身分")
@@ -234,8 +251,18 @@ private struct GroupCard: View {
         Array(group.members as? Set<Member> ?? [])
     }
 
+    private var activeCount: Int {
+        members.filter {
+            $0.archivedAt == nil
+                && $0.invitationStatus == InvitationStatus.accepted.rawValue
+        }.count
+    }
+
     private var pendingCount: Int {
-        members.filter { $0.invitationStatus == InvitationStatus.pending.rawValue }.count
+        members.filter {
+            $0.archivedAt == nil
+                && $0.invitationStatus == InvitationStatus.pending.rawValue
+        }.count
     }
 
     var body: some View {
@@ -255,7 +282,7 @@ private struct GroupCard: View {
                         .font(.headline)
                         .foregroundStyle(.primary)
                     HStack(spacing: 8) {
-                        Label("\(members.count) 位成員", systemImage: "person.2")
+                        Label("\(activeCount) 位成員", systemImage: "person.2")
                         Text("·")
                         Text(LedgerCurrency.normalizedCode(group.currencyCode))
                         if pendingCount > 0 {
@@ -283,4 +310,3 @@ private struct GroupCard: View {
             PersistenceController(inMemory: true).container.viewContext
         )
 }
-
