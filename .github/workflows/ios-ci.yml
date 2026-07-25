@@ -15,13 +15,56 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      # Resolved at run time so the workflow does not break when the runner image
+      # changes its bundled simulator set.
+      - name: Select iOS simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          udid=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          runtimes = json.load(sys.stdin)["devices"]
+          candidates = [
+              device
+              for runtime, devices in runtimes.items()
+              if "iOS" in runtime
+              for device in devices
+              if device.get("isAvailable")
+          ]
+          if not candidates:
+              sys.exit("No available iOS simulator on this runner")
+          candidates.sort(key=lambda device: ("iPhone" not in device["name"], device["name"]))
+          print(candidates[0]["udid"])
+          ')
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices available | grep "$udid"
+
       - name: Build app and tests
         run: >-
           xcodebuild build-for-testing
           -project SharedLedger.xcodeproj
           -scheme SharedLedger
-          -destination 'generic/platform=iOS Simulator'
+          -destination "id=${{ steps.simulator.outputs.udid }}"
+          -derivedDataPath "$RUNNER_TEMP/TestDerivedData"
           CODE_SIGNING_ALLOWED=NO
+
+      - name: Run tests
+        run: >-
+          xcodebuild test-without-building
+          -project SharedLedger.xcodeproj
+          -scheme SharedLedger
+          -destination "id=${{ steps.simulator.outputs.udid }}"
+          -derivedDataPath "$RUNNER_TEMP/TestDerivedData"
+          -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult"
+          CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ${{ runner.temp }}/TestResults.xcresult
+          retention-days: 7
 
       - name: Archive app without signing
         run: >-
