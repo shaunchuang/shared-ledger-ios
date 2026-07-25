@@ -54,8 +54,10 @@ jobs:
                   text = text.replace(old, new, 1)
               path.write_text(text)
 
-          if text.count("SettlementCalculatorTests.swift in Sources") != 1:
-              raise SystemExit("Settlement test Sources membership is not exactly one")
+          if text.count("SettlementCalculatorTests.swift in Sources") != 2:
+              raise SystemExit("Settlement test build-file declaration and Sources membership are incomplete")
+          if text.count("SettlementCalculatorTests.swift */") != 2:
+              raise SystemExit("Settlement test file reference and group membership are incomplete")
 
       - name: Persist test target membership
         run: |
