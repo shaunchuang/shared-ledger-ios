@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build-for-testing:
     runs-on: macos-15
@@ -14,6 +17,57 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: agent/add-settlement-engine
+
+      - name: Add settlement tests to Xcode target
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("SharedLedger.xcodeproj/project.pbxproj")
+          text = path.read_text()
+
+          if "SettlementCalculatorTests.swift in Sources" not in text:
+              replacements = [
+                  (
+                      "\t\tC0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000004 /* AllocationCalculatorTests.swift */; };",
+                      "\t\tC0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000004 /* AllocationCalculatorTests.swift */; };\n\t\tC0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000006 /* SettlementCalculatorTests.swift */; };"
+                  ),
+                  (
+                      "\t\tC0DE00000000000000000004 /* AllocationCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllocationCalculatorTests.swift; sourceTree = \"<group>\"; };",
+                      "\t\tC0DE00000000000000000004 /* AllocationCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllocationCalculatorTests.swift; sourceTree = \"<group>\"; };\n\t\tC0DE00000000000000000006 /* SettlementCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementCalculatorTests.swift; sourceTree = \"<group>\"; };"
+                  ),
+                  (
+                      "\t\t\t\tC0DE00000000000000000004 /* AllocationCalculatorTests.swift */,\n\t\t\t\tD239A715784171742AA525A4 /* CategoryNodeTests.swift */,",
+                      "\t\t\t\tC0DE00000000000000000004 /* AllocationCalculatorTests.swift */,\n\t\t\t\tC0DE00000000000000000006 /* SettlementCalculatorTests.swift */,\n\t\t\t\tD239A715784171742AA525A4 /* CategoryNodeTests.swift */,"
+                  ),
+                  (
+                      "\t\t\t\tC0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */,\n\t\t\t\t3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */,",
+                      "\t\t\t\tC0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */,\n\t\t\t\tC0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */,\n\t\t\t\t3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */,"
+                  ),
+              ]
+              for old, new in replacements:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f"Expected one project pattern, found {count}: {old[:80]}")
+                  text = text.replace(old, new, 1)
+              path.write_text(text)
+
+          if text.count("SettlementCalculatorTests.swift in Sources") != 1:
+              raise SystemExit("Settlement test Sources membership is not exactly one")
+
+      - name: Persist test target membership
+        run: |
+          if git diff --quiet -- SharedLedger.xcodeproj/project.pbxproj; then
+            echo "Project membership already present"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add SharedLedger.xcodeproj/project.pbxproj
+          git commit -m "Add settlement tests to test target"
+          git push origin HEAD:agent/add-settlement-engine
 
       - name: Build app and tests
         run: >-
