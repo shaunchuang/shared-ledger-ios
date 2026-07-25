@@ -1,3 +1,4 @@
+import CloudKit
 import CoreData
 import Foundation
 
@@ -190,6 +191,21 @@ struct GroupRepository {
         try saveChanges()
     }
 
+    /// Binds the CloudKit participant that is operating this device to the App member.
+    /// `cloudParticipantID` is share-local and intentionally does not replace the
+    /// private-only `LocalMemberIdentity` mapping used to identify the current user.
+    func bindCurrentCloudParticipant(
+        from share: CKShare,
+        to member: Member,
+        in group: LedgerGroup
+    ) throws {
+        guard let participant = share.currentUserParticipant else {
+            throw GroupError.missingCloudParticipant
+        }
+        try bindCloudParticipant(participant, to: member, in: group)
+        try saveChanges()
+    }
+
     @discardableResult
     func claimCurrentMember(_ member: Member, in group: LedgerGroup) throws -> Member {
         guard persistence.store(for: group) === persistence.sharedStore else {
@@ -213,8 +229,12 @@ struct GroupRepository {
             throw GroupError.invalidIdentityCandidate
         }
 
+        let participant = try currentCloudParticipant(in: group)
+        try validateCloudParticipant(participant, for: member, in: group)
+
         let context = persistence.container.viewContext
         let now = Date()
+        member.cloudParticipantID = participant.participantID
         member.invitationStatus = InvitationStatus.accepted.rawValue
         member.joinedAt = now
         group.updatedAt = now
@@ -246,12 +266,16 @@ struct GroupRepository {
             throw GroupError.invalidIdentityCandidate
         }
 
+        let participant = try currentCloudParticipant(in: group)
+        try validateCloudParticipantForNewMember(participant, in: group)
+
         let context = persistence.container.viewContext
         let store = persistence.store(for: group)
         let now = Date()
         let member = Member(context: context)
         context.assign(member, to: store)
         member.id = UUID()
+        member.cloudParticipantID = participant.participantID
         member.displayName = trimmedName
         member.invitationStatus = InvitationStatus.accepted.rawValue
         member.joinedAt = now
@@ -267,6 +291,104 @@ struct GroupRepository {
         } catch {
             context.rollback()
             throw error
+        }
+    }
+
+    func cloudParticipantMapping(in group: LedgerGroup) throws -> [UUID: CKShare.Participant] {
+        guard let share = try share(for: group) else { return [:] }
+        let participantsByID = Dictionary(uniqueKeysWithValues: share.participants.map { ($0.participantID, $0) })
+        let members = group.members as? Set<Member> ?? []
+        return Dictionary(uniqueKeysWithValues: members.compactMap { member in
+            guard let memberID = member.id,
+                  let participantID = member.cloudParticipantID,
+                  let participant = participantsByID[participantID]
+            else { return nil }
+            return (memberID, participant)
+        })
+    }
+
+    private func share(for group: LedgerGroup) throws -> CKShare? {
+        guard !group.objectID.isTemporaryID else { return nil }
+        return try persistence.container.fetchShares(matching: [group.objectID])[group.objectID]
+    }
+
+    private func currentCloudParticipant(in group: LedgerGroup) throws -> CKShare.Participant {
+        guard let share = try share(for: group),
+              let participant = share.currentUserParticipant
+        else { throw GroupError.missingCloudParticipant }
+        return participant
+    }
+
+    private func bindCloudParticipant(
+        _ participant: CKShare.Participant,
+        to member: Member,
+        in group: LedgerGroup
+    ) throws {
+        guard member.group == group else { throw GroupError.crossGroupMember }
+        try validateCloudParticipant(participant, for: member, in: group)
+        member.cloudParticipantID = participant.participantID
+    }
+
+    private func validateCloudParticipant(
+        _ participant: CKShare.Participant,
+        for member: Member,
+        in group: LedgerGroup
+    ) throws {
+        guard participant.acceptanceStatus == .accepted else {
+            throw GroupError.cloudParticipantNotAccepted
+        }
+        if let existingID = member.cloudParticipantID,
+           existingID != participant.participantID {
+            throw GroupError.cloudParticipantMismatch
+        }
+        if let existingMember = memberLinked(
+            to: participant.participantID,
+            in: group,
+            excluding: member
+        ) {
+            if existingMember.archivedAt != nil {
+                throw GroupError.removedMemberCannotRejoin
+            }
+            throw GroupError.cloudParticipantAlreadyLinked
+        }
+
+        let memberRole = role(of: member)
+        if memberRole != .viewer,
+           participant.role != .owner,
+           participant.permission != .readWrite {
+            throw GroupError.cloudParticipantReadOnly
+        }
+        if memberRole == .owner, participant.role != .owner {
+            throw GroupError.cloudParticipantRoleMismatch
+        }
+    }
+
+    private func validateCloudParticipantForNewMember(
+        _ participant: CKShare.Participant,
+        in group: LedgerGroup
+    ) throws {
+        guard participant.acceptanceStatus == .accepted else {
+            throw GroupError.cloudParticipantNotAccepted
+        }
+        if let existingMember = memberLinked(to: participant.participantID, in: group) {
+            if existingMember.archivedAt != nil {
+                throw GroupError.removedMemberCannotRejoin
+            }
+            throw GroupError.cloudParticipantAlreadyLinked
+        }
+        guard participant.role == .owner || participant.permission == .readWrite else {
+            throw GroupError.cloudParticipantReadOnly
+        }
+    }
+
+    private func memberLinked(
+        to participantID: String,
+        in group: LedgerGroup,
+        excluding excludedMember: Member? = nil
+    ) -> Member? {
+        let members = group.members as? Set<Member> ?? []
+        return members.first {
+            $0 != excludedMember && $0.cloudParticipantID == participantID
         }
     }
 
@@ -304,7 +426,7 @@ struct GroupRepository {
         insertAudit(
             action: "member.identity.confirmed",
             actorDisplayName: member.displayName ?? "共享成員",
-            summary: "確認群組成員身分「\(member.displayName ?? "共享成員")」",
+            summary: "確認群組成員身分「\(member.displayName ?? "共享成員")」並對應 iCloud 共享參與者",
             in: group,
             at: date
         )
@@ -344,6 +466,12 @@ struct GroupRepository {
         case useLeaveGroupForCurrentMember
         case ownerMustTransferBeforeLeaving
         case ownershipTransferRequiresCloudParticipantMapping
+        case missingCloudParticipant
+        case cloudParticipantNotAccepted
+        case cloudParticipantAlreadyLinked
+        case cloudParticipantMismatch
+        case cloudParticipantReadOnly
+        case cloudParticipantRoleMismatch
 
         var errorDescription: String? {
             switch self {
@@ -377,6 +505,18 @@ struct GroupRepository {
                 return "群組擁有者不能直接退出或被移除，必須先完成擁有權移轉。"
             case .ownershipTransferRequiresCloudParticipantMapping:
                 return "目前尚未建立 App 成員與 iCloud 共享參與者的安全對應，因此暫時不能移轉群組擁有權。"
+            case .missingCloudParticipant:
+                return "找不到目前 Apple Account 在這個 iCloud 共享中的參與者身分，請確認共享已完成同步後再試。"
+            case .cloudParticipantNotAccepted:
+                return "目前 iCloud 共享邀請尚未完成接受，暫時不能確認 App 成員身分。"
+            case .cloudParticipantAlreadyLinked:
+                return "這個 iCloud 共享參與者已經對應到另一位 App 成員。"
+            case .cloudParticipantMismatch:
+                return "這位 App 成員已對應到不同的 iCloud 共享參與者，無法直接改綁。"
+            case .cloudParticipantReadOnly:
+                return "目前 iCloud 共享權限是唯讀，無法對應為可編輯的 App 成員角色。"
+            case .cloudParticipantRoleMismatch:
+                return "App 群組擁有者必須對應到 iCloud 共享的擁有者。"
             }
         }
     }
