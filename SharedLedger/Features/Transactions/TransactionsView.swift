@@ -246,20 +246,30 @@ private struct TransactionListView: View {
         )
     }
 
+    private var visibleEntries: [LedgerEntry] {
+        let repository = EntryRepository()
+        return entries.filter { !repository.isVoided($0) }
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                if entries.isEmpty {
+                if visibleEntries.isEmpty {
                     LedgerEmptyState(
                         systemImage: "receipt",
-                        title: "帳本還是空的",
-                        message: "新增第一筆共同收支，之後就能在這裡快速搜尋、篩選與核對。",
-                        actionTitle: "新增第一筆交易",
+                        title: "沒有有效交易",
+                        message: "新增共同收支後，就能在這裡查看、編輯與核對交易。",
+                        actionTitle: "新增交易",
                         action: onAddFirst
                     )
                 } else {
-                    ForEach(entries, id: \.objectID) { entry in
-                        EntryRow(entry: entry)
+                    ForEach(visibleEntries, id: \.objectID) { entry in
+                        NavigationLink {
+                            TransactionDetailView(entry: entry)
+                        } label: {
+                            EntryRow(entry: entry)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -301,27 +311,11 @@ private struct EntryRow: View {
     }
 
     private var amountText: String {
-        let amount = (entry.amount as Decimal?) ?? 0
-        let absoluteAmount = amount < 0 ? -amount : amount
-        let currencyCode = LedgerCurrency.normalizedCode(entry.group?.currencyCode)
-        switch kind {
-        case .income:
-            return LedgerCurrency.format(
-                absoluteAmount,
-                currencyCode: currencyCode,
-                showPositiveSign: true
-            )
-        case .expense:
-            return LedgerCurrency.format(-absoluteAmount, currencyCode: currencyCode)
-        case .transfer:
-            return LedgerCurrency.format(absoluteAmount, currencyCode: currencyCode)
-        case .balanceAdjustment:
-            return LedgerCurrency.format(
-                amount,
-                currencyCode: currencyCode,
-                showPositiveSign: true
-            )
-        }
+        formattedAmount(
+            (entry.amount as Decimal?) ?? 0,
+            kind: kind,
+            currencyCode: LedgerCurrency.normalizedCode(entry.group?.currencyCode)
+        )
     }
 
     private var amountColor: Color {
@@ -350,8 +344,234 @@ private struct EntryRow: View {
                 Text(amountText)
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(amountColor)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
         }
+    }
+}
+
+private struct TransactionDetailView: View {
+    @ObservedObject var entry: LedgerEntry
+
+    @State private var isEditing = false
+    @State private var showVoidConfirmation = false
+    @State private var errorMessage: String?
+
+    private var repository: EntryRepository { EntryRepository() }
+
+    private var isVoided: Bool {
+        repository.isVoided(entry)
+    }
+
+    private var kind: EntryKind {
+        EntryKind(rawValue: entry.kind ?? "") ?? .expense
+    }
+
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(entry.group?.currencyCode)
+    }
+
+    private var payments: [EntryPayment] {
+        (entry.payments as? Set<EntryPayment> ?? [])
+            .sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+                return (lhs.member?.displayName ?? "") < (rhs.member?.displayName ?? "")
+            }
+    }
+
+    private var splits: [EntrySplit] {
+        (entry.splits as? Set<EntrySplit> ?? [])
+            .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
+    }
+
+    private var originalSnapshot: TransactionAuditPayload.Snapshot? {
+        repository.auditPayloads(for: entry).last(where: { $0.after?.isVoided == true })?.before
+    }
+
+    private var detailAmount: Decimal {
+        if isVoided,
+           let amountText = originalSnapshot?.amount,
+           let original = Decimal(string: amountText) {
+            return original
+        }
+        return (entry.amount as Decimal?) ?? 0
+    }
+
+    var body: some View {
+        List {
+            if isVoided {
+                Section {
+                    Label("此交易已作廢，保留於稽核歷史中。", systemImage: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("交易") {
+                detailRow("類型", value: kind.displayName)
+                detailRow(
+                    "金額",
+                    value: formattedAmount(detailAmount, kind: kind, currencyCode: currencyCode)
+                )
+                if let date = entry.date {
+                    detailRow("日期", value: date.formatted(date: .long, time: .omitted))
+                }
+                detailRow("帳本", value: entry.book?.name ?? "未命名帳本")
+                if let category = entry.category?.name, !category.isEmpty {
+                    detailRow("分類", value: category)
+                }
+                if kind == .transfer {
+                    detailRow("轉出帳戶", value: entry.sourceAccount?.name ?? "-")
+                    detailRow("轉入帳戶", value: entry.destinationAccount?.name ?? "-")
+                } else {
+                    detailRow("帳戶", value: entry.sourceAccount?.name ?? "-")
+                }
+                if let note = entry.note, !note.isEmpty {
+                    detailRow("備註", value: note)
+                }
+            }
+
+            if kind != .transfer {
+                Section("付款人") {
+                    ForEach(payments, id: \.objectID) { payment in
+                        detailRow(
+                            payment.member?.displayName ?? "未命名成員",
+                            value: LedgerCurrency.format(
+                                (payment.amount as Decimal?) ?? 0,
+                                currencyCode: currencyCode
+                            )
+                        )
+                    }
+                }
+
+                Section("分攤 · \(splitModeName)") {
+                    ForEach(splits, id: \.objectID) { split in
+                        VStack(alignment: .leading, spacing: 4) {
+                            detailRow(
+                                split.member?.displayName ?? "未命名成員",
+                                value: LedgerCurrency.format(
+                                    (split.amount as Decimal?) ?? 0,
+                                    currencyCode: currencyCode
+                                )
+                            )
+                            if let input = split.inputValue as Decimal?,
+                               splitMode != .equal {
+                                Text(splitMode == .percentage
+                                     ? "原始輸入：\(NSDecimalNumber(decimal: input).stringValue)%"
+                                     : "原始輸入：\(LedgerCurrency.format(input, currencyCode: currencyCode))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !isVoided {
+                Section {
+                    Button("作廢交易", role: .destructive) {
+                        showVoidConfirmation = true
+                    }
+                } footer: {
+                    Text("作廢不會刪除歷史紀錄；系統會保存交易當下的付款與分攤快照。")
+                }
+            }
+        }
+        .navigationTitle("交易詳情")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !isVoided, entry.book?.archivedAt == nil {
+                Button("編輯") {
+                    isEditing = true
+                }
+            }
+        }
+        .sheet(isPresented: $isEditing) {
+            if let book = entry.book {
+                NavigationStack {
+                    NewTransactionView(book: book, entry: entry) {
+                        isEditing = false
+                    }
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+        }
+        .confirmationDialog(
+            "確定要作廢這筆交易？",
+            isPresented: $showVoidConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("作廢交易", role: .destructive, action: voidEntry)
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("作廢後不能再編輯，但完整交易快照仍會保留在稽核紀錄。")
+        }
+        .alert("無法處理交易", isPresented: errorBinding) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "請稍後再試。")
+        }
+    }
+
+    private var splitMode: SplitMode {
+        SplitMode(rawValue: entry.splitMode ?? "") ?? .equal
+    }
+
+    private var splitModeName: String {
+        switch splitMode {
+        case .equal: return "平均"
+        case .percentage: return "比例"
+        case .fixedAmount: return "指定金額"
+        }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )
+    }
+
+    private func detailRow(_ title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 16)
+            Text(value)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func voidEntry() {
+        do {
+            try repository.voidEntry(entry)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private func formattedAmount(_ amount: Decimal, kind: EntryKind, currencyCode: String) -> String {
+    let absoluteAmount = amount < 0 ? -amount : amount
+    switch kind {
+    case .income:
+        return LedgerCurrency.format(
+            absoluteAmount,
+            currencyCode: currencyCode,
+            showPositiveSign: true
+        )
+    case .expense:
+        return LedgerCurrency.format(-absoluteAmount, currencyCode: currencyCode)
+    case .transfer:
+        return LedgerCurrency.format(absoluteAmount, currencyCode: currencyCode)
+    case .balanceAdjustment:
+        return LedgerCurrency.format(
+            amount,
+            currencyCode: currencyCode,
+            showPositiveSign: true
+        )
     }
 }
 
