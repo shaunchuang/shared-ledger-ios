@@ -6,36 +6,79 @@ struct NewTransactionView: View {
     @Environment(\.dismiss) private var dismiss
 
     let book: LedgerBook
+    let entry: LedgerEntry?
     let onSaved: () -> Void
 
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
     @FetchRequest private var categories: FetchedResults<LedgerCategory>
 
-    @State private var draft = TransactionDraft()
+    @State private var draft: TransactionDraft
     @State private var errorMessage: String?
 
-    init(book: LedgerBook, onSaved: @escaping () -> Void) {
+    init(
+        book: LedgerBook,
+        entry: LedgerEntry? = nil,
+        onSaved: @escaping () -> Void
+    ) {
         self.book = book
+        self.entry = entry
         self.onSaved = onSaved
-        let accountPredicate = book.group.map {
-            NSPredicate(format: "group == %@ AND archivedAt == nil", $0)
-        } ?? NSPredicate(value: false)
+        _draft = State(initialValue: entry.map(TransactionDraft.init(entry:)) ?? TransactionDraft())
+
+        let accountPredicate: NSPredicate
+        if let group = book.group {
+            let existingAccountIDs = [entry?.sourceAccount?.id, entry?.destinationAccount?.id].compactMap { $0 }
+            if existingAccountIDs.isEmpty {
+                accountPredicate = NSPredicate(format: "group == %@ AND archivedAt == nil", group)
+            } else {
+                accountPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                    NSPredicate(format: "group == %@", group),
+                    NSCompoundPredicate(orPredicateWithSubpredicates: [
+                        NSPredicate(format: "archivedAt == nil"),
+                        NSPredicate(format: "id IN %@", existingAccountIDs)
+                    ])
+                ])
+            }
+        } else {
+            accountPredicate = NSPredicate(value: false)
+        }
         _accounts = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerAccount.createdAt, ascending: true)],
             predicate: accountPredicate
         )
+
+        let categoryPredicate: NSPredicate
+        if let group = book.group {
+            if let categoryID = entry?.category?.id {
+                categoryPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                    NSPredicate(format: "group == %@", group),
+                    NSCompoundPredicate(orPredicateWithSubpredicates: [
+                        NSPredicate(format: "archivedAt == nil"),
+                        NSPredicate(format: "id == %@", categoryID as CVarArg)
+                    ])
+                ])
+            } else {
+                categoryPredicate = NSPredicate(format: "group == %@ AND archivedAt == nil", group)
+            }
+        } else {
+            categoryPredicate = NSPredicate(value: false)
+        }
         _categories = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \LedgerCategory.sortOrder, ascending: true)],
-            predicate: book.group.map {
-                NSPredicate(format: "group == %@ AND archivedAt == nil", $0)
-            } ?? NSPredicate(value: false)
+            predicate: categoryPredicate
         )
     }
 
     private var members: [Member] {
         let set = book.group?.members as? Set<Member> ?? []
+        let historicalIDs = Set(
+            ((entry?.splits as? Set<EntrySplit>) ?? []).compactMap { $0.member?.id }
+                + ((entry?.payments as? Set<EntryPayment>) ?? []).compactMap { $0.member?.id }
+        )
         return set
-            .filter { $0.archivedAt == nil }
+            .filter { member in
+                member.archivedAt == nil || member.id.map(historicalIDs.contains) == true
+            }
             .sorted { ($0.displayName ?? "") < ($1.displayName ?? "") }
     }
 
@@ -49,7 +92,12 @@ struct NewTransactionView: View {
                 .availableCategories(in: book)
                 .map(\.objectID)
         )
-        return categories.filter { availableIDs.contains($0.objectID) }
+        var result = categories.filter { availableIDs.contains($0.objectID) }
+        if let current = entry?.category,
+           !result.contains(where: { $0.objectID == current.objectID }) {
+            result.append(current)
+        }
+        return result
     }
 
     var body: some View {
@@ -72,11 +120,7 @@ struct NewTransactionView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     TextField("0", text: $draft.amountText)
-                        .keyboardType(
-                            LedgerCurrency.fractionDigits(for: currencyCode) == 0
-                                ? .numberPad
-                                : .decimalPad
-                        )
+                        .keyboardType(amountKeyboardType)
                         .multilineTextAlignment(.trailing)
                 }
                 DatePicker("日期", selection: $draft.date, displayedComponents: .date)
@@ -203,7 +247,7 @@ struct NewTransactionView: View {
                     .lineLimit(2...4)
             }
         }
-        .navigationTitle("新增交易")
+        .navigationTitle(entry == nil ? "新增交易" : "編輯交易")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -214,7 +258,11 @@ struct NewTransactionView: View {
                     .disabled(!draft.canSave)
             }
         }
-        .onAppear(perform: prefillDefaults)
+        .onAppear {
+            if entry == nil {
+                prefillDefaults()
+            }
+        }
         .onChange(of: draft.amountText) { oldValue, newValue in
             syncSinglePaymentAmount(oldValue: oldValue, newValue: newValue)
         }
@@ -414,13 +462,24 @@ struct NewTransactionView: View {
 
     private func save() {
         do {
-            try EntryRepository().createEntry(
-                from: draft,
-                in: book,
-                accounts: Array(accounts),
-                categories: availableCategories,
-                members: members
-            )
+            let repository = EntryRepository()
+            if let entry {
+                try repository.updateEntry(
+                    entry,
+                    from: draft,
+                    accounts: Array(accounts),
+                    categories: availableCategories,
+                    members: members
+                )
+            } else {
+                try repository.createEntry(
+                    from: draft,
+                    in: book,
+                    accounts: Array(accounts),
+                    categories: availableCategories,
+                    members: members
+                )
+            }
             onSaved()
             dismiss()
         } catch {
