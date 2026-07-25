@@ -48,6 +48,11 @@ jobs:
           -derivedDataPath "$RUNNER_TEMP/TestDerivedData"
           CODE_SIGNING_ALLOWED=NO
 
+      # CloudSharingTests builds a real CKContainer. CloudKit terminates any
+      # process without a com.apple.developer.icloud-services entitlement, and
+      # CODE_SIGNING_ALLOWED=NO leaves the build without one, so those tests kill
+      # the test host and take unrelated tests down with them. They need a signed
+      # build with iCloud entitlements and cannot run here.
       - name: Run tests
         run: >-
           xcodebuild test-without-building
@@ -56,6 +61,7 @@ jobs:
           -destination "id=${{ steps.simulator.outputs.udid }}"
           -derivedDataPath "$RUNNER_TEMP/TestDerivedData"
           -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult"
+          -skip-testing:SharedLedgerTests/CloudSharingTests
           CODE_SIGNING_ALLOWED=NO
 
       - name: Upload test results
