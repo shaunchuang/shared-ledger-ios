@@ -2,7 +2,17 @@ import CoreData
 import CloudKit
 
 final class PersistenceController {
-    static let shared = PersistenceController()
+    /// The app target hosts the unit tests, so this is also constructed when the
+    /// test bundle launches. A CloudKit-backed store cannot load on a simulator
+    /// without a signed-in iCloud account, and the failure path trips
+    /// `assertionFailure`, which traps before any test can run. Tests build their
+    /// own `PersistenceController(inMemory: true)`, so the shared instance only has
+    /// to launch cleanly here.
+    static let shared = PersistenceController(inMemory: isRunningTests)
+
+    private static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
     private static let cloudKitContainerIdentifier = "iCloud.com.shaunchuang.SharedLedger"
 
     typealias ShareFetcher = (
