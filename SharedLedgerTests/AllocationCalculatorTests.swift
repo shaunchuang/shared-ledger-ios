@@ -345,7 +345,7 @@ final class TransactionLifecycleTests: XCTestCase {
         XCTAssertEqual(restored.note, "晚餐")
         XCTAssertEqual(restored.sourceAccountID, fixture.account.id)
         XCTAssertEqual(restored.splitMode, .percentage)
-        XCTAssertEqual(restored.splitMemberIDs, [ownerID, friendID])
+        XCTAssertEqual(restored.splitMemberIDs, Set([ownerID, friendID]))
         XCTAssertEqual(restored.splitValueTexts[ownerID], "40")
         XCTAssertEqual(restored.splitValueTexts[friendID], "60")
         XCTAssertEqual(restored.paymentDrafts.map(\.memberID), [ownerID, friendID])
@@ -412,7 +412,7 @@ final class TransactionLifecycleTests: XCTestCase {
         XCTAssertEqual(updateAudit.after?.amount, "120")
         XCTAssertEqual(updateAudit.before?.note, "原始")
         XCTAssertEqual(updateAudit.after?.note, "更新後")
-        XCTAssertEqual(updateAudit.after?.payments.map(\.amount), ["80", "40"])
+        XCTAssertEqual(Set(updateAudit.after?.payments.map(\.amount) ?? []), ["80", "40"])
         XCTAssertEqual(Set(updateAudit.after?.splits.map(\.amount) ?? []), ["30", "90"])
     }
 
@@ -437,6 +437,7 @@ final class TransactionLifecycleTests: XCTestCase {
         try fixture.repository.voidEntry(entry)
 
         XCTAssertTrue(fixture.repository.isVoided(entry))
+        XCTAssertEqual(entry.amount as Decimal?, 0)
         let voidAudit = try XCTUnwrap(
             fixture.repository.auditPayloads(for: entry).last(where: { $0.message == "作廢交易" })
         )
@@ -464,6 +465,29 @@ final class TransactionLifecycleTests: XCTestCase {
                 return XCTFail("Expected voidedEntry, got \(error)")
             }
         }
+    }
+
+    func testVoidedEntryStopsAffectingAccountBalance() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let entry = try fixture.repository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "300",
+                sourceAccountID: fixture.account.id,
+                payerMemberID: ownerID,
+                splitMemberIDs: [ownerID]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner]
+        )
+        let accountRepository = AccountRepository(persistence: fixture.persistence)
+
+        XCTAssertEqual(accountRepository.currentBalance(for: fixture.account), -300)
+        try fixture.repository.voidEntry(entry)
+        XCTAssertEqual(accountRepository.currentBalance(for: fixture.account), 0)
     }
 
     private func makeFixture() throws -> EntryFixture {
