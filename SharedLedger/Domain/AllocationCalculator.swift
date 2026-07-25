@@ -391,10 +391,11 @@ enum SettlementCalculator {
                 }
 
                 let candidate = [transfer] + search(next)
-                if let best {
-                    if candidate.count < best.count
-                        || (candidate.count == best.count && transferKey(candidate) < transferKey(best)) {
-                        selfAssign(&best, candidate)
+                if let currentBest = best {
+                    if candidate.count < currentBest.count
+                        || (candidate.count == currentBest.count
+                            && transferKey(candidate) < transferKey(currentBest)) {
+                        best = candidate
                     }
                 } else {
                     best = candidate
@@ -417,10 +418,6 @@ enum SettlementCalculator {
                 amount: amount(fromMinorUnits: $0.units, currencyCode: currencyCode)
             )
         }
-    }
-
-    private static func selfAssign<T>(_ value: inout T, _ newValue: T) {
-        value = newValue
     }
 
     private static func minorUnits(for amount: Decimal, currencyCode: String) throws -> Int64 {
