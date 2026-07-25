@@ -49,11 +49,14 @@ private struct GroupDashboardView: View {
     let groups: [LedgerGroup]
     @Binding var selectedGroupID: NSManagedObjectID?
 
+    @Environment(\.managedObjectContext) private var context
+
     @AppStorage private var selectedBookID: String
     @State private var scope: ReportBookScope = .allActiveBooks
     @State private var month = Date()
     @State private var selectedCustomBookIDs: Set<UUID> = []
     @State private var isPresentingBookSelection = false
+    @State private var snapshot = GroupReportSnapshot.empty
 
     init(
         group: LedgerGroup,
@@ -88,8 +91,11 @@ private struct GroupDashboardView: View {
             ?? DateInterval(start: month, duration: 31 * 24 * 60 * 60)
     }
 
-    private var snapshot: GroupReportSnapshot {
-        GroupReportService().snapshot(
+    /// 快照是快取的，不是 computed property。body 會讀取它數十次（每個分類列還會
+    /// 再讀一次），而每次計算都要重新掃描整個群組的交易與稽核事件，做成 computed
+    /// property 等於每次 render 都重跑數十次完整聚合。
+    private func reloadSnapshot() {
+        snapshot = GroupReportService().snapshot(
             in: group,
             interval: monthInterval,
             scope: scope,
@@ -137,9 +143,29 @@ private struct GroupDashboardView: View {
             .padding(.horizontal, LedgerTheme.pagePadding)
             .padding(.bottom, 28)
         }
-        .onAppear(perform: normalizeSelections)
+        .onAppear {
+            normalizeSelections()
+            reloadSnapshot()
+        }
         .onChange(of: activeBooks.count) { _, _ in
             normalizeSelections()
+            reloadSnapshot()
+        }
+        .onChange(of: month) { _, _ in reloadSnapshot() }
+        .onChange(of: scope) { _, _ in reloadSnapshot() }
+        .onChange(of: selectedBookID) { _, _ in reloadSnapshot() }
+        .onChange(of: selectedCustomBookIDs) { _, _ in reloadSnapshot() }
+        .onChange(of: group.objectID) { _, _ in
+            normalizeSelections()
+            reloadSnapshot()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { _ in
+            reloadSnapshot()
         }
         .sheet(isPresented: $isPresentingBookSelection) {
             customBookSelectionSheet
@@ -418,6 +444,9 @@ private struct GroupDashboardView: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
+                                    Text("佔總支出 \(ReportShare.formatted(book.expenseShare))")
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.tertiary)
                                 }
                                 Spacer()
                                 Text(LedgerCurrency.format(book.net, currencyCode: currencyCode, showPositiveSign: true))
@@ -512,16 +541,9 @@ private struct GroupDashboardView: View {
     }
 
     private func categoryRow(_ category: GroupReportCategorySummary) -> some View {
-        let maxExpense = snapshot.categories.map(\.expense).max() ?? 0
-        let fraction: Double
-        if maxExpense > 0 {
-            fraction = min(
-                1,
-                NSDecimalNumber(decimal: category.expense / maxExpense).doubleValue
-            )
-        } else {
-            fraction = 0
-        }
+        // 進度條與百分比都以「佔期間總支出」為準，兩者一致；先前的長條是相對於
+        // 最大分類，會讓最大的分類永遠看起來像 100%。
+        let fraction = min(1, max(0, NSDecimalNumber(decimal: category.expenseShare).doubleValue))
 
         return VStack(alignment: .leading, spacing: 9) {
             HStack {
@@ -536,10 +558,18 @@ private struct GroupDashboardView: View {
             }
             ProgressView(value: fraction)
                 .tint(LedgerTheme.primary)
-            if category.income > 0 {
-                Text("收入 \(LedgerCurrency.format(category.income, currencyCode: currencyCode))")
-                    .font(.caption2)
+            HStack(spacing: 6) {
+                Text("佔總支出 \(ReportShare.formatted(category.expenseShare))")
+                    .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
+                if category.income > 0 {
+                    Text("·")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Text("收入 \(LedgerCurrency.format(category.income, currencyCode: currencyCode))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(16)
@@ -755,6 +785,8 @@ struct GroupReportCategorySummary: Identifiable, Equatable, Sendable {
     let name: String
     let income: Decimal
     let expense: Decimal
+    /// 這個分類佔期間總支出的比例，範圍 0...1；總支出為 0 時為 0。
+    let expenseShare: Decimal
 }
 
 struct GroupReportBookSummary: Identifiable, Equatable, Sendable {
@@ -763,8 +795,24 @@ struct GroupReportBookSummary: Identifiable, Equatable, Sendable {
     let name: String
     let income: Decimal
     let expense: Decimal
+    /// 這個帳本佔期間總支出的比例，範圍 0...1；總支出為 0 時為 0。
+    let expenseShare: Decimal
 
     var net: Decimal { income - expense }
+}
+
+enum ReportShare {
+    /// 佔比一律以期間總支出為分母，讓分類與帳本的比例可以直接互相對照。
+    /// 總支出為 0（例如只有收入）時回傳 0，而不是製造一個無意義的分母。
+    static func share(of amount: Decimal, in total: Decimal) -> Decimal {
+        guard total > 0, amount > 0 else { return 0 }
+        return amount / total
+    }
+
+    static func formatted(_ share: Decimal) -> String {
+        let percentage = NSDecimalNumber(decimal: share * 100).doubleValue
+        return String(format: "%.1f%%", percentage)
+    }
 }
 
 struct GroupReportSourceEntry: Identifiable, Equatable, Sendable {
@@ -791,6 +839,17 @@ struct GroupReportSnapshot: Equatable, Sendable {
     let entries: [GroupReportSourceEntry]
 
     var net: Decimal { income - expense }
+
+    static let empty = GroupReportSnapshot(
+        interval: DateInterval(start: .distantPast, duration: 0),
+        includedBookIDs: [],
+        income: 0,
+        expense: 0,
+        accountBalance: 0,
+        categories: [],
+        books: [],
+        entries: []
+    )
 }
 
 @MainActor
@@ -833,10 +892,12 @@ struct GroupReportService {
         let voidedEntryIDs = EntryRepository(persistence: persistence).voidedEntryIDs(in: group)
         let entries = (group.entries as? Set<LedgerEntry> ?? [])
             .filter { entry in
+                // DateInterval.contains 含右端點，會讓剛好落在下個月 1 日 00:00:00
+                // 的交易同時被算進兩個月，所以這裡自行做左閉右開判斷。
                 guard let book = entry.book,
                       includedObjectIDs.contains(book.objectID),
                       let date = entry.date,
-                      interval.contains(date),
+                      date >= interval.start, date < interval.end,
                       let kind = entry.kind.flatMap(EntryKind.init(rawValue:)),
                       kind == .income || kind == .expense
                 else { return false }
@@ -925,7 +986,8 @@ struct GroupReportService {
                     categoryID: summary.categoryID,
                     name: summary.name,
                     income: summary.income,
-                    expense: summary.expense
+                    expense: summary.expense,
+                    expenseShare: ReportShare.share(of: summary.expense, in: expense)
                 )
             }
             .sorted { lhs, rhs in
@@ -944,7 +1006,8 @@ struct GroupReportService {
                     bookID: summary.bookID,
                     name: summary.name,
                     income: summary.income,
-                    expense: summary.expense
+                    expense: summary.expense,
+                    expenseShare: ReportShare.share(of: summary.expense, in: expense)
                 )
             }
             .sorted { lhs, rhs in
