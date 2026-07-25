@@ -94,6 +94,31 @@ final class AllocationCalculatorTests: XCTestCase {
         }
     }
 
+    func testPaymentsPreserveEnteredOrder() throws {
+        // EntryPayment.sortOrder is assigned from this array's index, and drives both
+        // the multi-payer list order and draft restoration, so validation must not
+        // reorder the payers.
+        //
+        // The payers are deliberately arranged so the first one has the larger UUID
+        // string: sorting by member UUID would swap them on every run, not on the
+        // coin flip that previously let this defect stay hidden.
+        let ids = [UUID(), UUID()].sorted { $0.uuidString > $1.uuidString }
+        let firstEntered = ids[0]
+        let secondEntered = ids[1]
+
+        let validated = try AllocationCalculator.validatePayments(
+            total: 101,
+            inputs: [
+                PaymentInput(memberID: firstEntered, amount: 70),
+                PaymentInput(memberID: secondEntered, amount: 31)
+            ],
+            currencyCode: "TWD"
+        )
+
+        XCTAssertEqual(validated.map(\.memberID), [firstEntered, secondEntered])
+        XCTAssertEqual(validated.map(\.amount), [70, 31])
+    }
+
     func testPaymentsRespectCurrencyMinorUnits() throws {
         XCTAssertThrowsError(
             try AllocationCalculator.validatePayments(
