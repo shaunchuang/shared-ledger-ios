@@ -30,6 +30,11 @@ Audit payload 保存 `settlementID`、`bookID`、付款人、收款人、金額�
 - viewer 或尚未完成目前成員身分確認者只能查看。
 - 已封存帳本不能新增結算。
 
+## 驗證
+
+- 純 Domain 結算演算法已以 Swift 編譯 smoke test 驗證支出、收入方向與部分結算。
+- `SharedLedgerTests/SettlementCalculatorTests.swift` 已加入 repository，涵蓋 Domain 與 repository 情境；目前 `.xcodeproj` 仍需將此新增檔加入 `SharedLedgerTests` Sources build phase，完成前不得將 Draft PR 視為可合併。
+
 ## 尚待端到端驗證
 
 - 兩個 Apple Account 對 shared store 的結算新增、撤銷與同步。
