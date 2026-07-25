@@ -43,7 +43,6 @@ struct TransactionDraft: Equatable, Sendable {
         self.paymentDrafts = paymentDrafts
     }
 
-    @MainActor
     init(entry: LedgerEntry) {
         kind = EntryKind(rawValue: entry.kind ?? "") ?? .expense
         amountText = Self.decimalString(entry.amount as Decimal?)
