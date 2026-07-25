@@ -18,9 +18,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        assertionFailure(
-            "Remote notification registration failed: \(error.localizedDescription)"
-        )
+        // 註冊失敗是可以復原的狀況：模擬器、或沒有 aps-environment entitlement 的
+        // Debug build 都會走到這裡。此時 CloudKit 只是收不到即時推播，退回下次啟動
+        // 或手動重新整理時同步，因此只記錄而不中止 App。
+        NSLog("Remote notification registration failed: \(error.localizedDescription)")
     }
 
     // 指定自訂的 SceneDelegate。SwiftUI 生命週期的 App 若採用場景（scene），
