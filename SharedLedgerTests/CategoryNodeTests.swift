@@ -76,6 +76,27 @@ final class LedgerCurrencyTests: XCTestCase {
         )
     }
 
+    func testTWDPrecisionIsPinnedIndependentlyOfSystemData() throws {
+        // ISO 4217 records TWD with 2 minor units and NumberFormatter follows the
+        // OS's CLDR data, but the app settles TWD in whole dollars. Ledgers sync
+        // across devices, so this must not drift with the iOS version.
+        XCTAssertEqual(LedgerCurrency.fractionDigits(for: "TWD"), 0)
+        XCTAssertTrue(LedgerCurrency.isValidAmount(100, currencyCode: "TWD"))
+        XCTAssertFalse(
+            LedgerCurrency.isValidAmount(
+                try XCTUnwrap(Decimal(string: "33.33")),
+                currencyCode: "TWD"
+            )
+        )
+        XCTAssertEqual(
+            LedgerCurrency.rounded(
+                try XCTUnwrap(Decimal(string: "33.5")),
+                currencyCode: "TWD"
+            ),
+            34
+        )
+    }
+
     func testCurrencyRoundingUsesRequestedPrecision() throws {
         XCTAssertEqual(
             LedgerCurrency.rounded(
