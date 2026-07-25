@@ -99,9 +99,13 @@ struct GroupRepository {
         let actor = try currentActor(in: group, requiringMemberManagement: true)
         guard member.group == group else { throw GroupError.crossGroupMember }
         guard member.role != MemberRole.owner.rawValue else { throw GroupError.invalidMemberOperation }
-        guard member.invitationStatus == InvitationStatus.pending.rawValue
-                || member.invitationStatus == InvitationStatus.revoked.rawValue
-        else { throw GroupError.invitationNotPending }
+        let canResendPending = member.invitationStatus == InvitationStatus.pending.rawValue
+        let canRestoreRevoked = member.invitationStatus == InvitationStatus.revoked.rawValue
+        let canRestoreRemoved = member.invitationStatus == InvitationStatus.accepted.rawValue
+            && member.archivedAt != nil
+        guard canResendPending || canRestoreRevoked || canRestoreRemoved else {
+            throw GroupError.invitationNotPending
+        }
 
         let now = Date()
         member.invitationStatus = InvitationStatus.pending.rawValue
@@ -362,7 +366,7 @@ struct GroupRepository {
             case .crossGroupMember:
                 return "不能管理其他群組的成員。"
             case .invitationNotPending:
-                return "只有待邀請或已撤回的成員可以重新邀請。"
+                return "只有待邀請、已撤回或已離開的成員可以重新邀請。"
             case .inactiveMember:
                 return "這位成員目前不是有效成員。"
             case .invalidMemberOperation:
