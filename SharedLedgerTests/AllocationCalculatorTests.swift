@@ -313,6 +313,196 @@ final class MultiPayerEntryRepositoryTests: XCTestCase {
 }
 
 @MainActor
+final class TransactionLifecycleTests: XCTestCase {
+    func testDraftRestoresPercentageSplitAndMultiplePayments() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let friendID = try XCTUnwrap(fixture.friend.id)
+        let entry = try fixture.repository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "101",
+                note: "晚餐",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                splitMode: .percentage,
+                splitValueTexts: [ownerID: "40", friendID: "60"],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "70"),
+                    TransactionPaymentDraft(memberID: friendID, amountText: "31")
+                ]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        let restored = TransactionDraft(entry: entry)
+
+        XCTAssertEqual(restored.kind, .expense)
+        XCTAssertEqual(restored.amountText, "101")
+        XCTAssertEqual(restored.note, "晚餐")
+        XCTAssertEqual(restored.sourceAccountID, fixture.account.id)
+        XCTAssertEqual(restored.splitMode, .percentage)
+        XCTAssertEqual(restored.splitMemberIDs, [ownerID, friendID])
+        XCTAssertEqual(restored.splitValueTexts[ownerID], "40")
+        XCTAssertEqual(restored.splitValueTexts[friendID], "60")
+        XCTAssertEqual(restored.paymentDrafts.map(\.memberID), [ownerID, friendID])
+        XCTAssertEqual(restored.paymentDrafts.map(\.amountText), ["70", "31"])
+    }
+
+    func testUpdateRecalculatesSplitsAndPersistsBeforeAfterAudit() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let friendID = try XCTUnwrap(fixture.friend.id)
+        let entry = try fixture.repository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "100",
+                note: "原始",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "100")
+                ]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        try fixture.repository.updateEntry(
+            entry,
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "120",
+                note: "更新後",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                splitMode: .percentage,
+                splitValueTexts: [ownerID: "25", friendID: "75"],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "80"),
+                    TransactionPaymentDraft(memberID: friendID, amountText: "40")
+                ]
+            ),
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        XCTAssertEqual(entry.amount as Decimal?, 120)
+        XCTAssertEqual(entry.note, "更新後")
+        XCTAssertEqual(entry.splitMode, SplitMode.percentage.rawValue)
+        XCTAssertEqual(
+            (entry.payments as? Set<EntryPayment> ?? []).compactMap { $0.amount as Decimal? }.reduce(0, +),
+            120
+        )
+        XCTAssertEqual(
+            Set((entry.splits as? Set<EntrySplit> ?? []).compactMap { $0.amount as Decimal? }),
+            [30, 90]
+        )
+
+        let updateAudit = try XCTUnwrap(
+            fixture.repository.auditPayloads(for: entry).last(where: { $0.message == "編輯交易" })
+        )
+        XCTAssertEqual(updateAudit.before?.amount, "100")
+        XCTAssertEqual(updateAudit.after?.amount, "120")
+        XCTAssertEqual(updateAudit.before?.note, "原始")
+        XCTAssertEqual(updateAudit.after?.note, "更新後")
+        XCTAssertEqual(updateAudit.after?.payments.map(\.amount), ["80", "40"])
+        XCTAssertEqual(Set(updateAudit.after?.splits.map(\.amount) ?? []), ["30", "90"])
+    }
+
+    func testVoidPersistsSnapshotAndPreventsFurtherEditing() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let entry = try fixture.repository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "300",
+                note: "要作廢",
+                sourceAccountID: fixture.account.id,
+                payerMemberID: ownerID,
+                splitMemberIDs: [ownerID]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner]
+        )
+
+        try fixture.repository.voidEntry(entry)
+
+        XCTAssertTrue(fixture.repository.isVoided(entry))
+        let voidAudit = try XCTUnwrap(
+            fixture.repository.auditPayloads(for: entry).last(where: { $0.message == "作廢交易" })
+        )
+        XCTAssertEqual(voidAudit.before?.amount, "300")
+        XCTAssertEqual(voidAudit.after?.amount, "300")
+        XCTAssertEqual(voidAudit.before?.isVoided, false)
+        XCTAssertEqual(voidAudit.after?.isVoided, true)
+
+        XCTAssertThrowsError(
+            try fixture.repository.updateEntry(
+                entry,
+                from: TransactionDraft(
+                    kind: .expense,
+                    amountText: "200",
+                    sourceAccountID: fixture.account.id,
+                    payerMemberID: ownerID,
+                    splitMemberIDs: [ownerID]
+                ),
+                accounts: [fixture.account],
+                categories: [],
+                members: [fixture.owner]
+            )
+        ) { error in
+            guard case EntryRepository.EntryError.voidedEntry = error else {
+                return XCTFail("Expected voidedEntry, got \(error)")
+            }
+        }
+    }
+
+    private func makeFixture() throws -> EntryFixture {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(
+                name: "家庭",
+                ownerDisplayName: "小明",
+                currencyCode: "TWD"
+            )
+        )
+        let owner = try XCTUnwrap((group.members as? Set<Member>)?.first)
+        let context = persistence.container.viewContext
+        let friend = Member(context: context)
+        context.assign(friend, to: persistence.store(for: group))
+        friend.id = UUID()
+        friend.displayName = "小美"
+        friend.invitationStatus = InvitationStatus.accepted.rawValue
+        friend.role = MemberRole.member.rawValue
+        friend.group = group
+        let book = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
+        let account = try AccountRepository(persistence: persistence).createAccount(
+            from: AccountDraft(name: "現金"),
+            in: group
+        )
+        try context.save()
+        return EntryFixture(
+            persistence: persistence,
+            group: group,
+            book: book,
+            account: account,
+            owner: owner,
+            friend: friend,
+            repository: EntryRepository(persistence: persistence)
+        )
+    }
+}
+
+@MainActor
 private struct EntryFixture {
     let persistence: PersistenceController
     let group: LedgerGroup
