@@ -203,6 +203,24 @@ final class PersistenceController {
         object.objectID.persistentStore ?? privateStore
     }
 
+    /// 接受其他成員送出的 CloudKit 共享邀請，並把記錄匯入 shared store。
+    /// AppDelegate 與 SceneDelegate 都會呼叫這個方法，確保無論系統
+    /// 走哪一條 callback，接受流程都一致。
+    func acceptShare(
+        metadata: CKShare.Metadata,
+        completion: ((Error?) -> Void)? = nil
+    ) {
+        container.acceptShareInvitations(
+            from: [metadata],
+            into: sharedStore
+        ) { _, error in
+            if let error {
+                assertionFailure("Unable to accept CloudKit share: \(error.localizedDescription)")
+            }
+            completion?(error)
+        }
+    }
+
     private func accountStatus(for cloudContainer: CKContainer) async throws -> CKAccountStatus {
         if let accountStatusProvider {
             return try await accountStatusProvider()
