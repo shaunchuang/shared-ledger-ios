@@ -41,13 +41,17 @@ Apple Developer Team 屬於 signing 設定，不可在不知道完整 Team ID �
 
 ## 模組方向
 
-- `App`：生命週期、依賴組裝及根導航。
+- `App`：生命週期、依賴組裝及根導航。這一層只放 `SharedLedgerApp`、`AppDelegate`、`SceneDelegate` 與 `RootTabView`，不承載任何功能畫面。
 - `DesignSystem`：色彩、卡片、按鈕、徽章、頭像與共用視覺元件。
 - `Domain`：不依賴 UI 的型別、草稿與規則。
-- `Persistence`：Core Data stack、repository、migration 與 CloudKit。
-- `Features`：依群組、帳本、帳戶、分類、交易、總覽與設定拆分的 SwiftUI 畫面。
+- `Persistence`：Core Data stack、repository、唯讀查詢 service、migration 與 CloudKit。
+- `Features`：依群組、帳本、帳戶、分類、交易、結算、總覽與設定拆分的 SwiftUI 畫面。
 
 View 不直接包含同步、結算或複雜帳務計算；可測試的領域規則應位於 Domain／service，持久化操作由 repository 負責。
+
+檔案配置規則：一個檔案的主要型別必須與檔名相同，其他型別只有在屬於同一個概念時才共用檔案。跨概念的型別（例如結算之於分攤、貨幣之於群組草稿）要各自成檔，避免用檔名找不到程式碼。
+
+金額換算的單一權威是 `LedgerCurrency`：精度、四捨五入、最小單位整數換算（`minorUnits` / `amount(fromMinorUnits:)`）與顯示格式（`format` / `formatSigned`）都在這裡。分攤、結算、repository 與畫面一律呼叫它，不得各自複製一份換算或格式化邏輯——同一筆金額在不同裝置或不同畫面上必須得到完全一致的結果。
 
 ## 資料模型與帳務規則
 
