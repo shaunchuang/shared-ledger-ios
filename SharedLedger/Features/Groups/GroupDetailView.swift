@@ -52,8 +52,13 @@ struct GroupDetailView: View {
         })
     }
 
+    /// Why member management is unavailable, or `nil` when it is allowed.
+    private var memberManagementRestriction: PermissionError? {
+        EffectivePermissionRepository().memberManagementRestriction(in: group)
+    }
+
     private var canManageMembers: Bool {
-        currentRole?.canManageMembers == true
+        memberManagementRestriction == nil
     }
 
     private var canManageGroupSettings: Bool {
@@ -154,6 +159,10 @@ struct GroupDetailView: View {
                             .padding(16)
                     }
                 }
+            }
+
+            if let message = memberManagementRestriction?.errorDescription {
+                LedgerNotice(message: message)
             }
 
             if !inactiveMembers.isEmpty {

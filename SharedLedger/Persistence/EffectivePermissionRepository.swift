@@ -187,41 +187,53 @@ struct EffectivePermissionRepository {
     // MARK: - Enforcement
 
     func requireTransactionWrite(in group: LedgerGroup) throws {
-        try require(in: group) { $0.canEditTransactions }
+        if let restriction = transactionWriteRestriction(in: group) { throw restriction }
     }
 
     func requireLedgerSettingsManagement(in group: LedgerGroup) throws {
-        try require(in: group) { $0.canManageLedgerSettings }
+        if let restriction = ledgerSettingsRestriction(in: group) { throw restriction }
     }
 
     func requireMemberManagement(in group: LedgerGroup) throws {
-        try require(in: group) { $0.canManageMembers }
+        if let restriction = memberManagementRestriction(in: group) { throw restriction }
     }
 
-    private func require(
+    /// Why transaction writes are unavailable, or `nil` when they are allowed.
+    /// Views use this to hide or explain a write action instead of letting the user
+    /// reach a form that fails on save; the `require…` calls throw the same value, so
+    /// the UI and the repositories can never disagree.
+    func transactionWriteRestriction(in group: LedgerGroup) -> PermissionError? {
+        restriction(in: group) { $0.canEditTransactions }
+    }
+
+    func ledgerSettingsRestriction(in group: LedgerGroup) -> PermissionError? {
+        restriction(in: group) { $0.canManageLedgerSettings }
+    }
+
+    func memberManagementRestriction(in group: LedgerGroup) -> PermissionError? {
+        restriction(in: group) { $0.canManageMembers }
+    }
+
+    private func restriction(
         in group: LedgerGroup,
         _ isAllowed: (EffectivePermission) -> Bool
-    ) throws {
+    ) -> PermissionError? {
         let permission = permission(in: group)
-        guard !isAllowed(permission) else { return }
+        guard !isAllowed(permission) else { return nil }
 
         switch permission.source {
         case .missingIdentity:
-            throw PermissionError.missingCurrentMember
+            return .missingCurrentMember
         case .cloudPermissionUnknown:
-            throw PermissionError.cloudPermissionUnknown
+            return .cloudPermissionUnknown
         case .participantMismatch:
-            throw PermissionError.cloudParticipantMismatch
+            return .cloudParticipantMismatch
         case .localOnly, .cloudParticipant, .cachedCloudParticipant:
-            guard let role = permission.role else {
-                throw PermissionError.missingCurrentMember
-            }
+            guard let role = permission.role else { return .missingCurrentMember }
             // A viewer produced by a CloudKit clamp is a read-only participant, which
             // is a different problem from an App role that was viewer to begin with.
-            if permission.isClampedByCloud {
-                throw PermissionError.cloudReadOnly
-            }
-            throw PermissionError.insufficientRole(role)
+            if permission.isClampedByCloud { return .cloudReadOnly }
+            return .insufficientRole(role)
         }
     }
 

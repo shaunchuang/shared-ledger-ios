@@ -124,6 +124,11 @@ private struct SettlementRootView: View {
         LedgerCurrency.normalizedCode(selectedGroup?.currencyCode)
     }
 
+    private var settlementRestriction: PermissionError? {
+        guard let group = selectedBook?.group else { return .missingCurrentMember }
+        return EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    }
+
     private var canRecordSettlements: Bool {
         selectedBook.map { SettlementRepository().canRecordSettlements(in: $0) } ?? false
     }
@@ -190,7 +195,8 @@ private struct SettlementRootView: View {
                     if !canRecordSettlements {
                         Section {
                             Label(
-                                "唯讀成員或尚未確認身分時只能查看結算，不能新增或撤銷。",
+                                settlementRestriction?.errorDescription
+                                    ?? "目前只能查看結算，不能新增或撤銷。",
                                 systemImage: "lock.fill"
                             )
                             .font(.footnote)
