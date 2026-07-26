@@ -253,7 +253,11 @@ private struct SettlementRootView: View {
                 for: .NSManagedObjectContextObjectsDidChange,
                 object: context
             )
-        ) { _ in
+        ) { notification in
+            // A TabView keeps this view alive while other tabs are on screen, so an
+            // unfiltered subscription reruns the settlement solver for writes it does
+            // not depend on — editing an account or a category, for example.
+            guard affectsSettlement(notification) else { return }
             reload()
         }
         .sheet(isPresented: transferSheetBinding) {
@@ -437,6 +441,40 @@ private struct SettlementRootView: View {
             selectedBookID = fallback.objectID
         } else if selectedBookID == nil {
             selectedBookID = fallback.objectID
+        }
+    }
+
+    /// Whether a context change touches anything `reload()` reads.
+    ///
+    /// `SettlementRepository.snapshot(in:)` walks the book's entries with their
+    /// payments and splits, resolves the members those rows point at, reads the
+    /// group's currency, and derives voided transactions and settlement history from
+    /// the group's audit events. `activeBooks` also depends on the group's books, and
+    /// the permission notices resolve the current member through its private
+    /// `LocalMemberIdentity`. Anything outside that set — accounts, categories,
+    /// balance adjustments — cannot change what this screen shows, so it must not
+    /// trigger a recompute.
+    private func affectsSettlement(_ notification: Notification) -> Bool {
+        let changeKeys = [
+            NSInsertedObjectsKey,
+            NSUpdatedObjectsKey,
+            NSDeletedObjectsKey,
+            NSRefreshedObjectsKey
+        ]
+        return changeKeys.contains { key in
+            guard let objects = notification.userInfo?[key] as? Set<NSManagedObject> else {
+                return false
+            }
+            return objects.contains { object in
+                object is LedgerEntry
+                    || object is EntryPayment
+                    || object is EntrySplit
+                    || object is Member
+                    || object is AuditEvent
+                    || object is LedgerGroup
+                    || object is LedgerBook
+                    || object is LocalMemberIdentity
+            }
         }
     }
 

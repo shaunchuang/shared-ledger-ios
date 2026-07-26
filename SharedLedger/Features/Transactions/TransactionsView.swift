@@ -265,8 +265,17 @@ private struct TransactionListView: View {
     }
 
     private var visibleEntries: [LedgerEntry] {
+        // `isVoided(_:)` rebuilds the group's voided-ID set from its audit events on
+        // every call, so filtering with it costs O(entries × audits) and re-decodes
+        // every audit payload once per row. The set is the same for all entries in a
+        // group, so build it once and match by id instead.
         let repository = EntryRepository()
-        return entries.filter { !repository.isVoided($0) }
+        let voidedEntryIDs = Set(entries.compactMap(\.group))
+            .reduce(into: Set<UUID>()) { $0.formUnion(repository.voidedEntryIDs(in: $1)) }
+        return entries.filter { entry in
+            guard let entryID = entry.id else { return true }
+            return !voidedEntryIDs.contains(entryID)
+        }
     }
 
     private var addAction: (() -> Void)? {
