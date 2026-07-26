@@ -198,10 +198,11 @@ final class PersistenceController {
 
         if let existingShare {
             existingShare[CKShare.SystemFieldKey.title] = shareTitle
+            try bindCurrentParticipantIfAvailable(from: existingShare, to: group)
             return (existingShare, cloudContainer)
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
+        let result: (CKShare, CKContainer) = try await withCheckedThrowingContinuation { continuation in
             container.share([group], to: nil) { _, share, cloudContainer, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -213,6 +214,8 @@ final class PersistenceController {
                 }
             }
         }
+        try bindCurrentParticipantIfAvailable(from: result.0, to: group)
+        return result
     }
 
     func store(for object: NSManagedObject) -> NSPersistentStore {
@@ -234,6 +237,31 @@ final class PersistenceController {
                 assertionFailure("Unable to accept CloudKit share: \(error.localizedDescription)")
             }
             completion?(error)
+        }
+    }
+
+    @MainActor
+    private func bindCurrentParticipantIfAvailable(from share: CKShare, to group: LedgerGroup) throws {
+        guard let participant = share.currentUserParticipant,
+              let member = CurrentMemberIdentityRepository(persistence: self).currentMember(in: group)
+        else { return }
+
+        if let existingParticipantID = member.cloudParticipantID,
+           existingParticipantID != participant.participantID {
+            throw SharingError.participantIdentityMismatch
+        }
+        guard member.role != MemberRole.owner.rawValue || participant.role == .owner else {
+            throw SharingError.participantIdentityMismatch
+        }
+
+        member.cloudParticipantID = participant.participantID
+        if container.viewContext.hasChanges {
+            do {
+                try container.viewContext.save()
+            } catch {
+                container.viewContext.rollback()
+                throw error
+            }
         }
     }
 
@@ -299,6 +327,7 @@ final class PersistenceController {
         case noICloudAccount
         case restrictedAccount
         case iCloudUnavailable
+        case participantIdentityMismatch
 
         var errorDescription: String? {
             switch self {
@@ -310,6 +339,8 @@ final class PersistenceController {
                 return "這個 Apple 帳號的 iCloud 功能受到限制，暫時無法建立共享邀請。"
             case .iCloudUnavailable:
                 return "目前無法連線到 iCloud，請確認網路與 iCloud 狀態後再試。"
+            case .participantIdentityMismatch:
+                return "目前 App 成員與 iCloud 共享參與者身分不一致，已停止更新共享設定。"
             }
         }
     }

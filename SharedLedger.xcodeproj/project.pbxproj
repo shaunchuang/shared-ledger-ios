@@ -19,6 +19,7 @@
 		C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000004 /* AllocationCalculatorTests.swift */; };
 		C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000006 /* SettlementCalculatorTests.swift */; };
 		C0DE00000000000000000007 /* GroupReportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000008 /* GroupReportServiceTests.swift */; };
+		C0DE00000000000000000009 /* CloudParticipantModelMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000000A /* CloudParticipantModelMigrationTests.swift */; };
 		3FD7B477EA974043CC7FE384 /* TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AC72E8EDCB58760C5C8FFB /* TransactionsView.swift */; };
 		470E635931EBCEA9E01495A0 /* GroupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C08A6952271AAF2C12550BD /* GroupsView.swift */; };
 		62957ADC31008DFE4BD2D1B6 /* CloudSharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61221ACA806160210D38B952 /* CloudSharingView.swift */; };
@@ -88,6 +89,7 @@
 		C0DE00000000000000000004 /* AllocationCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllocationCalculatorTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000006 /* SettlementCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementCalculatorTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000008 /* GroupReportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupReportServiceTests.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000000A /* CloudParticipantModelMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudParticipantModelMigrationTests.swift; sourceTree = "<group>"; };
 		EE02B5318E1A4FEC2A36631B /* GroupDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupDetailView.swift; sourceTree = "<group>"; };
 		F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactPicker.swift; sourceTree = "<group>"; };
 		F88B235208B24B8948B97717 /* MemberRole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRole.swift; sourceTree = "<group>"; };
@@ -115,6 +117,7 @@
 		B00CDAF7000000000000000A /* SharedLedgerV5.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV5.xcdatamodel; sourceTree = "<group>"; };
 		B00CDAF7000000000000000B /* SharedLedgerV6.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV6.xcdatamodel; sourceTree = "<group>"; };
 		B00CDAF7000000000000000C /* SharedLedgerV7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV7.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF7000000000000000D /* SharedLedgerV8.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV8.xcdatamodel; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -274,6 +277,7 @@
 				C0DE00000000000000000004 /* AllocationCalculatorTests.swift */,
 				C0DE00000000000000000006 /* SettlementCalculatorTests.swift */,
 				C0DE00000000000000000008 /* GroupReportServiceTests.swift */,
+				C0DE0000000000000000000A /* CloudParticipantModelMigrationTests.swift */,
 				D239A715784171742AA525A4 /* CategoryNodeTests.swift */,
 			);
 			path = SharedLedgerTests;
@@ -386,6 +390,7 @@
 				C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */,
 				C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */,
 				C0DE00000000000000000007 /* GroupReportServiceTests.swift in Sources */,
+				C0DE00000000000000000009 /* CloudParticipantModelMigrationTests.swift in Sources */,
 				3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -710,8 +715,9 @@
 				B00CDAF7000000000000000A /* SharedLedgerV5.xcdatamodel */,
 				B00CDAF7000000000000000B /* SharedLedgerV6.xcdatamodel */,
 				B00CDAF7000000000000000C /* SharedLedgerV7.xcdatamodel */,
+				B00CDAF7000000000000000D /* SharedLedgerV8.xcdatamodel */,
 			);
-			currentVersion = B00CDAF7000000000000000C /* SharedLedgerV7.xcdatamodel */;
+			currentVersion = B00CDAF7000000000000000D /* SharedLedgerV8.xcdatamodel */;
 			path = SharedLedger.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;
