@@ -167,6 +167,100 @@ struct GroupRepository {
         try saveChanges()
     }
 
+    /// Moves the App owner seat to another member of the same group.
+    ///
+    /// CloudKit share ownership does not move with it: the record zone stays in the
+    /// Apple Account that created the share, so that account keeps holding the data
+    /// and keeps managing the iCloud participant list. What moves is the App role —
+    /// who manages members and ledger settings, and who is allowed to leave.
+    ///
+    /// The seat may only go to a member that is provably the person behind an
+    /// accepted, writable `CKShare` participant. Without that correlation a `Member`
+    /// row is just a display name, which is what
+    /// `ownershipTransferRequiresCloudParticipantMapping` records.
+    func transferOwnership(to member: Member, in group: LedgerGroup) throws {
+        let actor = try currentActor(in: group, requiringMemberManagement: true)
+        guard role(of: actor) == .owner else {
+            throw GroupError.onlyOwnerCanTransferOwnership
+        }
+        if let restriction = ownershipTransferRestriction(to: member, in: group) {
+            throw restriction
+        }
+
+        let now = Date()
+        let previousOwnerName = actor.displayName ?? "目前使用者"
+        member.role = MemberRole.owner.rawValue
+        actor.role = MemberRole.administrator.rawValue
+        // Without an explicit mapping, `CurrentMemberIdentityRepository` resolves the
+        // current user of a private group through its single accepted owner. That is
+        // no longer this member, so pin the identity before it stops being derivable.
+        CurrentMemberIdentityRepository(persistence: persistence)
+            .setCurrentMember(actor, in: group)
+        group.updatedAt = now
+        insertAudit(
+            action: "group.ownership.transferred",
+            actorDisplayName: previousOwnerName,
+            summary: "將群組擁有權移轉給「\(member.displayName ?? "未命名成員")」；"
+                + "「\(previousOwnerName)」改為管理員。iCloud 共享仍由原共享擁有者管理",
+            in: group,
+            at: now
+        )
+        try saveChanges()
+    }
+
+    /// Why `transferOwnership(to:in:)` would refuse this member, or `nil` when the
+    /// member can take the seat. Member management uses it to explain a blocked
+    /// transfer instead of offering one that fails on confirm.
+    ///
+    /// It deliberately does not check the current user's own permission — that is
+    /// resolved by `currentActor(in:requiringMemberManagement:)` at transfer time.
+    /// Pass `participantStatus` when the caller already resolved the group's statuses,
+    /// because each lookup reads the group's share metadata.
+    func ownershipTransferRestriction(
+        to member: Member,
+        in group: LedgerGroup,
+        participantStatus: CloudParticipantStatus? = nil
+    ) -> GroupError? {
+        guard member.group == group else { return .crossGroupMember }
+        guard role(of: member) != .owner else { return .invalidMemberOperation }
+        guard member.archivedAt == nil,
+              member.invitationStatus == InvitationStatus.accepted.rawValue
+        else { return .inactiveMember }
+
+        let status = participantStatus
+            ?? cloudParticipantStatuses(in: group)[member.objectID]
+            ?? .notShared
+        switch status {
+        case .notShared:
+            // Only groups outside the shared store report this: the App role is the
+            // whole authority there, exactly as `EffectivePermission.localOnly` treats
+            // it, and there is no participant to correlate the member against. A
+            // shared group whose share has not synced reports `.shareUnavailable`
+            // instead, so an unverifiable member cannot slip through here.
+            return nil
+        case .shareUnavailable, .unmapped, .participantMissing:
+            return .ownershipTransferRequiresCloudParticipantMapping
+        case let .mapped(canWrite, _, isAccepted):
+            guard isAccepted else { return .ownershipTransferRequiresCloudParticipantMapping }
+            // A read-only participant would be clamped straight back to viewer by
+            // `EffectivePermissionRepository`, leaving the group with an owner who
+            // cannot act as one — and no owner able to hand the seat on again.
+            guard canWrite else { return .ownershipTransferRequiresWritableParticipant }
+            return nil
+        }
+    }
+
+    /// Whether the member could take the owner seat at all, before the CloudKit
+    /// mapping is considered. Passing `.notShared` skips the mapping half of the
+    /// check, which member management reports separately so the reason stays visible.
+    func isOwnershipTransferCandidate(_ member: Member, in group: LedgerGroup) -> Bool {
+        ownershipTransferRestriction(
+            to: member,
+            in: group,
+            participantStatus: .notShared
+        ) == nil
+    }
+
     func leaveGroup(_ group: LedgerGroup) throws {
         let identityRepository = CurrentMemberIdentityRepository(persistence: persistence)
         guard let actor = identityRepository.currentMember(in: group) else {
@@ -319,7 +413,16 @@ struct GroupRepository {
             return statuses(for: members, allBeing: .shareUnavailable)
         }
         guard let share else {
-            return statuses(for: members, allBeing: .notShared)
+            // A group that reached the shared store did so through a share, so a
+            // missing share record means the metadata has not been mirrored to this
+            // device — not that the group is unshared. Reporting `.notShared` there
+            // would state as fact something this device cannot see. The private store
+            // is the discriminator rather than the shared one, matching
+            // `EffectivePermissionRepository`: the two are the same object when a
+            // single in-memory store backs both configurations, and only "definitely
+            // private" may skip the participant checks.
+            let isShared = persistence.store(for: group) !== persistence.privateStore
+            return statuses(for: members, allBeing: isShared ? .shareUnavailable : .notShared)
         }
 
         let participantsByID = Dictionary(
@@ -411,6 +514,11 @@ struct GroupRepository {
         // role is clamped down to viewer at every write instead of blocking the
         // claim outright and leaving the person with no identity at all.
         // `EffectivePermissionRepository` applies that clamp.
+        // Claiming the owner seat is only allowed for the share owner: on this path
+        // nothing else vouches for who the participant is. A seat that moved through
+        // `transferOwnership(to:in:)` is a different matter — that check runs on an
+        // already-mapped participant — so this is a rule about claiming, not an
+        // invariant that the App owner is always the CKShare owner.
         if role(of: member) == .owner, participant.role != .owner {
             throw GroupError.cloudParticipantRoleMismatch
         }
@@ -503,7 +611,7 @@ struct GroupRepository {
         audit.group = group
     }
 
-    enum GroupError: LocalizedError {
+    enum GroupError: LocalizedError, Equatable {
         case invalidDraft
         case invalidDisplayName
         case invalidGroupName
@@ -517,7 +625,9 @@ struct GroupRepository {
         case invalidMemberOperation
         case useLeaveGroupForCurrentMember
         case ownerMustTransferBeforeLeaving
+        case onlyOwnerCanTransferOwnership
         case ownershipTransferRequiresCloudParticipantMapping
+        case ownershipTransferRequiresWritableParticipant
         case missingCloudParticipant
         case cloudParticipantNotAccepted
         case cloudParticipantAlreadyLinked
@@ -552,8 +662,12 @@ struct GroupRepository {
                 return "目前使用者請使用「退出群組」。"
             case .ownerMustTransferBeforeLeaving:
                 return "群組擁有者不能直接退出或被移除，必須先完成擁有權移轉。"
+            case .onlyOwnerCanTransferOwnership:
+                return "只有目前的群組擁有者可以移轉擁有權。"
             case .ownershipTransferRequiresCloudParticipantMapping:
-                return "目前尚未建立 App 成員與 iCloud 共享參與者的安全對應，因此暫時不能移轉群組擁有權。"
+                return "這位成員還沒有與 iCloud 共享參與者建立可驗證的對應，因此不能接手群組擁有權。"
+            case .ownershipTransferRequiresWritableParticipant:
+                return "這位成員在 iCloud 共享中的權限是唯讀，請先在共享設定改為可編輯，再移轉群組擁有權。"
             case .missingCloudParticipant:
                 return "找不到目前 Apple Account 在這個 iCloud 共享中的參與者身分，請確認共享已完成同步後再試。"
             case .cloudParticipantNotAccepted:

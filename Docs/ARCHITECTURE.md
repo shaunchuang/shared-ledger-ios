@@ -154,6 +154,8 @@ V4 資料修復對每個既有分類採以下規則：
 
 目前使用者的 App 內成員身分由 `CurrentMemberIdentityRepository` 解析。private 群組以唯一已接受的 owner 為目前成員；shared 群組使用 private store 的 `LocalMemberIdentity`，將 shared `LedgerGroup.id` 對應到 shared `Member.id`。首次開啟尚無對應的共享群組時，畫面必須阻止繼續操作並要求使用者確認身分：只能認領待接受的 member／viewer，不能直接認領 owner／administrator；若沒有相符邀請，可用顯示名稱建立基本 member。認領後才由 repository 將該成員用於權限、稽核、付款人預設與「你」的標示，不以姓名猜測，也不把目前使用者旗標同步給群組。這個 App 內對應不取代 CloudKit participant 的資料存取權限。
 
+群組擁有權移轉（`GroupRepository.transferOwnership`）只改變 App 角色：接手的成員成為 owner，原擁有者降為 administrator。降級前必須先把原擁有者明確寫入 `LocalMemberIdentity`，否則 private 群組會回退到「唯一已接受 owner」的推導而讓原擁有者失去身分。CKShare 的擁有權無法移轉：record zone 仍留在建立共享的 Apple Account，該帳號繼續持有資料並管理 participant 名單，因此 private store 的共享入口以「可管理成員」為條件，而不是以 App owner 為條件。只有已對應到「已接受且可寫入」CKShare participant 的成員能接手 owner；未對應、participant 已不存在、共享尚未同步或唯讀 participant 一律拒絕，避免產生無法行使權限的擁有者。`validateCloudParticipant` 的 owner／share owner 檢查只約束「認領 owner 席位」，不推翻已完成驗證的移轉結果。
+
 MVP 的 CloudKit share 邊界是整個 `LedgerGroup`：加入群組即能同步該群組的全部帳戶與帳本，暫不提供逐帳本成員名單或只分享單一帳本。畫面隱藏不構成資料權限；若未來需要帳本級隱私，必須另行設計 share 邊界與資料搬移流程。
 
 App 必須呈現未登入 iCloud、暫時不可用、同步中、同步成功、離線及同步失敗等狀態。沒有 iCloud 帳號時仍允許本機記帳，但停用共享邀請並說明原因。邀請畫面維持 private、read-write CloudKit Sharing；已存在的群組 share 必須重用，不可為同一個 root group 建立第二份 share。分享控制器的儲存與同步錯誤必須顯示給使用者，不可只在 Release 中停用的 assertion 回報。

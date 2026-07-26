@@ -93,14 +93,44 @@ struct GroupDetailView: View {
         return nil
     }
 
+    /// Whether the row offers ownership transfer, and why it is unavailable when the
+    /// member could hold the seat but the CloudKit mapping is not ready. `currentOwner`
+    /// is `nil` unless this device holds the owner seat, because nobody else can hand
+    /// it over.
+    private func ownershipTransferOption(
+        for member: Member,
+        status: CloudParticipantStatus,
+        currentOwner: Member?
+    ) -> OwnershipTransferOption? {
+        guard let currentOwner, member != currentOwner else { return nil }
+        let repository = GroupRepository()
+        guard repository.isOwnershipTransferCandidate(member, in: group) else { return nil }
+        guard let restriction = repository.ownershipTransferRestriction(
+            to: member,
+            in: group,
+            participantStatus: status
+        ) else { return .available }
+
+        switch restriction {
+        case .ownershipTransferRequiresWritableParticipant:
+            return .blocked(reason: "需要可編輯的 iCloud 權限才能移轉")
+        default:
+            return .blocked(reason: "需要完成 iCloud 對應才能移轉")
+        }
+    }
+
     private var canManageGroupSettings: Bool {
         currentRole?.canManageLedgerSettings == true
     }
 
+    /// Only the Apple Account holding the group in its private store can present the
+    /// system sharing controller, and after an ownership transfer that account is an
+    /// administrator rather than the App owner — it still has to be able to manage the
+    /// participant list, because nobody else can.
     private var canInviteMembers: Bool {
         let persistence = PersistenceController.shared
         return persistence.store(for: group) === persistence.privateStore
-            && currentRole == .owner
+            && currentRole?.canManageMembers == true
     }
 
     private var activeBooks: [LedgerBook] {
@@ -165,9 +195,7 @@ struct GroupDetailView: View {
             Alert(
                 title: Text(action.title),
                 message: Text(action.message),
-                primaryButton: .destructive(Text(action.confirmTitle)) {
-                    performConfirmedAction(action)
-                },
+                primaryButton: primaryAlertButton(for: action),
                 secondaryButton: .cancel()
             )
         }
@@ -175,14 +203,18 @@ struct GroupDetailView: View {
 
     private var memberSection: some View {
         let statuses = participantStatuses
+        // Resolved once per render alongside the statuses: both read the group's share
+        // metadata, and every row needs to know whether this device holds the seat it
+        // would be handing over.
+        let currentOwner = currentRole == .owner ? currentMember : nil
         return VStack(alignment: .leading, spacing: 12) {
             LedgerSectionHeader(title: "成員")
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
-                    memberRows(activeMembers, statuses: statuses)
+                    memberRows(activeMembers, statuses: statuses, currentOwner: currentOwner)
                     if !pendingMembers.isEmpty {
                         if !activeMembers.isEmpty { Divider().padding(.leading, 72) }
-                        memberRows(pendingMembers, statuses: statuses)
+                        memberRows(pendingMembers, statuses: statuses, currentOwner: currentOwner)
                     }
                     if activeMembers.isEmpty && pendingMembers.isEmpty {
                         Text("目前沒有有效成員。")
@@ -206,7 +238,7 @@ struct GroupDetailView: View {
                 DisclosureGroup("已離開或已撤回（\(inactiveMembers.count)）") {
                     LedgerCard(padding: 0) {
                         VStack(spacing: 0) {
-                            memberRows(inactiveMembers, statuses: statuses)
+                            memberRows(inactiveMembers, statuses: statuses, currentOwner: currentOwner)
                         }
                     }
                     .padding(.top, 8)
@@ -220,7 +252,8 @@ struct GroupDetailView: View {
     @ViewBuilder
     private func memberRows(
         _ members: [Member],
-        statuses: [NSManagedObjectID: CloudParticipantStatus]
+        statuses: [NSManagedObjectID: CloudParticipantStatus],
+        currentOwner: Member?
     ) -> some View {
         ForEach(Array(members.enumerated()), id: \.element.objectID) { index, member in
             MemberRow(
@@ -228,16 +261,20 @@ struct GroupDetailView: View {
                 participantStatus: statuses[member.objectID] ?? .notShared,
                 isCurrentUser: member == currentMember,
                 canManage: canManageMembers,
-                canTransferOwnership: currentRole == .owner
-                    && member != currentMember
-                    && member.archivedAt == nil
-                    && member.invitationStatus == InvitationStatus.accepted.rawValue,
+                ownershipTransfer: ownershipTransferOption(
+                    for: member,
+                    status: statuses[member.objectID] ?? .notShared,
+                    currentOwner: currentOwner
+                ),
                 onResend: { resendInvitation(member) },
                 onRevoke: {
                     pendingAction = PendingMemberAction(kind: .revokeInvitation, member: member)
                 },
                 onRemove: {
                     pendingAction = PendingMemberAction(kind: .removeMember, member: member)
+                },
+                onTransferOwnership: {
+                    pendingAction = PendingMemberAction(kind: .transferOwnership, member: member)
                 }
             )
             if index < members.count - 1 {
@@ -335,7 +372,7 @@ struct GroupDetailView: View {
                 }
                 .buttonStyle(LedgerPrimaryButtonStyle())
 
-                Text("App 內的成員狀態與 iCloud 共享參與者目前尚未建立一對一識別。移除成員後，請同時在 iCloud 共享畫面確認其存取權已移除。")
+                Text("App 內的成員狀態不會自動變更 iCloud 存取權。移除成員後，請同時在 iCloud 共享畫面確認其存取權已移除。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -354,7 +391,7 @@ struct GroupDetailView: View {
             }
             .buttonStyle(.bordered)
         } else if currentRole == .owner {
-            Text("群組擁有者不能直接退出。擁有權移轉需要先完成 App Member 與 iCloud participant 的安全對應，因此目前暫不開放。")
+            Text("群組擁有者不能直接退出。請先從成員清單將擁有權移轉給另一位已完成 iCloud 對應的成員，移轉後你會成為管理員並可以退出。iCloud 共享本身仍由建立共享的 Apple Account 管理。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -476,6 +513,14 @@ struct GroupDetailView: View {
         }
     }
 
+    private func primaryAlertButton(for action: PendingMemberAction) -> Alert.Button {
+        let label = Text(action.confirmTitle)
+        let confirm = { performConfirmedAction(action) }
+        return action.isDestructive
+            ? .destructive(label, action: confirm)
+            : .default(label, action: confirm)
+    }
+
     private func performConfirmedAction(_ action: PendingMemberAction) {
         do {
             switch action.kind {
@@ -486,6 +531,8 @@ struct GroupDetailView: View {
             case .leaveGroup:
                 try GroupRepository().leaveGroup(group)
                 dismiss()
+            case .transferOwnership:
+                try GroupRepository().transferOwnership(to: action.member, in: group)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -507,11 +554,20 @@ struct GroupDetailView: View {
     }
 }
 
+/// Whether a member row offers ownership transfer. A blocked option is still shown,
+/// carrying its reason, so the missing participant mapping is visible instead of the
+/// action simply not being there.
+private enum OwnershipTransferOption {
+    case available
+    case blocked(reason: String)
+}
+
 private struct PendingMemberAction: Identifiable {
     enum Kind {
         case revokeInvitation
         case removeMember
         case leaveGroup
+        case transferOwnership
     }
 
     let id = UUID()
@@ -523,6 +579,7 @@ private struct PendingMemberAction: Identifiable {
         case .revokeInvitation: "撤回邀請？"
         case .removeMember: "移除成員？"
         case .leaveGroup: "退出群組？"
+        case .transferOwnership: "移轉群組擁有權？"
         }
     }
 
@@ -534,6 +591,8 @@ private struct PendingMemberAction: Identifiable {
             "「\(member.displayName ?? "未命名成員")」會停止成為有效 App 成員，但歷史付款與分攤仍會保留。請另外確認 iCloud 共享存取權已移除。"
         case .leaveGroup:
             "退出後會保留你既有的付款與分攤歷史。重新加入必須由管理者重新邀請。"
+        case .transferOwnership:
+            "「\(member.displayName ?? "未命名成員")」會成為新的群組擁有者，你會改為管理員。iCloud 共享名單仍由建立共享的 Apple Account 管理，不會一併移轉。"
         }
     }
 
@@ -542,7 +601,14 @@ private struct PendingMemberAction: Identifiable {
         case .revokeInvitation: "撤回"
         case .removeMember: "移除"
         case .leaveGroup: "退出"
+        case .transferOwnership: "移轉"
         }
+    }
+
+    /// Ownership transfer changes who is in charge rather than taking something away,
+    /// so it must not borrow the destructive alert styling of the other actions.
+    var isDestructive: Bool {
+        kind != .transferOwnership
     }
 }
 
@@ -555,10 +621,11 @@ private struct MemberRow: View {
     let participantStatus: CloudParticipantStatus
     let isCurrentUser: Bool
     let canManage: Bool
-    let canTransferOwnership: Bool
+    let ownershipTransfer: OwnershipTransferOption?
     let onResend: () -> Void
     let onRevoke: () -> Void
     let onRemove: () -> Void
+    let onTransferOwnership: () -> Void
 
     private var name: String {
         member.displayName ?? "未命名成員"
@@ -677,11 +744,18 @@ private struct MemberRow: View {
                     Label("移除成員", systemImage: "person.badge.minus")
                 }
             }
-            if canTransferOwnership {
-                Button {} label: {
-                    Label("擁有權移轉尚未開放", systemImage: "person.crop.circle.badge.checkmark")
+            if let ownershipTransfer {
+                switch ownershipTransfer {
+                case .available:
+                    Button(action: onTransferOwnership) {
+                        Label("移轉群組擁有權", systemImage: "person.crop.circle.badge.checkmark")
+                    }
+                case let .blocked(reason):
+                    Button {} label: {
+                        Label(reason, systemImage: "person.crop.circle.badge.exclamationmark")
+                    }
+                    .disabled(true)
                 }
-                .disabled(true)
             }
         } label: {
             Image(systemName: "ellipsis.circle")
