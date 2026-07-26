@@ -65,8 +65,8 @@ final class CloudParticipantModelMigrationTests: XCTestCase {
         }
     }
 
-    func testV8IsTheModelTheAppLoads() throws {
-        let current = try currentModel()
+    func testV8IsTheModelTheAppLoads() {
+        let current = currentModel()
 
         XCTAssertNotNil(
             current.entitiesByName["Member"]?.attributesByName["cloudParticipantID"],
@@ -170,23 +170,12 @@ final class CloudParticipantModelMigrationTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func modelDirectory() throws -> URL {
-        try XCTUnwrap(
-            Bundle(for: PersistenceController.self)
-                .url(forResource: "SharedLedger", withExtension: "momd")
-        )
-    }
-
     private func model(named name: String) throws -> NSManagedObjectModel {
-        try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: try modelDirectory().appendingPathComponent("\(name).mom")
-            )
-        )
+        try loadVersionedModel(named: name)
     }
 
-    private func currentModel() throws -> NSManagedObjectModel {
-        try XCTUnwrap(NSManagedObjectModel(contentsOf: try modelDirectory()))
+    private func currentModel() -> NSManagedObjectModel {
+        loadCurrentModel()
     }
 
     private func makeTemporaryStoreURL() throws -> URL {
@@ -250,5 +239,50 @@ final class CloudParticipantModelMigrationTests: XCTestCase {
         let context = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
         context.persistentStoreCoordinator = coordinator
         return OpenStore(coordinator: coordinator, store: store, context: context)
+    }
+}
+
+extension XCTestCase {
+    func managedObjectModelDirectory() throws -> URL {
+        try XCTUnwrap(
+            Bundle(for: PersistenceController.self)
+                .url(forResource: "SharedLedger", withExtension: "momd")
+        )
+    }
+
+    /// Loads a specific `.mom` for inspection.
+    ///
+    /// The entities are detached from their generated subclasses first: a model
+    /// loaded here is only ever read or driven through KVC, and leaving the class
+    /// names in place makes these entities compete with the running app's model for
+    /// `+entity`, which floods every later test with `Multiple NSEntityDescriptions
+    /// claim the NSManagedObject subclass …`.
+    func loadVersionedModel(named name: String) throws -> NSManagedObjectModel {
+        let model = try XCTUnwrap(
+            NSManagedObjectModel(
+                contentsOf: try managedObjectModelDirectory()
+                    .appendingPathComponent("\(name).mom")
+            )
+        )
+        return detachedFromGeneratedClasses(model)
+    }
+
+    /// The model the app actually runs on.
+    ///
+    /// This is deliberately the same instance `PersistenceController` uses, not a
+    /// fresh load: once a coordinator owns a model it is immutable, so detaching its
+    /// classes the way `loadVersionedModel(named:)` does would raise, and loading a
+    /// second copy would re-create the `+entity` ambiguity.
+    func loadCurrentModel() -> NSManagedObjectModel {
+        PersistenceController.managedObjectModel
+    }
+
+    private func detachedFromGeneratedClasses(
+        _ model: NSManagedObjectModel
+    ) -> NSManagedObjectModel {
+        for entity in model.entities {
+            entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        }
+        return model
     }
 }

@@ -15,11 +15,14 @@
 		2B942BB78BB04EB9446BCAF3 /* SharedLedgerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64BF13138376FD41852B5EC5 /* SharedLedgerApp.swift */; };
 		2D4C20C4C48AF5D503BA3043 /* ContactPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */; };
 		39F1BDD0AB285B51FDA06776 /* GroupRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23001F74E857C5902E92E07F /* GroupRepository.swift */; };
+		C0DE0000000000000000000B /* EffectivePermissionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000000C /* EffectivePermissionRepository.swift */; };
+		C0DE0000000000000000000F /* CloudParticipantStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000010 /* CloudParticipantStatus.swift */; };
 		3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D239A715784171742AA525A4 /* CategoryNodeTests.swift */; };
 		C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000004 /* AllocationCalculatorTests.swift */; };
 		C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000006 /* SettlementCalculatorTests.swift */; };
 		C0DE00000000000000000007 /* GroupReportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000008 /* GroupReportServiceTests.swift */; };
 		C0DE00000000000000000009 /* CloudParticipantModelMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000000A /* CloudParticipantModelMigrationTests.swift */; };
+		C0DE0000000000000000000D /* EffectivePermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000000E /* EffectivePermissionTests.swift */; };
 		3FD7B477EA974043CC7FE384 /* TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AC72E8EDCB58760C5C8FFB /* TransactionsView.swift */; };
 		470E635931EBCEA9E01495A0 /* GroupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C08A6952271AAF2C12550BD /* GroupsView.swift */; };
 		62957ADC31008DFE4BD2D1B6 /* CloudSharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61221ACA806160210D38B952 /* CloudSharingView.swift */; };
@@ -71,6 +74,8 @@
 		1C08A6952271AAF2C12550BD /* GroupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupsView.swift; sourceTree = "<group>"; };
 		1EB2692318D6DD111B869EF4 /* SharedLedger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SharedLedger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23001F74E857C5902E92E07F /* GroupRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupRepository.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000000C /* EffectivePermissionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectivePermissionRepository.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000010 /* CloudParticipantStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudParticipantStatus.swift; sourceTree = "<group>"; };
 		2337C09D411E2A550FCB5198 /* CategoryNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryNode.swift; sourceTree = "<group>"; };
 		2705E374C03B78BD3A1C470B /* PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceController.swift; sourceTree = "<group>"; };
 		33A5DB733C043707DC1BE2CA /* GroupDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupDraft.swift; sourceTree = "<group>"; };
@@ -90,6 +95,7 @@
 		C0DE00000000000000000006 /* SettlementCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementCalculatorTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000008 /* GroupReportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupReportServiceTests.swift; sourceTree = "<group>"; };
 		C0DE0000000000000000000A /* CloudParticipantModelMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudParticipantModelMigrationTests.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000000E /* EffectivePermissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectivePermissionTests.swift; sourceTree = "<group>"; };
 		EE02B5318E1A4FEC2A36631B /* GroupDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupDetailView.swift; sourceTree = "<group>"; };
 		F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactPicker.swift; sourceTree = "<group>"; };
 		F88B235208B24B8948B97717 /* MemberRole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRole.swift; sourceTree = "<group>"; };
@@ -165,6 +171,8 @@
 				3E6EBEA69AD91742929038A3 /* CategoryRepository.swift */,
 				B1788D61353B381E92004D40 /* EntryRepository.swift */,
 				23001F74E857C5902E92E07F /* GroupRepository.swift */,
+				C0DE0000000000000000000C /* EffectivePermissionRepository.swift */,
+				C0DE00000000000000000010 /* CloudParticipantStatus.swift */,
 				2705E374C03B78BD3A1C470B /* PersistenceController.swift */,
 			);
 			path = Persistence;
@@ -278,6 +286,7 @@
 				C0DE00000000000000000006 /* SettlementCalculatorTests.swift */,
 				C0DE00000000000000000008 /* GroupReportServiceTests.swift */,
 				C0DE0000000000000000000A /* CloudParticipantModelMigrationTests.swift */,
+				C0DE0000000000000000000E /* EffectivePermissionTests.swift */,
 				D239A715784171742AA525A4 /* CategoryNodeTests.swift */,
 			);
 			path = SharedLedgerTests;
@@ -391,6 +400,7 @@
 				C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */,
 				C0DE00000000000000000007 /* GroupReportServiceTests.swift in Sources */,
 				C0DE00000000000000000009 /* CloudParticipantModelMigrationTests.swift in Sources */,
+				C0DE0000000000000000000D /* EffectivePermissionTests.swift in Sources */,
 				3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -425,6 +435,8 @@
 				0E812BB89B2B79F01F9B75F4 /* GroupDetailView.swift in Sources */,
 				D1320B075E57EC9CFA539DCF /* GroupDraft.swift in Sources */,
 				39F1BDD0AB285B51FDA06776 /* GroupRepository.swift in Sources */,
+				C0DE0000000000000000000B /* EffectivePermissionRepository.swift in Sources */,
+				C0DE0000000000000000000F /* CloudParticipantStatus.swift in Sources */,
 				470E635931EBCEA9E01495A0 /* GroupsView.swift in Sources */,
 				A818AB515CCAE044AC82A948 /* LedgerComponents.swift in Sources */,
 				082CCAC3D0CA8FB0C8B5C323 /* LedgerTheme.swift in Sources */,

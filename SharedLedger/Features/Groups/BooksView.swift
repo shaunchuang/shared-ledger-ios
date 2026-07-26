@@ -34,15 +34,35 @@ struct BooksView: View {
         books.filter { $0.archivedAt != nil }
     }
 
+    /// Book creation, renaming, reordering and archiving are all ledger settings
+    /// changes, so they follow the same effective permission the repository enforces.
+    private var settingsRestriction: PermissionError? {
+        EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
+    }
+
+    /// `nil` disables drag reordering, which is a persisted settings change.
+    private var moveBooksHandler: ((IndexSet, Int) -> Void)? {
+        guard settingsRestriction == nil else { return nil }
+        return moveBooks
+    }
+
     var body: some View {
         ZStack {
             LedgerBackground()
             List {
+                if let message = settingsRestriction?.errorDescription {
+                    Section {
+                        Label(message, systemImage: "lock")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section {
                     ForEach(activeBooks, id: \.objectID) { book in
                         activeBookRow(book)
                     }
-                    .onMove(perform: moveBooks)
+                    .onMove(perform: moveBooksHandler)
                 } header: {
                     Text("使用中的帳本")
                 } footer: {
@@ -77,16 +97,18 @@ struct BooksView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if activeBooks.count > 1 {
+                if activeBooks.count > 1, settingsRestriction == nil {
                     EditButton()
                 }
-                Button {
-                    isPresentingNewBook = true
-                } label: {
-                    Image(systemName: "plus")
-                        .fontWeight(.bold)
+                if settingsRestriction == nil {
+                    Button {
+                        isPresentingNewBook = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .fontWeight(.bold)
+                    }
+                    .accessibilityLabel("新增帳本")
                 }
-                .accessibilityLabel("新增帳本")
             }
         }
         .sheet(isPresented: $isPresentingNewBook) {
@@ -170,29 +192,31 @@ struct BooksView: View {
             .accessibilityLabel("選擇帳本「\(book.name ?? "未命名帳本")」")
             .accessibilityValue(isSelected(book) ? "目前帳本" : "")
 
-            Menu {
-                if !book.isDefault {
-                    Button {
-                        setDefault(book)
-                    } label: {
-                        Label("設為預設帳本", systemImage: "star")
+            if settingsRestriction == nil {
+                Menu {
+                    if !book.isDefault {
+                        Button {
+                            setDefault(book)
+                        } label: {
+                            Label("設為預設帳本", systemImage: "star")
+                        }
                     }
-                }
-                Button {
-                    bookPendingRename = book
+                    Button {
+                        bookPendingRename = book
+                    } label: {
+                        Label("重新命名", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        bookPendingArchive = book
+                    } label: {
+                        Label("封存帳本", systemImage: "archivebox")
+                    }
                 } label: {
-                    Label("重新命名", systemImage: "pencil")
+                    Image(systemName: "ellipsis")
+                        .frame(width: 36, height: 44)
                 }
-                Button(role: .destructive) {
-                    bookPendingArchive = book
-                } label: {
-                    Label("封存帳本", systemImage: "archivebox")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .frame(width: 36, height: 44)
+                .accessibilityLabel("帳本選項")
             }
-            .accessibilityLabel("帳本選項")
         }
     }
 

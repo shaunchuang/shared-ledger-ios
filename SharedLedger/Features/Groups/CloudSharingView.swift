@@ -8,6 +8,7 @@ struct CloudSharePayload: Identifiable {
     let share: CKShare
     let container: CKContainer
     let store: NSPersistentStore
+    let group: LedgerGroup
     let title: String
 }
 
@@ -19,6 +20,7 @@ struct CloudSharingView: UIViewControllerRepresentable {
         Coordinator(
             title: payload.title,
             store: payload.store,
+            group: payload.group,
             onError: onError
         )
     }
@@ -29,7 +31,11 @@ struct CloudSharingView: UIViewControllerRepresentable {
             container: payload.container
         )
         controller.delegate = context.coordinator
-        controller.availablePermissions = [.allowPrivate, .allowReadWrite]
+        controller.availablePermissions = [
+            .allowPrivate,
+            .allowReadOnly,
+            .allowReadWrite
+        ]
         return controller
     }
 
@@ -41,16 +47,19 @@ struct CloudSharingView: UIViewControllerRepresentable {
     final class Coordinator: NSObject, UICloudSharingControllerDelegate {
         private let title: String
         private let store: NSPersistentStore
+        private let group: LedgerGroup
         private let onError: (String) -> Void
         private let persistence = PersistenceController.shared
 
         init(
             title: String,
             store: NSPersistentStore,
+            group: LedgerGroup,
             onError: @escaping (String) -> Void
         ) {
             self.title = title
             self.store = store
+            self.group = group
             self.onError = onError
         }
 
@@ -84,17 +93,36 @@ struct CloudSharingView: UIViewControllerRepresentable {
         }
 
         func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
-            guard let share = csc.share else { return }
-            persistence.container.purgeObjectsAndRecordsInZone(
-                with: share.recordID.zoneID,
-                in: store
-            ) { [weak self] _, error in
-                if let error {
-                    self?.report(
-                        title: "無法停止共享",
-                        error: error
-                    )
-                }
+            // This delegate callback is the owner stopping the entire CKShare.
+            // Do not purge the record zone here: purgeObjectsAndRecordsInZone
+            // also deletes the owner's managed object graph. iOS 17 already
+            // lets NSPersistentCloudKitContainer observe system sharing UI
+            // changes and reconcile its share metadata automatically.
+            Task { @MainActor [weak self] in
+                self?.clearShareLocalParticipantMappings()
+            }
+        }
+
+        @MainActor
+        private func clearShareLocalParticipantMappings() {
+            let context = persistence.container.viewContext
+            let members = group.members as? Set<Member> ?? []
+            let mappedMembers = members.filter { $0.cloudParticipantID != nil }
+            guard !mappedMembers.isEmpty else { return }
+
+            for member in mappedMembers {
+                member.cloudParticipantID = nil
+            }
+            group.updatedAt = Date()
+
+            do {
+                try context.save()
+            } catch {
+                context.rollback()
+                report(
+                    title: "已停止 iCloud 共享，但無法清除舊的參與者對應",
+                    error: error
+                )
             }
         }
 

@@ -93,11 +93,22 @@ private struct BookTransactionsView: View {
             ?? activeBooks.first
     }
 
+    /// Why adding a transaction is unavailable, or `nil` when it is allowed. The
+    /// repositories throw the same value, so the entry point and the save path can
+    /// never disagree.
+    private var writeRestriction: PermissionError? {
+        EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
             if let selectedBook {
-                TransactionListView(book: selectedBook, kind: filter.kind) {
+                TransactionListView(
+                    book: selectedBook,
+                    kind: filter.kind,
+                    writeRestriction: writeRestriction
+                ) {
                     isPresentingNewEntry = true
                 }
                 .id(selectedBook.objectID)
@@ -114,7 +125,7 @@ private struct BookTransactionsView: View {
             }
         }
         .toolbar {
-            if selectedBook != nil {
+            if selectedBook != nil, writeRestriction == nil {
                 Button {
                     isPresentingNewEntry = true
                 } label: {
@@ -229,9 +240,16 @@ private struct BookTransactionsView: View {
 
 private struct TransactionListView: View {
     @FetchRequest private var entries: FetchedResults<LedgerEntry>
+    let writeRestriction: PermissionError?
     let onAddFirst: () -> Void
 
-    init(book: LedgerBook, kind: EntryKind?, onAddFirst: @escaping () -> Void) {
+    init(
+        book: LedgerBook,
+        kind: EntryKind?,
+        writeRestriction: PermissionError?,
+        onAddFirst: @escaping () -> Void
+    ) {
+        self.writeRestriction = writeRestriction
         self.onAddFirst = onAddFirst
         let predicate: NSPredicate
         if let kind {
@@ -251,16 +269,27 @@ private struct TransactionListView: View {
         return entries.filter { !repository.isVoided($0) }
     }
 
+    private var addAction: (() -> Void)? {
+        guard writeRestriction == nil else { return nil }
+        return onAddFirst
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
+                if let message = writeRestriction?.errorDescription {
+                    LedgerNotice(message: message)
+                }
+
                 if visibleEntries.isEmpty {
                     LedgerEmptyState(
                         systemImage: "receipt",
                         title: "沒有有效交易",
-                        message: "新增共同收支後，就能在這裡查看、編輯與核對交易。",
-                        actionTitle: "新增交易",
-                        action: onAddFirst
+                        message: writeRestriction == nil
+                            ? "新增共同收支後，就能在這裡查看、編輯與核對交易。"
+                            : "目前還沒有可檢視的交易。",
+                        actionTitle: writeRestriction == nil ? "新增交易" : nil,
+                        action: addAction
                     )
                 } else {
                     ForEach(visibleEntries, id: \.objectID) { entry in
@@ -386,6 +415,12 @@ private struct TransactionDetailView: View {
             .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
     }
 
+    /// Why editing or voiding this entry is unavailable, or `nil` when allowed.
+    private var writeRestriction: PermissionError? {
+        guard let group = entry.group else { return .missingCurrentMember }
+        return EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    }
+
     private var originalSnapshot: TransactionAuditPayload.Snapshot? {
         repository.auditPayloads(for: entry).last(where: { $0.after?.isVoided == true })?.before
     }
@@ -469,19 +504,27 @@ private struct TransactionDetailView: View {
             }
 
             if !isVoided {
-                Section {
-                    Button("作廢交易", role: .destructive) {
-                        showVoidConfirmation = true
+                if let message = writeRestriction?.errorDescription {
+                    Section {
+                        Label(message, systemImage: "lock")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                } footer: {
-                    Text("作廢不會刪除歷史紀錄；系統會保存交易當下的付款與分攤快照。")
+                } else {
+                    Section {
+                        Button("作廢交易", role: .destructive) {
+                            showVoidConfirmation = true
+                        }
+                    } footer: {
+                        Text("作廢不會刪除歷史紀錄；系統會保存交易當下的付款與分攤快照。")
+                    }
                 }
             }
         }
         .navigationTitle("交易詳情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !isVoided, entry.book?.archivedAt == nil {
+            if !isVoided, entry.book?.archivedAt == nil, writeRestriction == nil {
                 Button("編輯") {
                     isEditing = true
                 }

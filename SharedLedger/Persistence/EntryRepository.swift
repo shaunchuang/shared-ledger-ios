@@ -90,6 +90,9 @@ struct EntryRepository {
             categories: categories,
             members: members
         )
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: values.group)
+
         let context = persistence.container.viewContext
         let now = Date()
         let store = persistence.store(for: book)
@@ -145,6 +148,8 @@ struct EntryRepository {
             members: members
         )
         guard values.group == group else { throw EntryError.crossScopeReference }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
 
         let context = persistence.container.viewContext
         let now = Date()
@@ -175,6 +180,8 @@ struct EntryRepository {
         guard let group = entry.group else { throw EntryError.missingGroup }
         guard let entryID = entry.id else { throw EntryError.missingEntryID }
         guard !isVoided(entry) else { throw EntryError.voidedEntry }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
 
         let context = persistence.container.viewContext
         let now = Date()
@@ -242,9 +249,15 @@ struct EntryRepository {
             .filter { $0.entryID == entryID }
     }
 
-    func migrateLegacyPayments() async throws {
+    /// - Parameter writableGroupIDs: see `BookRepository.backfillMissingBookRelationships(in:)`.
+    ///   Payments are the source of truth for settlement, so repairing them for a
+    ///   group this device cannot write to would make the device settle differently
+    ///   from the owner.
+    func migrateLegacyPayments(in writableGroupIDs: Set<UUID>) async throws {
+        guard !writableGroupIDs.isEmpty else { return }
         let context = persistence.container.viewContext
         let request = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+        request.predicate = NSPredicate(format: "group.id IN %@", Array(writableGroupIDs))
         let entries = try context.fetch(request)
         var hasChanges = false
 

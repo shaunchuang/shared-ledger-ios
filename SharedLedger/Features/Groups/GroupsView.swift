@@ -132,6 +132,7 @@ struct GroupsView: View {
                     share: share,
                     container: container,
                     store: persistence.store(for: group),
+                    group: group,
                     title: group.name ?? "Shared Ledger 群組"
                 )
             } catch {
@@ -167,7 +168,7 @@ struct MemberIdentitySelectionView: View {
     var body: some View {
         Form {
             Section {
-                Text("為了讓付款人、分攤與權限正確，請確認你在「\(group.name ?? "共享群組")」中的成員身分。這項對應只會保存到你的私人 iCloud 資料。")
+                Text("為了讓付款人、分攤與權限正確，請確認你在「\(group.name ?? "共享群組")」中的成員身分。你的目前使用者對應只保存在私人 iCloud；系統另外保存這個 share 專用的 participant 識別，用來核對共享權限。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

@@ -292,8 +292,15 @@ final class MultiPayerEntryRepositoryTests: XCTestCase {
         entry.payer = fixture.owner
         try context.save()
 
-        try await fixture.repository.migrateLegacyPayments()
-        try await fixture.repository.migrateLegacyPayments()
+        // A group this device cannot write to is skipped entirely: payments are the
+        // source of truth for settlement, so repairing one locally would make this
+        // device settle differently from the owner while CloudKit refuses the export.
+        try await fixture.repository.migrateLegacyPayments(in: [])
+        XCTAssertTrue((entry.payments as? Set<EntryPayment> ?? []).isEmpty)
+
+        let writableGroupIDs: Set<UUID> = [try XCTUnwrap(fixture.group.id)]
+        try await fixture.repository.migrateLegacyPayments(in: writableGroupIDs)
+        try await fixture.repository.migrateLegacyPayments(in: writableGroupIDs)
 
         let payments = entry.payments as? Set<EntryPayment> ?? []
         XCTAssertEqual(payments.count, 1)
@@ -564,20 +571,8 @@ private struct EntryFixture {
 
 final class SplitPaymentModelMigrationTests: XCTestCase {
     func testV6ToV7LightweightMappingCanBeInferred() throws {
-        let bundle = Bundle(for: PersistenceController.self)
-        let modelDirectory = try XCTUnwrap(
-            bundle.url(forResource: "SharedLedger", withExtension: "momd")
-        )
-        let sourceModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV6.mom")
-            )
-        )
-        let destinationModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV7.mom")
-            )
-        )
+        let sourceModel = try loadVersionedModel(named: "SharedLedgerV6")
+        let destinationModel = try loadVersionedModel(named: "SharedLedgerV7")
 
         XCTAssertNoThrow(
             try NSMappingModel.inferredMappingModel(
@@ -716,8 +711,8 @@ final class GroupMemberLifecycleTests: XCTestCase {
         XCTAssertThrowsError(
             try fixture.groupRepository.removeMember(third, from: fixture.group)
         ) { error in
-            guard case GroupRepository.GroupError.permissionDenied = error else {
-                return XCTFail("Expected permissionDenied, got \(error)")
+            guard case PermissionError.insufficientRole(.member) = error else {
+                return XCTFail("Expected insufficientRole(.member), got \(error)")
             }
         }
         XCTAssertNil(third.archivedAt)

@@ -77,9 +77,8 @@ struct GroupRepository {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { throw GroupError.invalidGroupName }
         let actor = try currentActor(in: group, requiringMemberManagement: false)
-        guard role(of: actor)?.canManageLedgerSettings == true else {
-            throw GroupError.permissionDenied
-        }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
         guard trimmedName != group.name else { return }
 
         let previousName = group.name ?? "未命名群組"
@@ -231,8 +230,9 @@ struct GroupRepository {
 
         // Binding is opportunistic: the share metadata may not have reached this
         // device yet, and refusing the claim would leave the person with no App
-        // identity at all. The participant ID is bound the next time the claim path
-        // runs with the share available.
+        // identity at all. Writing is gated separately by
+        // `EffectivePermissionRepository`, which denies mutations while the
+        // CloudKit permission is still unknown.
         if let participant = availableCloudParticipant(in: group) {
             try validateCloudParticipant(participant, for: member, in: group)
             member.cloudParticipantID = participant.participantID
@@ -301,22 +301,59 @@ struct GroupRepository {
         }
     }
 
-    func cloudParticipantMapping(in group: LedgerGroup) throws -> [UUID: CKShare.Participant] {
-        guard let share = try share(for: group) else { return [:] }
-        let participantsByID = Dictionary(uniqueKeysWithValues: share.participants.map { ($0.participantID, $0) })
+    /// Joins every App member in the group to the live `CKShare` participant list.
+    ///
+    /// Unlike a plain mapping this keeps the members that did *not* resolve, because
+    /// "not mapped yet" and "bound to a participant that is no longer in the share"
+    /// are exactly the states member management and the two-Apple-Account validation
+    /// matrix need to distinguish.
+    func cloudParticipantStatuses(
+        in group: LedgerGroup
+    ) -> [NSManagedObjectID: CloudParticipantStatus] {
         let members = group.members as? Set<Member> ?? []
-        return Dictionary(uniqueKeysWithValues: members.compactMap { member in
-            guard let memberID = member.id,
-                  let participantID = member.cloudParticipantID,
-                  let participant = participantsByID[participantID]
-            else { return nil }
-            return (memberID, participant)
+
+        let share: CKShare?
+        do {
+            share = try self.share(for: group)
+        } catch {
+            return statuses(for: members, allBeing: .shareUnavailable)
+        }
+        guard let share else {
+            return statuses(for: members, allBeing: .notShared)
+        }
+
+        let participantsByID = Dictionary(
+            share.participants.map { ($0.participantID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        return Dictionary(uniqueKeysWithValues: members.map { member in
+            guard let participantID = member.cloudParticipantID else {
+                return (member.objectID, CloudParticipantStatus.unmapped)
+            }
+            guard let participant = participantsByID[participantID] else {
+                return (member.objectID, CloudParticipantStatus.participantMissing)
+            }
+            return (
+                member.objectID,
+                CloudParticipantStatus.mapped(
+                    canWrite: participant.role == .owner || participant.permission == .readWrite,
+                    isShareOwner: participant.role == .owner,
+                    isAccepted: participant.acceptanceStatus == .accepted
+                )
+            )
         })
     }
 
+    private func statuses(
+        for members: Set<Member>,
+        allBeing status: CloudParticipantStatus
+    ) -> [NSManagedObjectID: CloudParticipantStatus] {
+        Dictionary(uniqueKeysWithValues: members.map { ($0.objectID, status) })
+    }
+
     private func share(for group: LedgerGroup) throws -> CKShare? {
-        guard !group.objectID.isTemporaryID else { return nil }
-        return try persistence.container.fetchShares(matching: [group.objectID])[group.objectID]
+        try persistence.existingShare(for: group.objectID)
     }
 
     private func currentCloudParticipant(in group: LedgerGroup) throws -> CKShare.Participant {
@@ -369,13 +406,12 @@ struct GroupRepository {
             throw GroupError.cloudParticipantAlreadyLinked
         }
 
-        let memberRole = role(of: member)
-        if memberRole != .viewer,
-           participant.role != .owner,
-           participant.permission != .readWrite {
-            throw GroupError.cloudParticipantReadOnly
-        }
-        if memberRole == .owner, participant.role != .owner {
+        // A read-only participant is allowed to claim a member/administrator seat.
+        // CloudKit permission is the ceiling, not a claim precondition, so the App
+        // role is clamped down to viewer at every write instead of blocking the
+        // claim outright and leaving the person with no identity at all.
+        // `EffectivePermissionRepository` applies that clamp.
+        if role(of: member) == .owner, participant.role != .owner {
             throw GroupError.cloudParticipantRoleMismatch
         }
     }
@@ -392,9 +428,6 @@ struct GroupRepository {
                 throw GroupError.removedMemberCannotRejoin
             }
             throw GroupError.cloudParticipantAlreadyLinked
-        }
-        guard participant.role == .owner || participant.permission == .readWrite else {
-            throw GroupError.cloudParticipantReadOnly
         }
     }
 
@@ -419,8 +452,11 @@ struct GroupRepository {
               actor.invitationStatus == InvitationStatus.accepted.rawValue
         else { throw GroupError.missingCurrentMember }
 
-        if requiringMemberManagement, role(of: actor)?.canManageMembers != true {
-            throw GroupError.permissionDenied
+        if requiringMemberManagement {
+            // The App role alone is not enough: a read-only CloudKit participant
+            // cannot push member changes, so the effective permission decides.
+            try EffectivePermissionRepository(persistence: persistence)
+                .requireMemberManagement(in: group)
         }
         return actor
     }
@@ -475,7 +511,6 @@ struct GroupRepository {
         case invalidIdentityCandidate
         case removedMemberCannotRejoin
         case missingCurrentMember
-        case permissionDenied
         case crossGroupMember
         case invitationNotPending
         case inactiveMember
@@ -487,7 +522,6 @@ struct GroupRepository {
         case cloudParticipantNotAccepted
         case cloudParticipantAlreadyLinked
         case cloudParticipantMismatch
-        case cloudParticipantReadOnly
         case cloudParticipantRoleMismatch
 
         var errorDescription: String? {
@@ -506,8 +540,6 @@ struct GroupRepository {
                 return "你已離開或被移出這個群組。需要由管理者重新邀請後才能再次加入。"
             case .missingCurrentMember:
                 return "無法確認你在這個群組中的成員身分。"
-            case .permissionDenied:
-                return "你的角色沒有管理這個群組成員的權限。"
             case .crossGroupMember:
                 return "不能管理其他群組的成員。"
             case .invitationNotPending:
@@ -530,8 +562,6 @@ struct GroupRepository {
                 return "這個 iCloud 共享參與者已經對應到另一位 App 成員。"
             case .cloudParticipantMismatch:
                 return "這位 App 成員已對應到不同的 iCloud 共享參與者，無法直接改綁。"
-            case .cloudParticipantReadOnly:
-                return "目前 iCloud 共享權限是唯讀，無法對應為可編輯的 App 成員角色。"
             case .cloudParticipantRoleMismatch:
                 return "App 群組擁有者必須對應到 iCloud 共享的擁有者。"
             }

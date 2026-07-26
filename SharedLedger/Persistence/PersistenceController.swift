@@ -23,6 +23,29 @@ final class PersistenceController {
     /// 以 `-initialize-cloudkit-schema` 啟動參數執行時，會把目前 Core Data 模型的
     /// record types 寫入 CloudKit Development schema；之後仍須在 CloudKit Console
     /// 手動將 Development schema 部署到 Production，正式版才能同步新 entity。
+    /// Loaded once for the whole process.
+    ///
+    /// `NSPersistentCloudKitContainer(name:)` reads the `.momd` from the bundle on
+    /// every instantiation, so each `PersistenceController` used to produce a fresh
+    /// `NSManagedObjectModel` whose entities all claim the same generated subclasses.
+    /// Core Data then logs `Multiple NSEntityDescriptions claim the NSManagedObject
+    /// subclass …` and `+entity` stops being able to disambiguate — harmless here but
+    /// loud enough to bury a real Core Data error in a test log. Sharing one model
+    /// across coordinators is supported and removes the ambiguity.
+    ///
+    /// Tests that need the model the app actually runs on must use this rather than
+    /// loading the `.momd` again: a model owned by a live coordinator is immutable,
+    /// and a second copy would re-create the ambiguity this exists to avoid.
+    static let managedObjectModel: NSManagedObjectModel = {
+        guard let url = Bundle(for: PersistenceController.self)
+            .url(forResource: "SharedLedger", withExtension: "momd"),
+              let model = NSManagedObjectModel(contentsOf: url)
+        else {
+            fatalError("Unable to load the SharedLedger managed object model")
+        }
+        return model
+    }()
+
     static var shouldInitializeCloudKitSchema: Bool {
         #if DEBUG
         CommandLine.arguments.contains("-initialize-cloudkit-schema")
@@ -35,6 +58,9 @@ final class PersistenceController {
     private(set) var privateStore: NSPersistentStore!
     private(set) var sharedStore: NSPersistentStore!
     private let shareFetcher: ShareFetcher?
+    /// Device-local cache of the last resolved CloudKit write permission per group,
+    /// held here so tests can isolate it from the shared user defaults.
+    let cloudPermissionCache: CloudPermissionCache
     private let accountStatusProvider: AccountStatusProvider?
     private var remoteChangeObserver: NSObjectProtocol?
     private var isRepairingData = false
@@ -44,11 +70,16 @@ final class PersistenceController {
         inMemory: Bool = false,
         shareFetcher: ShareFetcher? = nil,
         accountStatusProvider: AccountStatusProvider? = nil,
-        inMemoryConfigurations: [String]? = nil
+        inMemoryConfigurations: [String]? = nil,
+        cloudPermissionCache: CloudPermissionCache = .standard
     ) {
         self.shareFetcher = shareFetcher
         self.accountStatusProvider = accountStatusProvider
-        container = NSPersistentCloudKitContainer(name: "SharedLedger")
+        self.cloudPermissionCache = cloudPermissionCache
+        container = NSPersistentCloudKitContainer(
+            name: "SharedLedger",
+            managedObjectModel: Self.managedObjectModel
+        )
 
         if let inMemoryConfigurations {
             container.persistentStoreDescriptions = inMemoryConfigurations.map { configuration in
@@ -187,14 +218,7 @@ final class PersistenceController {
             throw SharingError.iCloudUnavailable
         }
 
-        let existingShare: CKShare?
-        if objectID.isTemporaryID {
-            existingShare = nil
-        } else if let shareFetcher {
-            existingShare = try shareFetcher([objectID])[objectID]
-        } else {
-            existingShare = try container.fetchShares(matching: [objectID])[objectID]
-        }
+        let existingShare = try existingShare(for: objectID)
 
         if let existingShare {
             existingShare[CKShare.SystemFieldKey.title] = shareTitle
@@ -220,6 +244,16 @@ final class PersistenceController {
 
     func store(for object: NSManagedObject) -> NSPersistentStore {
         object.objectID.persistentStore ?? privateStore
+    }
+
+    /// The locally cached `CKShare` for an object, honouring an injected
+    /// `ShareFetcher` so permission logic stays testable without CloudKit.
+    func existingShare(for objectID: NSManagedObjectID) throws -> CKShare? {
+        guard !objectID.isTemporaryID else { return nil }
+        if let shareFetcher {
+            return try shareFetcher([objectID])[objectID]
+        }
+        return try container.fetchShares(matching: [objectID])[objectID]
     }
 
     /// 接受其他成員送出的 CloudKit 共享邀請，並把記錄匯入 shared store。
@@ -293,16 +327,45 @@ final class PersistenceController {
             defer { self.isRepairingData = false }
             repeat {
                 self.shouldRepeatDataRepair = false
+                let writableGroupIDs = self.repairableGroupIDs()
                 do {
-                    try await BookRepository(persistence: self).backfillMissingBookRelationships()
-                    try await CategoryRepository(persistence: self).repairLegacyCategoryAssignments()
-                    try await AccountRepository(persistence: self).migrateLegacyBalanceAdjustments()
-                    try await EntryRepository(persistence: self).migrateLegacyPayments()
+                    try await BookRepository(persistence: self)
+                        .backfillMissingBookRelationships(in: writableGroupIDs)
+                    try await CategoryRepository(persistence: self)
+                        .repairLegacyCategoryAssignments(in: writableGroupIDs)
+                    try await AccountRepository(persistence: self)
+                        .migrateLegacyBalanceAdjustments(in: writableGroupIDs)
+                    try await EntryRepository(persistence: self)
+                        .migrateLegacyPayments(in: writableGroupIDs)
                 } catch {
                     assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
                 }
             } while self.shouldRepeatDataRepair
         }
+    }
+
+    /// Groups this device may actually write to.
+    ///
+    /// The repairs create real synced objects — payments, adjustments, category
+    /// assignments — and payments in particular are the source of truth for
+    /// settlement. Running them for a group the current user cannot write to would
+    /// produce local rows CloudKit then refuses to export, so the device would
+    /// silently compute different settlements from the owner. Reads stay unaffected:
+    /// a group left out here is simply not repaired, and the owner's own device
+    /// repairs it.
+    @MainActor
+    private func repairableGroupIDs() -> Set<UUID> {
+        let request = NSFetchRequest<LedgerGroup>(entityName: "LedgerGroup")
+        guard let groups = try? container.viewContext.fetch(request) else { return [] }
+        let permissions = EffectivePermissionRepository(persistence: self)
+        return Set(
+            groups.compactMap { group -> UUID? in
+                guard let id = group.id,
+                      permissions.permission(in: group).canEditTransactions
+                else { return nil }
+                return id
+            }
+        )
     }
 
     private static func storeDescription(

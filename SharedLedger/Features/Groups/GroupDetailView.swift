@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 import SwiftUI
 
@@ -25,8 +26,10 @@ struct GroupDetailView: View {
         CurrentMemberIdentityRepository().currentMember(in: group)
     }
 
+    /// The App role after the CloudKit participant permission has been applied, so
+    /// the management UI matches what the repositories will actually allow.
     private var currentRole: MemberRole? {
-        currentMember?.role.flatMap(MemberRole.init(rawValue:))
+        EffectivePermissionRepository().permission(in: group).role
     }
 
     private var activeMembers: [Member] {
@@ -50,8 +53,44 @@ struct GroupDetailView: View {
         })
     }
 
+    /// Why member management is unavailable, or `nil` when it is allowed.
+    private var memberManagementRestriction: PermissionError? {
+        EffectivePermissionRepository().memberManagementRestriction(in: group)
+    }
+
+    /// Resolved once per render rather than per row, because each lookup reads the
+    /// group's share metadata.
+    private var participantStatuses: [NSManagedObjectID: CloudParticipantStatus] {
+        GroupRepository().cloudParticipantStatuses(in: group)
+    }
+
     private var canManageMembers: Bool {
-        currentRole?.canManageMembers == true
+        memberManagementRestriction == nil
+    }
+
+    /// The most notable participant-mapping problem across the group's members, in
+    /// severity order, so the section explains the badges once instead of repeating
+    /// a paragraph on every row.
+    private func participantNotice(
+        from statuses: [NSManagedObjectID: CloudParticipantStatus]
+    ) -> String? {
+        let values = Array(statuses.values)
+        if let unavailable = values.first(where: { $0 == .shareUnavailable }) {
+            return unavailable.explanation
+        }
+        if let missing = values.first(where: { $0 == .participantMissing }) {
+            return missing.explanation
+        }
+        if let pending = values.first(where: {
+            if case let .mapped(_, _, isAccepted) = $0 { return !isAccepted }
+            return false
+        }) {
+            return pending.explanation
+        }
+        if let unmapped = values.first(where: { $0 == .unmapped }) {
+            return unmapped.explanation
+        }
+        return nil
     }
 
     private var canManageGroupSettings: Bool {
@@ -135,14 +174,15 @@ struct GroupDetailView: View {
     }
 
     private var memberSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let statuses = participantStatuses
+        return VStack(alignment: .leading, spacing: 12) {
             LedgerSectionHeader(title: "成員")
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
-                    memberRows(activeMembers)
+                    memberRows(activeMembers, statuses: statuses)
                     if !pendingMembers.isEmpty {
                         if !activeMembers.isEmpty { Divider().padding(.leading, 72) }
-                        memberRows(pendingMembers)
+                        memberRows(pendingMembers, statuses: statuses)
                     }
                     if activeMembers.isEmpty && pendingMembers.isEmpty {
                         Text("目前沒有有效成員。")
@@ -154,11 +194,19 @@ struct GroupDetailView: View {
                 }
             }
 
+            if let message = memberManagementRestriction?.errorDescription {
+                LedgerNotice(message: message)
+            }
+
+            if let message = participantNotice(from: statuses) {
+                LedgerNotice(message: message, systemImage: "person.2.badge.gearshape")
+            }
+
             if !inactiveMembers.isEmpty {
                 DisclosureGroup("已離開或已撤回（\(inactiveMembers.count)）") {
                     LedgerCard(padding: 0) {
                         VStack(spacing: 0) {
-                            memberRows(inactiveMembers)
+                            memberRows(inactiveMembers, statuses: statuses)
                         }
                     }
                     .padding(.top, 8)
@@ -170,10 +218,14 @@ struct GroupDetailView: View {
     }
 
     @ViewBuilder
-    private func memberRows(_ members: [Member]) -> some View {
+    private func memberRows(
+        _ members: [Member],
+        statuses: [NSManagedObjectID: CloudParticipantStatus]
+    ) -> some View {
         ForEach(Array(members.enumerated()), id: \.element.objectID) { index, member in
             MemberRow(
                 member: member,
+                participantStatus: statuses[member.objectID] ?? .notShared,
                 isCurrentUser: member == currentMember,
                 canManage: canManageMembers,
                 canTransferOwnership: currentRole == .owner
@@ -500,6 +552,7 @@ private func ledgerGroupAmount(_ amount: Decimal, currencyCode: String) -> Strin
 
 private struct MemberRow: View {
     @ObservedObject var member: Member
+    let participantStatus: CloudParticipantStatus
     let isCurrentUser: Bool
     let canManage: Bool
     let canTransferOwnership: Bool
@@ -538,6 +591,12 @@ private struct MemberRow: View {
                 Text(roleName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let participantBadge = participantStatus.badgeText {
+                    Label(participantBadge, systemImage: participantIcon)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(participantTint)
+                        .accessibilityLabel("iCloud 共享對應：\(participantBadge)")
+                }
             }
             Spacer()
             statusBadge
@@ -547,6 +606,32 @@ private struct MemberRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    private var participantIcon: String {
+        switch participantStatus {
+        case .notShared, .unmapped:
+            return "person.crop.circle.badge.questionmark"
+        case .shareUnavailable:
+            return "icloud.slash"
+        case .participantMissing:
+            return "person.crop.circle.badge.exclamationmark"
+        case let .mapped(canWrite, _, isAccepted):
+            if !isAccepted { return "clock" }
+            return canWrite ? "icloud.and.arrow.up" : "eye"
+        }
+    }
+
+    private var participantTint: Color {
+        switch participantStatus {
+        case .notShared, .unmapped, .shareUnavailable:
+            return .secondary
+        case .participantMissing:
+            return LedgerTheme.coral
+        case let .mapped(canWrite, _, isAccepted):
+            if !isAccepted { return LedgerTheme.amber }
+            return canWrite ? LedgerTheme.primary : LedgerTheme.amber
+        }
     }
 
     @ViewBuilder

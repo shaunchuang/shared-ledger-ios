@@ -18,6 +18,8 @@ struct AccountRepository {
         guard LedgerCurrency.isValidAmount(openingBalance, currencyCode: currencyCode) else {
             throw AccountError.invalidCurrencyAmount(currencyCode)
         }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let context = persistence.container.viewContext
         let store = persistence.store(for: group)
@@ -43,6 +45,8 @@ struct AccountRepository {
     func archiveAccount(_ account: LedgerAccount) throws {
         guard let group = account.group else { throw AccountError.missingGroup }
         guard account.archivedAt == nil else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let context = persistence.container.viewContext
         let now = Date()
@@ -144,6 +148,8 @@ struct AccountRepository {
         guard LedgerCurrency.isValidAmount(targetBalance, currencyCode: currencyCode) else {
             throw AccountError.invalidCurrencyAmount(currencyCode)
         }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
 
         let currentBalance = currentBalance(for: account)
         let difference = targetBalance - currentBalance
@@ -185,6 +191,8 @@ struct AccountRepository {
     func reconcile(_ account: LedgerAccount, at date: Date = Date()) throws {
         guard account.archivedAt == nil else { throw AccountError.archivedAccount }
         guard let group = account.group else { throw AccountError.missingGroup }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
 
         let context = persistence.container.viewContext
         let balance = currentBalance(for: account)
@@ -225,7 +233,9 @@ struct AccountRepository {
     /// Converts the V2 representation (a bookless balance-adjustment entry)
     /// into the V3 account-owned entity. The conversion is atomic and safe to
     /// repeat after CloudKit remote changes.
-    func migrateLegacyBalanceAdjustments() async throws {
+    /// - Parameter writableGroupIDs: see `BookRepository.backfillMissingBookRelationships(in:)`.
+    func migrateLegacyBalanceAdjustments(in writableGroupIDs: Set<UUID>) async throws {
+        guard !writableGroupIDs.isEmpty else { return }
         let context = persistence.container.newBackgroundContext()
         context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
@@ -235,8 +245,9 @@ struct AccountRepository {
 
             let entryRequest = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
             entryRequest.predicate = NSPredicate(
-                format: "kind == %@",
-                EntryKind.balanceAdjustment.rawValue
+                format: "kind == %@ AND group.id IN %@",
+                EntryKind.balanceAdjustment.rawValue,
+                Array(writableGroupIDs)
             )
 
             for entry in try context.fetch(entryRequest) {
