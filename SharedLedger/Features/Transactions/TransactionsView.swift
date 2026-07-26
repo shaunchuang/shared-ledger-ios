@@ -353,7 +353,7 @@ private struct EntryRow: View {
     }
 
     private var amountText: String {
-        formattedAmount(
+        LedgerCurrency.formatSigned(
             (entry.amount as Decimal?) ?? 0,
             kind: kind,
             currencyCode: LedgerCurrency.normalizedCode(entry.group?.currencyCode)
@@ -460,7 +460,11 @@ private struct TransactionDetailView: View {
                 detailRow("類型", value: kind.displayName)
                 detailRow(
                     "金額",
-                    value: formattedAmount(detailAmount, kind: kind, currencyCode: currencyCode)
+                    value: LedgerCurrency.formatSigned(
+                        detailAmount,
+                        kind: kind,
+                        currencyCode: currencyCode
+                    )
                 )
                 if let date = entry.date {
                     detailRow("日期", value: date.formatted(date: .long, time: .omitted))
@@ -606,28 +610,6 @@ private struct TransactionDetailView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-}
-
-private func formattedAmount(_ amount: Decimal, kind: EntryKind, currencyCode: String) -> String {
-    let absoluteAmount = amount < 0 ? -amount : amount
-    switch kind {
-    case .income:
-        return LedgerCurrency.format(
-            absoluteAmount,
-            currencyCode: currencyCode,
-            showPositiveSign: true
-        )
-    case .expense:
-        return LedgerCurrency.format(-absoluteAmount, currencyCode: currencyCode)
-    case .transfer:
-        return LedgerCurrency.format(absoluteAmount, currencyCode: currencyCode)
-    case .balanceAdjustment:
-        return LedgerCurrency.format(
-            amount,
-            currencyCode: currencyCode,
-            showPositiveSign: true
-        )
     }
 }
 
