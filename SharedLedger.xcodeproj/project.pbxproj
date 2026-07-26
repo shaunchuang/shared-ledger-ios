@@ -428,13 +428,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C0DE00000000000000000021 /* LedgerCurrency.swift in Sources */,
-				C0DE00000000000000000023 /* SettlementCalculator.swift in Sources */,
-				C0DE00000000000000000025 /* GroupReport.swift in Sources */,
-				C0DE00000000000000000027 /* GroupReportService.swift in Sources */,
-				C0DE00000000000000000029 /* SettlementRepository.swift in Sources */,
-				C0DE0000000000000000002B /* CurrentMemberIdentityRepository.swift in Sources */,
-				C0DE0000000000000000002D /* SettlementView.swift in Sources */,
 				C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */,
 				C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */,
 				C0DE00000000000000000007 /* GroupReportServiceTests.swift in Sources */,
@@ -449,6 +442,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000021 /* LedgerCurrency.swift in Sources */,
+				C0DE00000000000000000023 /* SettlementCalculator.swift in Sources */,
+				C0DE00000000000000000025 /* GroupReport.swift in Sources */,
+				C0DE00000000000000000027 /* GroupReportService.swift in Sources */,
+				C0DE00000000000000000029 /* SettlementRepository.swift in Sources */,
+				C0DE0000000000000000002B /* CurrentMemberIdentityRepository.swift in Sources */,
+				C0DE0000000000000000002D /* SettlementView.swift in Sources */,
 				A3BBD971273A91FE8923017A /* AppDelegate.swift in Sources */,
 				B00CDAF70000000000000100 /* SceneDelegate.swift in Sources */,
 				6441D1FBF057593839DC7E0E /* AccountType.swift in Sources */,
