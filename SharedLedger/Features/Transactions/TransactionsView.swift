@@ -265,8 +265,17 @@ private struct TransactionListView: View {
     }
 
     private var visibleEntries: [LedgerEntry] {
+        // `isVoided(_:)` rebuilds the group's voided-ID set from its audit events on
+        // every call, so filtering with it costs O(entries × audits) and re-decodes
+        // every audit payload once per row. The set is the same for all entries in a
+        // group, so build it once and match by id instead.
         let repository = EntryRepository()
-        return entries.filter { !repository.isVoided($0) }
+        let voidedEntryIDs = Set(entries.compactMap(\.group))
+            .reduce(into: Set<UUID>()) { $0.formUnion(repository.voidedEntryIDs(in: $1)) }
+        return entries.filter { entry in
+            guard let entryID = entry.id else { return true }
+            return !voidedEntryIDs.contains(entryID)
+        }
     }
 
     private var addAction: (() -> Void)? {
@@ -275,13 +284,17 @@ private struct TransactionListView: View {
     }
 
     var body: some View {
+        // Read once per render: both branches below need it, and each read rebuilds
+        // the group's voided-ID set.
+        let visible = visibleEntries
+
         ScrollView {
             LazyVStack(spacing: 12) {
                 if let message = writeRestriction?.errorDescription {
                     LedgerNotice(message: message)
                 }
 
-                if visibleEntries.isEmpty {
+                if visible.isEmpty {
                     LedgerEmptyState(
                         systemImage: "receipt",
                         title: "沒有有效交易",
@@ -292,7 +305,7 @@ private struct TransactionListView: View {
                         action: addAction
                     )
                 } else {
-                    ForEach(visibleEntries, id: \.objectID) { entry in
+                    ForEach(visible, id: \.objectID) { entry in
                         NavigationLink {
                             TransactionDetailView(entry: entry)
                         } label: {
