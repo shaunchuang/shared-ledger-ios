@@ -68,13 +68,13 @@ struct CategoryRepository {
         return true
     }
 
+    /// Reflects the same effective permission the mutations enforce, so a read-only
+    /// CloudKit participant sees the management UI disabled rather than failing on
+    /// save.
     func canManageCategories(in group: LedgerGroup) -> Bool {
-        guard let rawRole = CurrentMemberIdentityRepository(persistence: persistence)
-            .currentMember(in: group)?
-            .role,
-              let role = MemberRole(rawValue: rawRole)
-        else { return false }
-        return role.canManageLedgerSettings
+        EffectivePermissionRepository(persistence: persistence)
+            .permission(in: group)
+            .canManageLedgerSettings
     }
 
     @discardableResult
@@ -110,7 +110,8 @@ struct CategoryRepository {
 
     func setCategory(_ category: LedgerCategory, enabled: Bool, in book: LedgerBook) throws {
         guard let group = book.group else { throw CategoryError.missingGroup }
-        guard canManageCategories(in: group) else { throw CategoryError.permissionDenied }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
         guard book.archivedAt == nil else { throw CategoryError.archivedBook }
         guard category.group == group else { throw CategoryError.crossGroupCategory }
         guard category.archivedAt == nil else { throw CategoryError.archivedCategory }
@@ -151,7 +152,8 @@ struct CategoryRepository {
 
     func archiveCategory(_ category: LedgerCategory) throws {
         guard let group = category.group else { throw CategoryError.missingGroup }
-        guard canManageCategories(in: group) else { throw CategoryError.permissionDenied }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
         guard category.archivedAt == nil else { return }
         let children = category.children as? Set<LedgerCategory> ?? []
         guard !children.contains(where: { $0.archivedAt == nil }) else {
@@ -266,7 +268,8 @@ struct CategoryRepository {
         parent: LedgerCategory?,
         enabledBooks: [LedgerBook]
     ) throws -> LedgerCategory {
-        guard canManageCategories(in: group) else { throw CategoryError.permissionDenied }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
         guard draft.canCreate else { throw CategoryError.invalidDraft }
         guard parent == nil || parent?.group == group else { throw CategoryError.crossGroupParent }
         guard parent?.archivedAt == nil else { throw CategoryError.archivedParent }
@@ -396,7 +399,6 @@ struct CategoryRepository {
     enum CategoryError: LocalizedError {
         case invalidDraft
         case missingGroup
-        case permissionDenied
         case archivedBook
         case archivedCategory
         case archivedParent
@@ -412,8 +414,6 @@ struct CategoryRepository {
                 return "請輸入分類名稱。"
             case .missingGroup:
                 return "找不到分類或帳本所屬的群組。"
-            case .permissionDenied:
-                return "只有群組擁有者或管理員可以修改分類設定。"
             case .archivedBook:
                 return "已封存的帳本不能修改可用分類。"
             case .archivedCategory:

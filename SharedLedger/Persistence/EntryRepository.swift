@@ -90,6 +90,9 @@ struct EntryRepository {
             categories: categories,
             members: members
         )
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: values.group)
+
         let context = persistence.container.viewContext
         let now = Date()
         let store = persistence.store(for: book)
@@ -145,6 +148,8 @@ struct EntryRepository {
             members: members
         )
         guard values.group == group else { throw EntryError.crossScopeReference }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
 
         let context = persistence.container.viewContext
         let now = Date()
@@ -175,6 +180,8 @@ struct EntryRepository {
         guard let group = entry.group else { throw EntryError.missingGroup }
         guard let entryID = entry.id else { throw EntryError.missingEntryID }
         guard !isVoided(entry) else { throw EntryError.voidedEntry }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
 
         let context = persistence.container.viewContext
         let now = Date()

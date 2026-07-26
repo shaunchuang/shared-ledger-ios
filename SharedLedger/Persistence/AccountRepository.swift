@@ -18,6 +18,8 @@ struct AccountRepository {
         guard LedgerCurrency.isValidAmount(openingBalance, currencyCode: currencyCode) else {
             throw AccountError.invalidCurrencyAmount(currencyCode)
         }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let context = persistence.container.viewContext
         let store = persistence.store(for: group)
@@ -43,6 +45,8 @@ struct AccountRepository {
     func archiveAccount(_ account: LedgerAccount) throws {
         guard let group = account.group else { throw AccountError.missingGroup }
         guard account.archivedAt == nil else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let context = persistence.container.viewContext
         let now = Date()
@@ -144,6 +148,8 @@ struct AccountRepository {
         guard LedgerCurrency.isValidAmount(targetBalance, currencyCode: currencyCode) else {
             throw AccountError.invalidCurrencyAmount(currencyCode)
         }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
 
         let currentBalance = currentBalance(for: account)
         let difference = targetBalance - currentBalance
@@ -185,6 +191,8 @@ struct AccountRepository {
     func reconcile(_ account: LedgerAccount, at date: Date = Date()) throws {
         guard account.archivedAt == nil else { throw AccountError.archivedAccount }
         guard let group = account.group else { throw AccountError.missingGroup }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
 
         let context = persistence.container.viewContext
         let balance = currentBalance(for: account)

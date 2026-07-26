@@ -39,6 +39,8 @@ struct BookRepository {
         categorySource: BookCategorySource = .allGroupCategories
     ) throws -> LedgerBook {
         guard draft.canCreate else { throw BookError.invalidDraft }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let activeBooks = books(in: group)
         let allBooks = books(in: group, includeArchived: true)
@@ -89,6 +91,8 @@ struct BookRepository {
     func archiveBook(_ book: LedgerBook) throws {
         guard let group = book.group else { throw BookError.missingGroup }
         guard book.archivedAt == nil else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let remainingBooks = books(in: group).filter { $0 != book }
         guard let replacement = remainingBooks.first else {
@@ -118,6 +122,8 @@ struct BookRepository {
 
         let oldName = book.name ?? "未命名帳本"
         guard oldName != draft.trimmedName else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let now = Date()
         book.name = draft.trimmedName
@@ -136,6 +142,8 @@ struct BookRepository {
         guard let group = book.group else { throw BookError.missingGroup }
         guard book.archivedAt == nil else { throw BookError.archivedBook }
         guard !book.isDefault else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let now = Date()
         for candidate in books(in: group) {
@@ -164,6 +172,8 @@ struct BookRepository {
             book.sortOrder != Int32(index)
         }
         guard hasChanges else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
 
         let now = Date()
         for (index, book) in orderedBooks.enumerated() {
@@ -565,17 +575,21 @@ struct SettlementRepository {
         .sorted { $0.recordedAt > $1.recordedAt }
     }
 
+    /// Mirrors `requireSettlementWrite` so the UI can hide the action instead of
+    /// letting the user reach an error, including when CloudKit has clamped the
+    /// App role down to read-only.
     func canRecordSettlements(in book: LedgerBook) -> Bool {
-        guard book.archivedAt == nil,
-              let group = book.group,
-              let member = CurrentMemberIdentityRepository(persistence: persistence).currentMember(in: group),
-              member.archivedAt == nil,
-              member.invitationStatus == InvitationStatus.accepted.rawValue,
-              let rawRole = member.role,
-              let role = MemberRole(rawValue: rawRole) else {
-            return false
-        }
-        return role.canEditTransactions
+        guard book.archivedAt == nil, let group = book.group else { return false }
+        return EffectivePermissionRepository(persistence: persistence)
+            .permission(in: group)
+            .canEditTransactions
+    }
+
+    private func requireSettlementWrite(in book: LedgerBook) throws {
+        guard book.archivedAt == nil else { throw RepositoryError.archivedBook }
+        guard let group = book.group else { throw RepositoryError.missingGroup }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
     }
 
     @discardableResult
@@ -587,8 +601,7 @@ struct SettlementRepository {
         in book: LedgerBook
     ) throws -> SettlementHistoryItem {
         guard let group = book.group, let bookID = book.id else { throw RepositoryError.missingGroup }
-        guard book.archivedAt == nil else { throw RepositoryError.archivedBook }
-        guard canRecordSettlements(in: book) else { throw RepositoryError.permissionDenied }
+        try requireSettlementWrite(in: book)
         guard payer.group == group,
               recipient.group == group,
               let payerID = payer.id,
@@ -648,7 +661,7 @@ struct SettlementRepository {
               settlement.bookID == bookID else {
             throw RepositoryError.missingGroup
         }
-        guard canRecordSettlements(in: book) else { throw RepositoryError.permissionDenied }
+        try requireSettlementWrite(in: book)
         guard let active = history(in: book).first(where: { $0.id == settlement.id }),
               !active.isReversed else {
             throw RepositoryError.alreadyReversed
@@ -704,7 +717,6 @@ struct SettlementRepository {
     enum RepositoryError: LocalizedError {
         case missingGroup
         case archivedBook
-        case permissionDenied
         case crossGroupMember
         case invalidAmount(String)
         case exceedsOutstandingBalance
@@ -716,8 +728,6 @@ struct SettlementRepository {
                 return "找不到這筆結算所屬的帳本或群組。"
             case .archivedBook:
                 return "已封存的帳本不能新增結算。"
-            case .permissionDenied:
-                return "目前成員沒有新增或撤銷結算的權限。"
             case .crossGroupMember:
                 return "結算付款人與收款人必須屬於目前群組，且不能是同一人。"
             case .invalidAmount(let code):

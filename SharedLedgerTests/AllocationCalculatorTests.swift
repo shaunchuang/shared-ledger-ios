@@ -716,8 +716,8 @@ final class GroupMemberLifecycleTests: XCTestCase {
         XCTAssertThrowsError(
             try fixture.groupRepository.removeMember(third, from: fixture.group)
         ) { error in
-            guard case GroupRepository.GroupError.permissionDenied = error else {
-                return XCTFail("Expected permissionDenied, got \(error)")
+            guard case PermissionError.insufficientRole(.member) = error else {
+                return XCTFail("Expected insufficientRole(.member), got \(error)")
             }
         }
         XCTAssertNil(third.archivedAt)

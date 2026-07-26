@@ -35,6 +35,9 @@ final class PersistenceController {
     private(set) var privateStore: NSPersistentStore!
     private(set) var sharedStore: NSPersistentStore!
     private let shareFetcher: ShareFetcher?
+    /// Device-local cache of the last resolved CloudKit write permission per group,
+    /// held here so tests can isolate it from the shared user defaults.
+    let cloudPermissionCache: CloudPermissionCache
     private let accountStatusProvider: AccountStatusProvider?
     private var remoteChangeObserver: NSObjectProtocol?
     private var isRepairingData = false
@@ -44,10 +47,12 @@ final class PersistenceController {
         inMemory: Bool = false,
         shareFetcher: ShareFetcher? = nil,
         accountStatusProvider: AccountStatusProvider? = nil,
-        inMemoryConfigurations: [String]? = nil
+        inMemoryConfigurations: [String]? = nil,
+        cloudPermissionCache: CloudPermissionCache = .standard
     ) {
         self.shareFetcher = shareFetcher
         self.accountStatusProvider = accountStatusProvider
+        self.cloudPermissionCache = cloudPermissionCache
         container = NSPersistentCloudKitContainer(name: "SharedLedger")
 
         if let inMemoryConfigurations {
@@ -187,14 +192,7 @@ final class PersistenceController {
             throw SharingError.iCloudUnavailable
         }
 
-        let existingShare: CKShare?
-        if objectID.isTemporaryID {
-            existingShare = nil
-        } else if let shareFetcher {
-            existingShare = try shareFetcher([objectID])[objectID]
-        } else {
-            existingShare = try container.fetchShares(matching: [objectID])[objectID]
-        }
+        let existingShare = try existingShare(for: objectID)
 
         if let existingShare {
             existingShare[CKShare.SystemFieldKey.title] = shareTitle
@@ -220,6 +218,16 @@ final class PersistenceController {
 
     func store(for object: NSManagedObject) -> NSPersistentStore {
         object.objectID.persistentStore ?? privateStore
+    }
+
+    /// The locally cached `CKShare` for an object, honouring an injected
+    /// `ShareFetcher` so permission logic stays testable without CloudKit.
+    func existingShare(for objectID: NSManagedObjectID) throws -> CKShare? {
+        guard !objectID.isTemporaryID else { return nil }
+        if let shareFetcher {
+            return try shareFetcher([objectID])[objectID]
+        }
+        return try container.fetchShares(matching: [objectID])[objectID]
     }
 
     /// 接受其他成員送出的 CloudKit 共享邀請，並把記錄匯入 shared store。

@@ -886,22 +886,22 @@ final class BookRepositoryTests: XCTestCase {
                 parent: nil
             )
         ) { error in
-            guard case CategoryRepository.CategoryError.permissionDenied = error else {
-                return XCTFail("Expected permissionDenied, got \(error)")
+            guard case PermissionError.insufficientRole(.viewer) = error else {
+                return XCTFail("Expected insufficientRole(.viewer), got \(error)")
             }
         }
         XCTAssertThrowsError(
             try repository.setCategory(category, enabled: false, in: book)
         ) { error in
-            guard case CategoryRepository.CategoryError.permissionDenied = error else {
-                return XCTFail("Expected permissionDenied, got \(error)")
+            guard case PermissionError.insufficientRole(.viewer) = error else {
+                return XCTFail("Expected insufficientRole(.viewer), got \(error)")
             }
         }
         XCTAssertThrowsError(
             try repository.archiveCategory(category)
         ) { error in
-            guard case CategoryRepository.CategoryError.permissionDenied = error else {
-                return XCTFail("Expected permissionDenied, got \(error)")
+            guard case PermissionError.insufficientRole(.viewer) = error else {
+                return XCTFail("Expected insufficientRole(.viewer), got \(error)")
             }
         }
 
@@ -913,7 +913,8 @@ final class BookRepositoryTests: XCTestCase {
     func testSharedMemberIdentityMappingUsesPrivateStore() throws {
         let persistence = PersistenceController(
             inMemory: true,
-            inMemoryConfigurations: ["Private", "Shared"]
+            inMemoryConfigurations: ["Private", "Shared"],
+            cloudPermissionCache: try makeIsolatedPermissionCache()
         )
         let context = persistence.container.viewContext
         let group = LedgerGroup(context: context)
@@ -951,17 +952,28 @@ final class BookRepositoryTests: XCTestCase {
         XCTAssertEqual(identities.first?.memberID, claimed.id)
         XCTAssertEqual(identities.first?.objectID.persistentStore, persistence.privateStore)
 
+        // The claim itself does not need CloudKit: the share metadata may still be
+        // syncing. Writing does, so an administrator whose participant permission
+        // has never been resolved on this device stays fail-closed until it is.
         claimed.role = MemberRole.administrator.rawValue
-        XCTAssertTrue(
+        XCTAssertNil(claimed.cloudParticipantID)
+        XCTAssertFalse(
             CategoryRepository(persistence: persistence)
                 .canManageCategories(in: group)
+        )
+        XCTAssertEqual(
+            EffectivePermissionRepository(persistence: persistence)
+                .permission(in: group)
+                .source,
+            .cloudPermissionUnknown
         )
     }
 
     func testSharedStoreCategoryAndAssignmentStayWithGroupRoot() throws {
         let persistence = PersistenceController(
             inMemory: true,
-            inMemoryConfigurations: ["Private", "Shared"]
+            inMemoryConfigurations: ["Private", "Shared"],
+            cloudPermissionCache: try makeIsolatedPermissionCache()
         )
         let context = persistence.container.viewContext
         let group = LedgerGroup(context: context)
@@ -982,6 +994,11 @@ final class BookRepositoryTests: XCTestCase {
         CurrentMemberIdentityRepository(persistence: persistence)
             .setCurrentMember(owner, in: group)
         try context.save()
+
+        // This test is about store placement, not permissions. Stand in for a share
+        // whose participant permission was already resolved as read/write, otherwise
+        // the shared-store writes below are correctly refused as unknown.
+        persistence.cloudPermissionCache.store(true, for: group)
 
         let book = try BookRepository(persistence: persistence).createBook(
             from: BookDraft(name: "主要帳本"),

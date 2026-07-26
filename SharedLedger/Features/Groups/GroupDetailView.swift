@@ -25,8 +25,10 @@ struct GroupDetailView: View {
         CurrentMemberIdentityRepository().currentMember(in: group)
     }
 
+    /// The App role after the CloudKit participant permission has been applied, so
+    /// the management UI matches what the repositories will actually allow.
     private var currentRole: MemberRole? {
-        currentMember?.role.flatMap(MemberRole.init(rawValue:))
+        EffectivePermissionRepository().permission(in: group).role
     }
 
     private var activeMembers: [Member] {

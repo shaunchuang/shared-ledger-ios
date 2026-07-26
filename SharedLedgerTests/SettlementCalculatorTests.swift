@@ -294,8 +294,8 @@ final class SettlementRepositoryTests: XCTestCase {
                 in: fixture.book
             )
         ) { error in
-            guard case SettlementRepository.RepositoryError.permissionDenied = error else {
-                return XCTFail("Expected permissionDenied, got \(error)")
+            guard case PermissionError.insufficientRole(.viewer) = error else {
+                return XCTFail("Expected insufficientRole(.viewer), got \(error)")
             }
         }
     }
