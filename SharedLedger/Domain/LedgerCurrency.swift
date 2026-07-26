@@ -102,12 +102,15 @@ enum LedgerCurrency {
         showPositiveSign: Bool = false
     ) -> String {
         let code = normalizedCode(currencyCode)
+        // fractionDigits(for:) builds a NumberFormatter for any currency without an
+        // override, and this runs for every amount in a list, so resolve it once.
+        let digits = fractionDigits(for: code)
         let formatter = NumberFormatter()
         formatter.locale = locale
         formatter.numberStyle = .currency
         formatter.currencyCode = code
-        formatter.minimumFractionDigits = fractionDigits(for: code)
-        formatter.maximumFractionDigits = fractionDigits(for: code)
+        formatter.minimumFractionDigits = digits
+        formatter.maximumFractionDigits = digits
         let formatted = formatter.string(from: amount as NSDecimalNumber)
             ?? "\(code) \((amount as NSDecimalNumber).stringValue)"
         return showPositiveSign && amount > 0 ? "+" + formatted : formatted
