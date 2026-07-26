@@ -40,3 +40,10 @@ enum LedgerTheme {
     }
 }
 
+extension Color {
+    /// A concrete color equivalent of SwiftUI's tertiary hierarchical style.
+    /// Useful when a ternary expression requires both branches to be `Color`.
+    static var tertiary: Color {
+        Color(uiColor: .tertiaryLabel)
+    }
+}
