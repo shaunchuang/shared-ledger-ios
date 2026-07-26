@@ -192,12 +192,17 @@ struct BookRepository {
 
     /// Idempotent post-migration repair for V1 data and CloudKit records that
     /// arrive without a book relationship.
-    func backfillMissingBookRelationships() async throws {
+    /// - Parameter writableGroupIDs: groups this device may write to. Repairs create
+    ///   synced objects, so a group the current user cannot write to is skipped
+    ///   rather than repaired into rows CloudKit will refuse.
+    func backfillMissingBookRelationships(in writableGroupIDs: Set<UUID>) async throws {
+        guard !writableGroupIDs.isEmpty else { return }
         let context = persistence.container.newBackgroundContext()
         context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
         try await context.perform {
             let request = NSFetchRequest<LedgerGroup>(entityName: "LedgerGroup")
+            request.predicate = NSPredicate(format: "id IN %@", Array(writableGroupIDs))
             let groups = try context.fetch(request)
 
             for group in groups {

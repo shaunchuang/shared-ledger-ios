@@ -356,8 +356,9 @@ final class AccountBalanceRepositoryTests: XCTestCase {
 
         XCTAssertEqual(repository.currentBalance(for: account), 125)
 
-        try await repository.migrateLegacyBalanceAdjustments()
-        try await repository.migrateLegacyBalanceAdjustments()
+        let writableGroupIDs: Set<UUID> = [try XCTUnwrap(group.id)]
+        try await repository.migrateLegacyBalanceAdjustments(in: writableGroupIDs)
+        try await repository.migrateLegacyBalanceAdjustments(in: writableGroupIDs)
         context.refresh(account, mergeChanges: false)
 
         let entryRequest = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
@@ -705,8 +706,9 @@ final class BookRepositoryTests: XCTestCase {
         try context.save()
 
         let repository = CategoryRepository(persistence: persistence)
-        try await repository.repairLegacyCategoryAssignments()
-        try await repository.repairLegacyCategoryAssignments()
+        let writableGroupIDs: Set<UUID> = [try XCTUnwrap(group.id)]
+        try await repository.repairLegacyCategoryAssignments(in: writableGroupIDs)
+        try await repository.repairLegacyCategoryAssignments(in: writableGroupIDs)
         context.refresh(category, mergeChanges: false)
 
         let repairedAssignments = category.bookAssignments as? Set<BookCategoryAssignment> ?? []
@@ -1022,20 +1024,8 @@ final class BookRepositoryTests: XCTestCase {
 
 final class CoreDataModelMigrationTests: XCTestCase {
     func testV5ToV6LightweightMappingCanBeInferred() throws {
-        let bundle = Bundle(for: PersistenceController.self)
-        let modelDirectory = try XCTUnwrap(
-            bundle.url(forResource: "SharedLedger", withExtension: "momd")
-        )
-        let sourceModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV5.mom")
-            )
-        )
-        let destinationModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV6.mom")
-            )
-        )
+        let sourceModel = try loadVersionedModel(named: "SharedLedgerV5")
+        let destinationModel = try loadVersionedModel(named: "SharedLedgerV6")
 
         XCTAssertNoThrow(
             try NSMappingModel.inferredMappingModel(
@@ -1052,20 +1042,8 @@ final class CoreDataModelMigrationTests: XCTestCase {
     }
 
     func testV4ToV5LightweightMappingCanBeInferred() throws {
-        let bundle = Bundle(for: PersistenceController.self)
-        let modelDirectory = try XCTUnwrap(
-            bundle.url(forResource: "SharedLedger", withExtension: "momd")
-        )
-        let sourceModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV4.mom")
-            )
-        )
-        let destinationModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV5.mom")
-            )
-        )
+        let sourceModel = try loadVersionedModel(named: "SharedLedgerV4")
+        let destinationModel = try loadVersionedModel(named: "SharedLedgerV5")
 
         XCTAssertNoThrow(
             try NSMappingModel.inferredMappingModel(
@@ -1076,20 +1054,8 @@ final class CoreDataModelMigrationTests: XCTestCase {
     }
 
     func testV3ToV4LightweightMappingCanBeInferred() throws {
-        let bundle = Bundle(for: PersistenceController.self)
-        let modelDirectory = try XCTUnwrap(
-            bundle.url(forResource: "SharedLedger", withExtension: "momd")
-        )
-        let sourceModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV3.mom")
-            )
-        )
-        let destinationModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV4.mom")
-            )
-        )
+        let sourceModel = try loadVersionedModel(named: "SharedLedgerV3")
+        let destinationModel = try loadVersionedModel(named: "SharedLedgerV4")
 
         XCTAssertNoThrow(
             try NSMappingModel.inferredMappingModel(

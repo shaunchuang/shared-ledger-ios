@@ -176,12 +176,19 @@ struct CategoryRepository {
 
     /// Idempotent V4 repair. Legacy categories keep `book` temporarily so
     /// delayed V3 CloudKit records can be mapped to an assignment safely.
-    func repairLegacyCategoryAssignments() async throws {
+    /// - Parameter writableGroupIDs: see `BookRepository.backfillMissingBookRelationships(in:)`.
+    func repairLegacyCategoryAssignments(in writableGroupIDs: Set<UUID>) async throws {
+        guard !writableGroupIDs.isEmpty else { return }
         let context = persistence.container.newBackgroundContext()
         context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
         try await context.perform {
             let request = NSFetchRequest<LedgerCategory>(entityName: "LedgerCategory")
+            request.predicate = NSPredicate(
+                format: "group.id IN %@ OR book.group.id IN %@",
+                Array(writableGroupIDs),
+                Array(writableGroupIDs)
+            )
             let categories = try context.fetch(request)
 
             for category in categories {

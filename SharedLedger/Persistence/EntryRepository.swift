@@ -249,9 +249,15 @@ struct EntryRepository {
             .filter { $0.entryID == entryID }
     }
 
-    func migrateLegacyPayments() async throws {
+    /// - Parameter writableGroupIDs: see `BookRepository.backfillMissingBookRelationships(in:)`.
+    ///   Payments are the source of truth for settlement, so repairing them for a
+    ///   group this device cannot write to would make the device settle differently
+    ///   from the owner.
+    func migrateLegacyPayments(in writableGroupIDs: Set<UUID>) async throws {
+        guard !writableGroupIDs.isEmpty else { return }
         let context = persistence.container.viewContext
         let request = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+        request.predicate = NSPredicate(format: "group.id IN %@", Array(writableGroupIDs))
         let entries = try context.fetch(request)
         var hasChanges = false
 

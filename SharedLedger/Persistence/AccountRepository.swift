@@ -233,7 +233,9 @@ struct AccountRepository {
     /// Converts the V2 representation (a bookless balance-adjustment entry)
     /// into the V3 account-owned entity. The conversion is atomic and safe to
     /// repeat after CloudKit remote changes.
-    func migrateLegacyBalanceAdjustments() async throws {
+    /// - Parameter writableGroupIDs: see `BookRepository.backfillMissingBookRelationships(in:)`.
+    func migrateLegacyBalanceAdjustments(in writableGroupIDs: Set<UUID>) async throws {
+        guard !writableGroupIDs.isEmpty else { return }
         let context = persistence.container.newBackgroundContext()
         context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
 
@@ -243,8 +245,9 @@ struct AccountRepository {
 
             let entryRequest = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
             entryRequest.predicate = NSPredicate(
-                format: "kind == %@",
-                EntryKind.balanceAdjustment.rawValue
+                format: "kind == %@ AND group.id IN %@",
+                EntryKind.balanceAdjustment.rawValue,
+                Array(writableGroupIDs)
             )
 
             for entry in try context.fetch(entryRequest) {
