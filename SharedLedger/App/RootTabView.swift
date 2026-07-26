@@ -454,12 +454,20 @@ private struct SettlementRootView: View {
     /// `LocalMemberIdentity`. Anything outside that set — accounts, categories,
     /// balance adjustments — cannot change what this screen shows, so it must not
     /// trigger a recompute.
+    ///
+    /// Only the object's type is inspected, never its properties, so invalidated
+    /// objects are safe to test here.
     private func affectsSettlement(_ notification: Notification) -> Bool {
+        // A context reset reports `NSInvalidatedAllObjectsKey` instead of listing the
+        // objects, so there is nothing to match against and it has to count as a hit.
+        if notification.userInfo?[NSInvalidatedAllObjectsKey] != nil { return true }
+
         let changeKeys = [
             NSInsertedObjectsKey,
             NSUpdatedObjectsKey,
             NSDeletedObjectsKey,
-            NSRefreshedObjectsKey
+            NSRefreshedObjectsKey,
+            NSInvalidatedObjectsKey
         ]
         return changeKeys.contains { key in
             guard let objects = notification.userInfo?[key] as? Set<NSManagedObject> else {

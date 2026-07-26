@@ -284,13 +284,17 @@ private struct TransactionListView: View {
     }
 
     var body: some View {
+        // Read once per render: both branches below need it, and each read rebuilds
+        // the group's voided-ID set.
+        let visible = visibleEntries
+
         ScrollView {
             LazyVStack(spacing: 12) {
                 if let message = writeRestriction?.errorDescription {
                     LedgerNotice(message: message)
                 }
 
-                if visibleEntries.isEmpty {
+                if visible.isEmpty {
                     LedgerEmptyState(
                         systemImage: "receipt",
                         title: "沒有有效交易",
@@ -301,7 +305,7 @@ private struct TransactionListView: View {
                         action: addAction
                     )
                 } else {
-                    ForEach(visibleEntries, id: \.objectID) { entry in
+                    ForEach(visible, id: \.objectID) { entry in
                         NavigationLink {
                             TransactionDetailView(entry: entry)
                         } label: {
