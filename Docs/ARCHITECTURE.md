@@ -121,8 +121,9 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | V5 | 移除會隨群組分享的 `Member.isCurrentUser`，新增只存在 private configuration 的 `LocalMemberIdentity` | 以 lightweight migration 移除舊欄位；共享群組首次開啟時由目前使用者確認待邀請的 member／viewer，或建立新的 member，再把 `groupID`／`memberID` 對應寫入 private store |
 | V6 | 在 `LedgerGroup` 新增非 optional ISO 4217 `currencyCode` | 以 lightweight migration 和 schema 預設 `TWD` 回填既有群組；新群組由建立者選擇或採裝置地區預設 |
 | V7 | 新增 `EntryPayment`、`LedgerEntry.splitMode`、`EntrySplit.inputValue` 與 `Member.archivedAt` | 以 lightweight migration 建立欄位與 entity；啟動及 remote change 後，將仍只有 legacy `payer` 的既有交易冪等轉成一筆全額付款，不改寫既有 split amount |
+| V8 | 在 shared `Member` 新增 optional `cloudParticipantID`，保存該成員對應的 `CKShare.Participant.participantID` | 以 lightweight migration 新增單一 optional String 欄位；既有成員維持 `nil`，下次在有效 CKShare 上認領或加入時才綁定 participant。此欄位是 share-local 識別碼，不取代 private-only 的 `LocalMemberIdentity` |
 
-V1→V2→V3→V4→V5→V6→V7 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。
+V1→V2→V3→V4→V5→V6→V7→V8 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。V8 只在 `Member` 加一個 optional String，因此 lightweight migration 可自動推得；升級後的既有成員 `cloudParticipantID` 為 `nil`，不做任何猜測式回填，必須等到該成員在真實 CKShare 上完成認領或加入，才由 `GroupRepository` 綁定當下已接受的 participant ID。`SharedLedgerTests/CloudParticipantModelMigrationTests` 驗證 V7→V8 可推導 mapping、V8 除該欄位外沒有其他 schema 漂移、既有 V7 store 升級後資料保留且 `cloudParticipantID` 為 `nil`，以及 `LocalMemberIdentity` 仍只屬於 private configuration。
 
 V4 資料修復對每個既有分類採以下規則：
 
@@ -170,6 +171,18 @@ CloudKit 的 Production 環境不允許在執行期新增 record type 或欄位�
 3. 部署完成後再送 TestFlight／App Store 建置版本。
 
 參考：Apple 文件 [Deploying an iCloud Container's Schema](https://developer.apple.com/documentation/cloudkit/deploying-an-icloud-container-s-schema) 與 [`initializeCloudKitSchema(options:)`](https://developer.apple.com/documentation/coredata/nspersistentcloudkitcontainer/initializecloudkitschema(options:))。
+
+#### V8 部署檢查表（未完成前不得送出含 V8 的建置版本）
+
+V8 沒有新增 record type，只在既有 `CD_Member` 上新增一個欄位 `CD_cloudParticipantID`（String, optional）。Production schema 同樣不允許執行期新增欄位，因此仍必須先部署再送版。
+
+1. 以 Debug 組態、啟動參數 `-initialize-cloudkit-schema` 執行一次 App，把 V8 寫入 Development schema，完成後移除該參數。
+2. CloudKit Console → `iCloud.com.shaunchuang.SharedLedger` → Development → Schema → Record Types → `CD_Member`，確認欄位 `CD_cloudParticipantID` 存在且型別為 String。
+3. 若之後要用 participant ID 做查詢，於 Development 為該欄位加上 Queryable index；只讀取既有物件欄位則不需要。索引變更同樣要一起部署。
+4. 執行「Deploy Schema Changes…」把 Development 部署到 Production，並在 Production 環境重新確認 `CD_Member.CD_cloudParticipantID` 已存在。
+5. 部署完成後才建立 TestFlight／App Store 建置版本。
+
+未先完成步驟 1–4 就送出含 V8 的版本時，Production 的 mirroring delegate 會以 `CKError "Invalid Arguments" (12/2006)` 失敗，同步與共享邀請全部停擺；已升級到 V8 的裝置本機資料仍可用，但無法同步。
 
 ## 聯絡人與隱私
 
