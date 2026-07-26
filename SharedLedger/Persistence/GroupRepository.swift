@@ -229,12 +229,17 @@ struct GroupRepository {
             throw GroupError.invalidIdentityCandidate
         }
 
-        let participant = try currentCloudParticipant(in: group)
-        try validateCloudParticipant(participant, for: member, in: group)
+        // Binding is opportunistic: the share metadata may not have reached this
+        // device yet, and refusing the claim would leave the person with no App
+        // identity at all. The participant ID is bound the next time the claim path
+        // runs with the share available.
+        if let participant = availableCloudParticipant(in: group) {
+            try validateCloudParticipant(participant, for: member, in: group)
+            member.cloudParticipantID = participant.participantID
+        }
 
         let context = persistence.container.viewContext
         let now = Date()
-        member.cloudParticipantID = participant.participantID
         member.invitationStatus = InvitationStatus.accepted.rawValue
         member.joinedAt = now
         group.updatedAt = now
@@ -266,8 +271,10 @@ struct GroupRepository {
             throw GroupError.invalidIdentityCandidate
         }
 
-        let participant = try currentCloudParticipant(in: group)
-        try validateCloudParticipantForNewMember(participant, in: group)
+        let participant = availableCloudParticipant(in: group)
+        if let participant {
+            try validateCloudParticipantForNewMember(participant, in: group)
+        }
 
         let context = persistence.container.viewContext
         let store = persistence.store(for: group)
@@ -275,7 +282,7 @@ struct GroupRepository {
         let member = Member(context: context)
         context.assign(member, to: store)
         member.id = UUID()
-        member.cloudParticipantID = participant.participantID
+        member.cloudParticipantID = participant?.participantID
         member.displayName = trimmedName
         member.invitationStatus = InvitationStatus.accepted.rawValue
         member.joinedAt = now
@@ -316,6 +323,16 @@ struct GroupRepository {
         guard let share = try share(for: group),
               let participant = share.currentUserParticipant
         else { throw GroupError.missingCloudParticipant }
+        return participant
+    }
+
+    /// The accepted participant for this device, or `nil` when the share metadata
+    /// is not available yet. Used by the claim/join paths, which must not fail just
+    /// because CloudKit has not synced.
+    private func availableCloudParticipant(in group: LedgerGroup) -> CKShare.Participant? {
+        guard let participant = try? currentCloudParticipant(in: group),
+              participant.acceptanceStatus == .accepted
+        else { return nil }
         return participant
     }
 
