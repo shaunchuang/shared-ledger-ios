@@ -65,8 +65,8 @@ final class CloudParticipantModelMigrationTests: XCTestCase {
         }
     }
 
-    func testV8IsTheModelTheAppLoads() throws {
-        let current = try currentModel()
+    func testV8IsTheModelTheAppLoads() {
+        let current = currentModel()
 
         XCTAssertNotNil(
             current.entitiesByName["Member"]?.attributesByName["cloudParticipantID"],
@@ -174,8 +174,8 @@ final class CloudParticipantModelMigrationTests: XCTestCase {
         try loadVersionedModel(named: name)
     }
 
-    private func currentModel() throws -> NSManagedObjectModel {
-        try loadCurrentModel()
+    private func currentModel() -> NSManagedObjectModel {
+        loadCurrentModel()
     }
 
     private func makeTemporaryStoreURL() throws -> URL {
@@ -267,11 +267,14 @@ extension XCTestCase {
         return detachedFromGeneratedClasses(model)
     }
 
-    func loadCurrentModel() throws -> NSManagedObjectModel {
-        let model = try XCTUnwrap(
-            NSManagedObjectModel(contentsOf: try managedObjectModelDirectory())
-        )
-        return detachedFromGeneratedClasses(model)
+    /// The model the app actually runs on.
+    ///
+    /// This is deliberately the same instance `PersistenceController` uses, not a
+    /// fresh load: once a coordinator owns a model it is immutable, so detaching its
+    /// classes the way `loadVersionedModel(named:)` does would raise, and loading a
+    /// second copy would re-create the `+entity` ambiguity.
+    func loadCurrentModel() -> NSManagedObjectModel {
+        PersistenceController.managedObjectModel
     }
 
     private func detachedFromGeneratedClasses(

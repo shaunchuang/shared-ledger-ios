@@ -32,7 +32,11 @@ final class PersistenceController {
     /// subclass …` and `+entity` stops being able to disambiguate — harmless here but
     /// loud enough to bury a real Core Data error in a test log. Sharing one model
     /// across coordinators is supported and removes the ambiguity.
-    private static let managedObjectModel: NSManagedObjectModel = {
+    ///
+    /// Tests that need the model the app actually runs on must use this rather than
+    /// loading the `.momd` again: a model owned by a live coordinator is immutable,
+    /// and a second copy would re-create the ambiguity this exists to avoid.
+    static let managedObjectModel: NSManagedObjectModel = {
         guard let url = Bundle(for: PersistenceController.self)
             .url(forResource: "SharedLedger", withExtension: "momd"),
               let model = NSManagedObjectModel(contentsOf: url)
