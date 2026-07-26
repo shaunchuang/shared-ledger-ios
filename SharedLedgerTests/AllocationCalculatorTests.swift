@@ -94,6 +94,31 @@ final class AllocationCalculatorTests: XCTestCase {
         }
     }
 
+    func testPaymentsPreserveEnteredOrder() throws {
+        // EntryPayment.sortOrder is assigned from this array's index, and drives both
+        // the multi-payer list order and draft restoration, so validation must not
+        // reorder the payers.
+        //
+        // The payers are deliberately arranged so the first one has the larger UUID
+        // string: sorting by member UUID would swap them on every run, not on the
+        // coin flip that previously let this defect stay hidden.
+        let ids = [UUID(), UUID()].sorted { $0.uuidString > $1.uuidString }
+        let firstEntered = ids[0]
+        let secondEntered = ids[1]
+
+        let validated = try AllocationCalculator.validatePayments(
+            total: 101,
+            inputs: [
+                PaymentInput(memberID: firstEntered, amount: 70),
+                PaymentInput(memberID: secondEntered, amount: 31)
+            ],
+            currencyCode: "TWD"
+        )
+
+        XCTAssertEqual(validated.map(\.memberID), [firstEntered, secondEntered])
+        XCTAssertEqual(validated.map(\.amount), [70, 31])
+    }
+
     func testPaymentsRespectCurrencyMinorUnits() throws {
         XCTAssertThrowsError(
             try AllocationCalculator.validatePayments(
@@ -267,8 +292,15 @@ final class MultiPayerEntryRepositoryTests: XCTestCase {
         entry.payer = fixture.owner
         try context.save()
 
-        try await fixture.repository.migrateLegacyPayments()
-        try await fixture.repository.migrateLegacyPayments()
+        // A group this device cannot write to is skipped entirely: payments are the
+        // source of truth for settlement, so repairing one locally would make this
+        // device settle differently from the owner while CloudKit refuses the export.
+        try await fixture.repository.migrateLegacyPayments(in: [])
+        XCTAssertTrue((entry.payments as? Set<EntryPayment> ?? []).isEmpty)
+
+        let writableGroupIDs: Set<UUID> = [try XCTUnwrap(fixture.group.id)]
+        try await fixture.repository.migrateLegacyPayments(in: writableGroupIDs)
+        try await fixture.repository.migrateLegacyPayments(in: writableGroupIDs)
 
         let payments = entry.payments as? Set<EntryPayment> ?? []
         XCTAssertEqual(payments.count, 1)
@@ -313,6 +345,220 @@ final class MultiPayerEntryRepositoryTests: XCTestCase {
 }
 
 @MainActor
+final class TransactionLifecycleTests: XCTestCase {
+    func testDraftRestoresPercentageSplitAndMultiplePayments() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let friendID = try XCTUnwrap(fixture.friend.id)
+        let entry = try fixture.repository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "101",
+                note: "晚餐",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                splitMode: .percentage,
+                splitValueTexts: [ownerID: "40", friendID: "60"],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "70"),
+                    TransactionPaymentDraft(memberID: friendID, amountText: "31")
+                ]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        let restored = TransactionDraft(entry: entry)
+
+        XCTAssertEqual(restored.kind, .expense)
+        XCTAssertEqual(restored.amountText, "101")
+        XCTAssertEqual(restored.note, "晚餐")
+        XCTAssertEqual(restored.sourceAccountID, fixture.account.id)
+        XCTAssertEqual(restored.splitMode, .percentage)
+        XCTAssertEqual(restored.splitMemberIDs, Set([ownerID, friendID]))
+        XCTAssertEqual(restored.splitValueTexts[ownerID], "40")
+        XCTAssertEqual(restored.splitValueTexts[friendID], "60")
+        XCTAssertEqual(restored.paymentDrafts.map(\.memberID), [ownerID, friendID])
+        XCTAssertEqual(restored.paymentDrafts.map(\.amountText), ["70", "31"])
+    }
+
+    func testUpdateRecalculatesSplitsAndPersistsBeforeAfterAudit() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let friendID = try XCTUnwrap(fixture.friend.id)
+        let entry = try fixture.repository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "100",
+                note: "原始",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "100")
+                ]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        try fixture.repository.updateEntry(
+            entry,
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "120",
+                note: "更新後",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                splitMode: .percentage,
+                splitValueTexts: [ownerID: "25", friendID: "75"],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "80"),
+                    TransactionPaymentDraft(memberID: friendID, amountText: "40")
+                ]
+            ),
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        XCTAssertEqual(entry.amount as Decimal?, 120)
+        XCTAssertEqual(entry.note, "更新後")
+        XCTAssertEqual(entry.splitMode, SplitMode.percentage.rawValue)
+        XCTAssertEqual(
+            (entry.payments as? Set<EntryPayment> ?? []).compactMap { $0.amount as Decimal? }.reduce(0, +),
+            120
+        )
+        XCTAssertEqual(
+            Set((entry.splits as? Set<EntrySplit> ?? []).compactMap { $0.amount as Decimal? }),
+            [30, 90]
+        )
+
+        let updateAudit = try XCTUnwrap(
+            fixture.repository.auditPayloads(for: entry).last(where: { $0.message == "編輯交易" })
+        )
+        XCTAssertEqual(updateAudit.before?.amount, "100")
+        XCTAssertEqual(updateAudit.after?.amount, "120")
+        XCTAssertEqual(updateAudit.before?.note, "原始")
+        XCTAssertEqual(updateAudit.after?.note, "更新後")
+        XCTAssertEqual(Set(updateAudit.after?.payments.map(\.amount) ?? []), ["80", "40"])
+        XCTAssertEqual(Set(updateAudit.after?.splits.map(\.amount) ?? []), ["30", "90"])
+    }
+
+    func testVoidPersistsSnapshotAndPreventsFurtherEditing() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let entry = try fixture.repository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "300",
+                note: "要作廢",
+                sourceAccountID: fixture.account.id,
+                payerMemberID: ownerID,
+                splitMemberIDs: [ownerID]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner]
+        )
+
+        try fixture.repository.voidEntry(entry)
+
+        XCTAssertTrue(fixture.repository.isVoided(entry))
+        XCTAssertEqual(entry.amount as Decimal?, 0)
+        let voidAudit = try XCTUnwrap(
+            fixture.repository.auditPayloads(for: entry).last(where: { $0.message == "作廢交易" })
+        )
+        XCTAssertEqual(voidAudit.before?.amount, "300")
+        XCTAssertEqual(voidAudit.after?.amount, "300")
+        XCTAssertEqual(voidAudit.before?.isVoided, false)
+        XCTAssertEqual(voidAudit.after?.isVoided, true)
+
+        XCTAssertThrowsError(
+            try fixture.repository.updateEntry(
+                entry,
+                from: TransactionDraft(
+                    kind: .expense,
+                    amountText: "200",
+                    sourceAccountID: fixture.account.id,
+                    payerMemberID: ownerID,
+                    splitMemberIDs: [ownerID]
+                ),
+                accounts: [fixture.account],
+                categories: [],
+                members: [fixture.owner]
+            )
+        ) { error in
+            guard case EntryRepository.EntryError.voidedEntry = error else {
+                return XCTFail("Expected voidedEntry, got \(error)")
+            }
+        }
+    }
+
+    func testVoidedEntryStopsAffectingAccountBalance() throws {
+        let fixture = try makeFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let entry = try fixture.repository.createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "300",
+                sourceAccountID: fixture.account.id,
+                payerMemberID: ownerID,
+                splitMemberIDs: [ownerID]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner]
+        )
+        let accountRepository = AccountRepository(persistence: fixture.persistence)
+
+        XCTAssertEqual(accountRepository.currentBalance(for: fixture.account), -300)
+        try fixture.repository.voidEntry(entry)
+        XCTAssertEqual(accountRepository.currentBalance(for: fixture.account), 0)
+    }
+
+    private func makeFixture() throws -> EntryFixture {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(
+                name: "家庭",
+                ownerDisplayName: "小明",
+                currencyCode: "TWD"
+            )
+        )
+        let owner = try XCTUnwrap((group.members as? Set<Member>)?.first)
+        let context = persistence.container.viewContext
+        let friend = Member(context: context)
+        context.assign(friend, to: persistence.store(for: group))
+        friend.id = UUID()
+        friend.displayName = "小美"
+        friend.invitationStatus = InvitationStatus.accepted.rawValue
+        friend.role = MemberRole.member.rawValue
+        friend.group = group
+        let book = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
+        let account = try AccountRepository(persistence: persistence).createAccount(
+            from: AccountDraft(name: "現金"),
+            in: group
+        )
+        try context.save()
+        return EntryFixture(
+            persistence: persistence,
+            group: group,
+            book: book,
+            account: account,
+            owner: owner,
+            friend: friend,
+            repository: EntryRepository(persistence: persistence)
+        )
+    }
+}
+
+@MainActor
 private struct EntryFixture {
     let persistence: PersistenceController
     let group: LedgerGroup
@@ -325,20 +571,8 @@ private struct EntryFixture {
 
 final class SplitPaymentModelMigrationTests: XCTestCase {
     func testV6ToV7LightweightMappingCanBeInferred() throws {
-        let bundle = Bundle(for: PersistenceController.self)
-        let modelDirectory = try XCTUnwrap(
-            bundle.url(forResource: "SharedLedger", withExtension: "momd")
-        )
-        let sourceModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV6.mom")
-            )
-        )
-        let destinationModel = try XCTUnwrap(
-            NSManagedObjectModel(
-                contentsOf: modelDirectory.appendingPathComponent("SharedLedgerV7.mom")
-            )
-        )
+        let sourceModel = try loadVersionedModel(named: "SharedLedgerV6")
+        let destinationModel = try loadVersionedModel(named: "SharedLedgerV7")
 
         XCTAssertNoThrow(
             try NSMappingModel.inferredMappingModel(
@@ -353,4 +587,198 @@ final class SplitPaymentModelMigrationTests: XCTestCase {
             SplitMode.equal.rawValue
         )
     }
+}
+
+@MainActor
+final class GroupMemberLifecycleTests: XCTestCase {
+    func testOwnerCanRenameRevokeAndReinvitePendingMemberWithAudits() throws {
+        let invitee = InviteeContact(contactIdentifier: "friend", displayName: "小美")
+        let persistence = PersistenceController(inMemory: true)
+        let repository = GroupRepository(persistence: persistence)
+        let group = try repository.createGroup(
+            from: GroupDraft(
+                name: "家庭",
+                ownerDisplayName: "小明",
+                invitees: [invitee]
+            )
+        )
+        let pending = try XCTUnwrap(
+            (group.members as? Set<Member>)?.first {
+                $0.invitationStatus == InvitationStatus.pending.rawValue
+            }
+        )
+
+        try repository.renameGroup(group, to: "共同生活")
+        try repository.revokeInvitation(pending, in: group)
+
+        XCTAssertEqual(group.name, "共同生活")
+        XCTAssertEqual(pending.invitationStatus, InvitationStatus.revoked.rawValue)
+        XCTAssertNotNil(pending.archivedAt)
+
+        try repository.resendInvitation(pending, in: group)
+
+        XCTAssertEqual(pending.invitationStatus, InvitationStatus.pending.rawValue)
+        XCTAssertNil(pending.archivedAt)
+        let actions = Set((group.auditEvents as? Set<AuditEvent> ?? []).compactMap(\.action))
+        XCTAssertTrue(actions.contains("group.renamed"))
+        XCTAssertTrue(actions.contains("member.invitation.revoked"))
+        XCTAssertTrue(actions.contains("member.invitation.resent"))
+    }
+
+    func testRemovingMemberPreservesHistoricalPaymentAndSplitRelationships() throws {
+        let fixture = try makeLifecycleFixture()
+        let ownerID = try XCTUnwrap(fixture.owner.id)
+        let friendID = try XCTUnwrap(fixture.friend.id)
+        let entry = try EntryRepository(persistence: fixture.persistence).createEntry(
+            from: TransactionDraft(
+                kind: .expense,
+                amountText: "100",
+                sourceAccountID: fixture.account.id,
+                splitMemberIDs: [ownerID, friendID],
+                paymentDrafts: [
+                    TransactionPaymentDraft(memberID: ownerID, amountText: "100")
+                ]
+            ),
+            in: fixture.book,
+            accounts: [fixture.account],
+            categories: [],
+            members: [fixture.owner, fixture.friend]
+        )
+
+        try fixture.groupRepository.removeMember(fixture.friend, from: fixture.group)
+
+        XCTAssertNotNil(fixture.friend.archivedAt)
+        XCTAssertTrue((entry.splits as? Set<EntrySplit> ?? []).contains { $0.member == fixture.friend })
+        XCTAssertEqual(entry.payer, fixture.owner)
+        XCTAssertTrue(
+            (fixture.group.auditEvents as? Set<AuditEvent> ?? [])
+                .contains { $0.action == "member.removed" }
+        )
+
+        try fixture.groupRepository.resendInvitation(fixture.friend, in: fixture.group)
+        XCTAssertNil(fixture.friend.archivedAt)
+        XCTAssertEqual(fixture.friend.invitationStatus, InvitationStatus.pending.rawValue)
+    }
+
+    func testOwnerCannotLeaveButMemberLeaveCreatesInactiveIdentityTombstone() throws {
+        let fixture = try makeLifecycleFixture()
+
+        XCTAssertThrowsError(try fixture.groupRepository.leaveGroup(fixture.group)) { error in
+            guard case GroupRepository.GroupError.ownerMustTransferBeforeLeaving = error else {
+                return XCTFail("Expected ownerMustTransferBeforeLeaving, got \(error)")
+            }
+        }
+
+        let identityRepository = CurrentMemberIdentityRepository(persistence: fixture.persistence)
+        identityRepository.setCurrentMember(fixture.friend, in: fixture.group)
+        try fixture.persistence.container.viewContext.save()
+        try fixture.groupRepository.leaveGroup(fixture.group)
+
+        XCTAssertNotNil(fixture.friend.archivedAt)
+        XCTAssertNil(identityRepository.currentMember(in: fixture.group))
+        XCTAssertEqual(identityRepository.mappedMember(in: fixture.group), fixture.friend)
+        XCTAssertTrue(identityRepository.hasInactiveIdentity(in: fixture.group))
+        XCTAssertFalse(identityRepository.needsResolution(for: fixture.group))
+
+        XCTAssertThrowsError(
+            try fixture.groupRepository.joinSharedGroup(
+                displayName: "另一個身分",
+                group: fixture.group
+            )
+        ) { error in
+            guard case GroupRepository.GroupError.removedMemberCannotRejoin = error else {
+                return XCTFail("Expected removedMemberCannotRejoin, got \(error)")
+            }
+        }
+    }
+
+    func testRegularMemberCannotRemoveAnotherMember() throws {
+        let fixture = try makeLifecycleFixture()
+        let context = fixture.persistence.container.viewContext
+        let third = Member(context: context)
+        context.assign(third, to: fixture.persistence.store(for: fixture.group))
+        third.id = UUID()
+        third.displayName = "小華"
+        third.role = MemberRole.member.rawValue
+        third.invitationStatus = InvitationStatus.accepted.rawValue
+        third.group = fixture.group
+        try context.save()
+
+        CurrentMemberIdentityRepository(persistence: fixture.persistence)
+            .setCurrentMember(fixture.friend, in: fixture.group)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try fixture.groupRepository.removeMember(third, from: fixture.group)
+        ) { error in
+            guard case PermissionError.insufficientRole(.member) = error else {
+                return XCTFail("Expected insufficientRole(.member), got \(error)")
+            }
+        }
+        XCTAssertNil(third.archivedAt)
+    }
+
+    func testCrossGroupMemberCannotBeManaged() throws {
+        let fixture = try makeLifecycleFixture()
+        let otherGroup = try fixture.groupRepository.createGroup(
+            from: GroupDraft(name: "室友", ownerDisplayName: "小華")
+        )
+        let foreignMember = try XCTUnwrap((otherGroup.members as? Set<Member>)?.first)
+
+        CurrentMemberIdentityRepository(persistence: fixture.persistence)
+            .setCurrentMember(fixture.owner, in: fixture.group)
+        try fixture.persistence.container.viewContext.save()
+
+        XCTAssertThrowsError(
+            try fixture.groupRepository.removeMember(foreignMember, from: fixture.group)
+        ) { error in
+            guard case GroupRepository.GroupError.crossGroupMember = error else {
+                return XCTFail("Expected crossGroupMember, got \(error)")
+            }
+        }
+    }
+
+    private func makeLifecycleFixture() throws -> GroupLifecycleFixture {
+        let persistence = PersistenceController(inMemory: true)
+        let groupRepository = GroupRepository(persistence: persistence)
+        let group = try groupRepository.createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let owner = try XCTUnwrap((group.members as? Set<Member>)?.first)
+        let context = persistence.container.viewContext
+        let friend = Member(context: context)
+        context.assign(friend, to: persistence.store(for: group))
+        friend.id = UUID()
+        friend.displayName = "小美"
+        friend.role = MemberRole.member.rawValue
+        friend.invitationStatus = InvitationStatus.accepted.rawValue
+        friend.joinedAt = Date()
+        friend.group = group
+        let book = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
+        let account = try AccountRepository(persistence: persistence).createAccount(
+            from: AccountDraft(name: "現金"),
+            in: group
+        )
+        try context.save()
+        return GroupLifecycleFixture(
+            persistence: persistence,
+            groupRepository: groupRepository,
+            group: group,
+            owner: owner,
+            friend: friend,
+            book: book,
+            account: account
+        )
+    }
+}
+
+@MainActor
+private struct GroupLifecycleFixture {
+    let persistence: PersistenceController
+    let groupRepository: GroupRepository
+    let group: LedgerGroup
+    let owner: Member
+    let friend: Member
+    let book: LedgerBook
+    let account: LedgerAccount
 }

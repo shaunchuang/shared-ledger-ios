@@ -200,3 +200,27 @@ struct LedgerIconBadge: View {
             .accessibilityHidden(true)
     }
 }
+
+/// An inline explanation shown in place of an action the current user cannot take,
+/// so a restriction is visible before the user commits to a form.
+struct LedgerNotice: View {
+    let message: String
+    var systemImage: String = "lock"
+    var tint: Color = LedgerTheme.amber
+
+    var body: some View {
+        LedgerCard {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}

@@ -87,15 +87,21 @@ struct CategoriesView: View {
         )
     }
 
-    private var canManage: Bool {
-        CategoryRepository().canManageCategories(in: group)
+    private var manageRestriction: PermissionError? {
+        EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
     }
+
+    private var canManage: Bool { manageRestriction == nil }
 
     var body: some View {
         ZStack {
             LedgerBackground()
             ScrollView {
                 VStack(spacing: 16) {
+                    if let message = manageRestriction?.errorDescription {
+                        LedgerNotice(message: message)
+                    }
+
                     if rootCategories.isEmpty {
                         LedgerEmptyState(
                             systemImage: "square.grid.2x2",
@@ -229,16 +235,22 @@ struct BookCategoriesView: View {
         )
     }
 
-    private var canManage: Bool {
-        guard let group = book.group else { return false }
-        return CategoryRepository().canManageCategories(in: group)
+    private var manageRestriction: PermissionError? {
+        guard let group = book.group else { return .missingCurrentMember }
+        return EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
     }
+
+    private var canManage: Bool { manageRestriction == nil }
 
     var body: some View {
         ZStack {
             LedgerBackground()
             ScrollView {
                 VStack(spacing: 16) {
+                    if let message = manageRestriction?.errorDescription {
+                        LedgerNotice(message: message)
+                    }
+
                     if rootCategories.isEmpty {
                         LedgerEmptyState(
                             systemImage: "square.grid.2x2",

@@ -118,12 +118,11 @@ struct CreateGroupView: View {
             .padding(.vertical, 12)
             .background(.ultraThinMaterial)
         }
-        .sheet(isPresented: $isShowingContacts) {
-            ContactPicker { contacts in
+        .background(
+            ContactPicker(isPresented: $isShowingContacts) { contacts in
                 draft.addInvitees(contacts)
-                isShowingContacts = false
             }
-        }
+        )
         .alert("無法建立群組", isPresented: errorBinding) {
             Button("好", role: .cancel) {}
         } message: {

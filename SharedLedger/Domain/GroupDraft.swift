@@ -27,11 +27,27 @@ enum LedgerCurrency {
         return "\(name)（\(normalized)）"
     }
 
+    /// App 自行釘住的幣別最小單位。
+    ///
+    /// `NumberFormatter` 的精度來自作業系統的 ICU/CLDR 資料，會隨系統版本改變。
+    /// 帳本會跨裝置同步，同一筆金額不能因為兩台裝置的 iOS 版本不同就有不同的
+    /// 合法性判定、四捨五入結果與分攤餘數，所以實際慣例與 ISO 不同的幣別在這裡
+    /// 明確指定。未列出的幣別仍沿用系統的 ISO 精度。
+    ///
+    /// TWD：ISO 4217 記為 2 位，但台幣實務以整數元計價，App 也照此處理。
+    private static let fractionDigitOverrides: [String: Int] = [
+        "TWD": 0
+    ]
+
     static func fractionDigits(for code: String) -> Int {
+        let normalized = normalizedCode(code)
+        if let override = fractionDigitOverrides[normalized] {
+            return override
+        }
         let formatter = NumberFormatter()
         formatter.locale = Locale(identifier: "en_US")
         formatter.numberStyle = .currency
-        formatter.currencyCode = normalizedCode(code)
+        formatter.currencyCode = normalized
         return formatter.maximumFractionDigits
     }
 

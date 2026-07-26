@@ -30,6 +30,22 @@ struct AccountsView: View {
         accounts.filter { $0.archivedAt != nil }
     }
 
+    /// Creating and archiving accounts is a ledger settings change, so it follows
+    /// the same effective permission the repository enforces on save.
+    private var settingsRestriction: PermissionError? {
+        EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
+    }
+
+    private var presentNewAccount: (() -> Void)? {
+        guard settingsRestriction == nil else { return nil }
+        return { isPresentingNewAccount = true }
+    }
+
+    private func archiveAction(for account: LedgerAccount) -> (() -> Void)? {
+        guard settingsRestriction == nil else { return nil }
+        return { accountPendingArchive = account }
+    }
+
     private func balances(for accounts: [LedgerAccount], repository: AccountRepository) -> [NSManagedObjectID: Decimal] {
         Dictionary(
             uniqueKeysWithValues: accounts.map { account in
@@ -43,15 +59,20 @@ struct AccountsView: View {
             LedgerBackground()
             ScrollView {
                 LazyVStack(spacing: 16) {
+                    if let message = settingsRestriction?.errorDescription {
+                        LedgerNotice(message: message)
+                    }
+
                     if accounts.isEmpty {
                         LedgerEmptyState(
                             systemImage: "creditcard",
                             title: "還沒有帳戶",
-                            message: "新增現金或銀行帳戶，設定期初餘額後開始記錄收支。",
-                            actionTitle: "新增帳戶"
-                        ) {
-                            isPresentingNewAccount = true
-                        }
+                            message: settingsRestriction == nil
+                                ? "新增現金或銀行帳戶，設定期初餘額後開始記錄收支。"
+                                : "這個群組還沒有帳戶。",
+                            actionTitle: settingsRestriction == nil ? "新增帳戶" : nil,
+                            action: presentNewAccount
+                        )
                     } else if !activeAccounts.isEmpty {
                         LedgerCard(padding: 0) {
                             VStack(spacing: 0) {
@@ -59,7 +80,7 @@ struct AccountsView: View {
                                     AccountRow(
                                         account: account,
                                         balance: accountBalances[account.objectID] ?? 0,
-                                        onArchive: { accountPendingArchive = account }
+                                        onArchive: archiveAction(for: account)
                                     )
                                     if index < activeAccounts.count - 1 {
                                         Divider().padding(.leading, 68)
@@ -97,13 +118,15 @@ struct AccountsView: View {
         .navigationTitle("帳戶")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            Button {
-                isPresentingNewAccount = true
-            } label: {
-                Image(systemName: "plus")
-                    .fontWeight(.bold)
+            if settingsRestriction == nil {
+                Button {
+                    isPresentingNewAccount = true
+                } label: {
+                    Image(systemName: "plus")
+                        .fontWeight(.bold)
+                }
+                .accessibilityLabel("新增帳戶")
             }
-            .accessibilityLabel("新增帳戶")
         }
         .sheet(isPresented: $isPresentingNewAccount) {
             NavigationStack {
@@ -306,6 +329,18 @@ private struct AccountDetailView: View {
         )
     }
 
+    /// Balance adjustment and reconciliation post ledger entries, so they follow the
+    /// transaction permission; archiving is a settings change.
+    private var transactionRestriction: PermissionError? {
+        guard let group = account.group else { return .missingCurrentMember }
+        return EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    }
+
+    private var settingsRestriction: PermissionError? {
+        guard let group = account.group else { return .missingCurrentMember }
+        return EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
+    }
+
     var body: some View {
         let currentBalance = accountRepository.currentBalance(for: account)
 
@@ -325,17 +360,22 @@ private struct AccountDetailView: View {
         .navigationTitle(account.name ?? "帳戶明細")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if account.archivedAt == nil {
+            if account.archivedAt == nil,
+               transactionRestriction == nil || settingsRestriction == nil {
                 Menu {
-                    Button("調整餘額", systemImage: "slider.horizontal.3") {
-                        isAdjustingBalance = true
+                    if transactionRestriction == nil {
+                        Button("調整餘額", systemImage: "slider.horizontal.3") {
+                            isAdjustingBalance = true
+                        }
+                        Button("完成對帳", systemImage: "checkmark.seal") {
+                            isConfirmingReconciliation = true
+                        }
                     }
-                    Button("完成對帳", systemImage: "checkmark.seal") {
-                        isConfirmingReconciliation = true
-                    }
-                    Divider()
-                    Button("封存帳戶", systemImage: "archivebox", role: .destructive) {
-                        isConfirmingArchive = true
+                    if settingsRestriction == nil {
+                        if transactionRestriction == nil { Divider() }
+                        Button("封存帳戶", systemImage: "archivebox", role: .destructive) {
+                            isConfirmingArchive = true
+                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
