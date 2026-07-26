@@ -416,8 +416,12 @@ struct GroupRepository {
             // A group that reached the shared store did so through a share, so a
             // missing share record means the metadata has not been mirrored to this
             // device — not that the group is unshared. Reporting `.notShared` there
-            // would state as fact something this device cannot see.
-            let isShared = persistence.store(for: group) === persistence.sharedStore
+            // would state as fact something this device cannot see. The private store
+            // is the discriminator rather than the shared one, matching
+            // `EffectivePermissionRepository`: the two are the same object when a
+            // single in-memory store backs both configurations, and only "definitely
+            // private" may skip the participant checks.
+            let isShared = persistence.store(for: group) !== persistence.privateStore
             return statuses(for: members, allBeing: isShared ? .shareUnavailable : .notShared)
         }
 
