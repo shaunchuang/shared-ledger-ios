@@ -301,17 +301,55 @@ struct GroupRepository {
         }
     }
 
-    func cloudParticipantMapping(in group: LedgerGroup) throws -> [UUID: CKShare.Participant] {
-        guard let share = try share(for: group) else { return [:] }
-        let participantsByID = Dictionary(uniqueKeysWithValues: share.participants.map { ($0.participantID, $0) })
+    /// Joins every App member in the group to the live `CKShare` participant list.
+    ///
+    /// Unlike a plain mapping this keeps the members that did *not* resolve, because
+    /// "not mapped yet" and "bound to a participant that is no longer in the share"
+    /// are exactly the states member management and the two-Apple-Account validation
+    /// matrix need to distinguish.
+    func cloudParticipantStatuses(
+        in group: LedgerGroup
+    ) -> [NSManagedObjectID: CloudParticipantStatus] {
         let members = group.members as? Set<Member> ?? []
-        return Dictionary(uniqueKeysWithValues: members.compactMap { member in
-            guard let memberID = member.id,
-                  let participantID = member.cloudParticipantID,
-                  let participant = participantsByID[participantID]
-            else { return nil }
-            return (memberID, participant)
+
+        let share: CKShare?
+        do {
+            share = try self.share(for: group)
+        } catch {
+            return statuses(for: members, allBeing: .shareUnavailable)
+        }
+        guard let share else {
+            return statuses(for: members, allBeing: .notShared)
+        }
+
+        let participantsByID = Dictionary(
+            share.participants.map { ($0.participantID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        return Dictionary(uniqueKeysWithValues: members.map { member in
+            guard let participantID = member.cloudParticipantID else {
+                return (member.objectID, CloudParticipantStatus.unmapped)
+            }
+            guard let participant = participantsByID[participantID] else {
+                return (member.objectID, CloudParticipantStatus.participantMissing)
+            }
+            return (
+                member.objectID,
+                CloudParticipantStatus.mapped(
+                    canWrite: participant.role == .owner || participant.permission == .readWrite,
+                    isShareOwner: participant.role == .owner,
+                    isAccepted: participant.acceptanceStatus == .accepted
+                )
+            )
         })
+    }
+
+    private func statuses(
+        for members: Set<Member>,
+        allBeing status: CloudParticipantStatus
+    ) -> [NSManagedObjectID: CloudParticipantStatus] {
+        Dictionary(uniqueKeysWithValues: members.map { ($0.objectID, status) })
     }
 
     private func share(for group: LedgerGroup) throws -> CKShare? {

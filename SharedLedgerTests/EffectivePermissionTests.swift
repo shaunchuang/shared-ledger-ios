@@ -180,6 +180,84 @@ final class EffectivePermissionTests: XCTestCase {
         }
     }
 
+    // MARK: - Participant mapping status
+
+    func testAnUnsharedGroupReportsNoParticipantMapping() throws {
+        let fixture = try makePrivateFixture()
+
+        let statuses = GroupRepository(persistence: fixture.persistence)
+            .cloudParticipantStatuses(in: fixture.group)
+
+        XCTAssertEqual(statuses[fixture.owner.objectID], .notShared)
+        XCTAssertNil(CloudParticipantStatus.notShared.badgeText)
+    }
+
+    func testAnUnreachableShareReportsShareUnavailableForEveryMember() throws {
+        let fixture = try makeSharedFixture(shareFetcher: { _ in
+            throw CocoaError(.fileReadUnknown)
+        })
+
+        let statuses = GroupRepository(persistence: fixture.persistence)
+            .cloudParticipantStatuses(in: fixture.group)
+
+        XCTAssertEqual(statuses[fixture.member.objectID], .shareUnavailable)
+        XCTAssertEqual(CloudParticipantStatus.shareUnavailable.badgeText, "共享未同步")
+    }
+
+    func testAMemberWithoutAParticipantIDIsReportedAsUnmapped() throws {
+        let share = CKShare(recordZoneID: CKRecordZone.ID(zoneName: "EffectivePermissionTests"))
+        let fixture = try makeSharedFixture(shareFetcher: { objectIDs in
+            Dictionary(uniqueKeysWithValues: objectIDs.map { ($0, share) })
+        })
+
+        let statuses = GroupRepository(persistence: fixture.persistence)
+            .cloudParticipantStatuses(in: fixture.group)
+
+        XCTAssertEqual(statuses[fixture.member.objectID], .unmapped)
+        XCTAssertEqual(CloudParticipantStatus.unmapped.badgeText, "未對應")
+    }
+
+    /// A participant that left or was removed from the share must not silently look
+    /// like a healthy mapping.
+    func testAMemberBoundToAnAbsentParticipantIsReportedAsMissing() throws {
+        let share = CKShare(recordZoneID: CKRecordZone.ID(zoneName: "EffectivePermissionTests"))
+        let fixture = try makeSharedFixture(shareFetcher: { objectIDs in
+            Dictionary(uniqueKeysWithValues: objectIDs.map { ($0, share) })
+        })
+        fixture.member.cloudParticipantID = "a-participant-that-is-not-in-the-share"
+        try fixture.persistence.container.viewContext.save()
+
+        let statuses = GroupRepository(persistence: fixture.persistence)
+            .cloudParticipantStatuses(in: fixture.group)
+
+        XCTAssertEqual(statuses[fixture.member.objectID], .participantMissing)
+        XCTAssertEqual(CloudParticipantStatus.participantMissing.badgeText, "參與者已不存在")
+    }
+
+    func testMappedBadgesDistinguishOwnerWriteAndReadOnly() {
+        XCTAssertEqual(
+            CloudParticipantStatus.mapped(canWrite: true, isShareOwner: true, isAccepted: true).badgeText,
+            "共享擁有者"
+        )
+        XCTAssertEqual(
+            CloudParticipantStatus.mapped(canWrite: true, isShareOwner: false, isAccepted: true).badgeText,
+            "可編輯"
+        )
+        XCTAssertEqual(
+            CloudParticipantStatus.mapped(canWrite: false, isShareOwner: false, isAccepted: true).badgeText,
+            "唯讀"
+        )
+        // An unaccepted invitation outranks the permission: there is nobody there yet.
+        XCTAssertEqual(
+            CloudParticipantStatus.mapped(canWrite: true, isShareOwner: false, isAccepted: false).badgeText,
+            "邀請未接受"
+        )
+        XCTAssertTrue(
+            CloudParticipantStatus.mapped(canWrite: false, isShareOwner: false, isAccepted: true).isMapped
+        )
+        XCTAssertFalse(CloudParticipantStatus.unmapped.isMapped)
+    }
+
     // MARK: - Fixtures
 
     private struct PrivateFixture {
@@ -213,10 +291,13 @@ final class EffectivePermissionTests: XCTestCase {
         )
     }
 
-    private func makeSharedFixture() throws -> SharedFixture {
+    private func makeSharedFixture(
+        shareFetcher: PersistenceController.ShareFetcher? = nil
+    ) throws -> SharedFixture {
         let cache = try makeIsolatedPermissionCache()
         let persistence = PersistenceController(
             inMemory: true,
+            shareFetcher: shareFetcher,
             inMemoryConfigurations: ["Private", "Shared"],
             cloudPermissionCache: cache
         )
