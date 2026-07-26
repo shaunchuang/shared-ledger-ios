@@ -232,8 +232,11 @@ struct GroupRepository {
             ?? .notShared
         switch status {
         case .notShared:
-            // Nothing is shared through CloudKit, so there is no second Apple Account
-            // the seat could reach and nothing to correlate the member against.
+            // Only groups outside the shared store report this: the App role is the
+            // whole authority there, exactly as `EffectivePermission.localOnly` treats
+            // it, and there is no participant to correlate the member against. A
+            // shared group whose share has not synced reports `.shareUnavailable`
+            // instead, so an unverifiable member cannot slip through here.
             return nil
         case .shareUnavailable, .unmapped, .participantMissing:
             return .ownershipTransferRequiresCloudParticipantMapping
@@ -410,7 +413,12 @@ struct GroupRepository {
             return statuses(for: members, allBeing: .shareUnavailable)
         }
         guard let share else {
-            return statuses(for: members, allBeing: .notShared)
+            // A group that reached the shared store did so through a share, so a
+            // missing share record means the metadata has not been mirrored to this
+            // device — not that the group is unshared. Reporting `.notShared` there
+            // would state as fact something this device cannot see.
+            let isShared = persistence.store(for: group) === persistence.sharedStore
+            return statuses(for: members, allBeing: isShared ? .shareUnavailable : .notShared)
         }
 
         let participantsByID = Dictionary(

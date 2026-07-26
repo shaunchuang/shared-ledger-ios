@@ -159,6 +159,28 @@ final class GroupOwnershipTransferTests: XCTestCase {
         )
     }
 
+    /// A shared group whose share record has not been mirrored yet must not read as
+    /// "never shared", or the participant gate would be skipped entirely for members
+    /// this device cannot verify.
+    func testASharedGroupWithoutShareMetadataRefusesTheTransfer() throws {
+        let fixture = try makeSharedFixture(shareFetcher: { _ in [:] })
+
+        let repository = GroupRepository(persistence: fixture.persistence)
+        XCTAssertEqual(
+            repository.cloudParticipantStatuses(in: fixture.group)[fixture.other.objectID],
+            .shareUnavailable
+        )
+        XCTAssertThrowsError(
+            try repository.transferOwnership(to: fixture.other, in: fixture.group)
+        ) { error in
+            XCTAssertEqual(
+                error as? GroupRepository.GroupError,
+                .ownershipTransferRequiresCloudParticipantMapping
+            )
+        }
+        XCTAssertEqual(fixture.other.role, MemberRole.member.rawValue)
+    }
+
     func testAMappedWritableParticipantClearsTheTransfer() throws {
         let fixture = try makePrivateFixture()
 
