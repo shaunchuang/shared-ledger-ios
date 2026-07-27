@@ -172,9 +172,10 @@ CloudKit 的 Production 環境不允許在執行期新增 record type 或欄位�
 
 每次修改 `SharedLedger.xcdatamodeld` 後，發佈前必須：
 
-1. 以 Debug 組態加上啟動參數 `-initialize-cloudkit-schema` 執行 App（Scheme → Run → Arguments Passed On Launch），`PersistenceController` 會呼叫 `initializeCloudKitSchema(options:)` 把目前模型寫入 Development schema。此模式只載入 private store（`initializeCloudKitSchema` 不支援 `.shared` scope），完成後移除該參數再正常執行。
-2. 到 [CloudKit Console](https://icloud.developer.apple.com/) → 容器 `iCloud.com.shaunchuang.SharedLedger` → Development 環境確認 `CD_<Entity>` record types 齊全，再執行「Deploy Schema Changes…」部署到 Production。
-3. 部署完成後再送 TestFlight／App Store 建置版本。
+1. 先確認要執行的裝置或模擬器已登入 Apple 帳號並開啟 iCloud：`initializeCloudKitSchema(options:)` 需要 mirroring delegate 初始化成功，沒有帳號時 delegate 會以 `CKAccountStatusNoAccount` 失敗，schema 一個字都寫不進去。
+2. 以 Debug 組態加上啟動參數 `-initialize-cloudkit-schema` 執行 App（Scheme → Run → Arguments Passed On Launch），`PersistenceController` 會先檢查 iCloud 帳號狀態，可用才呼叫 `initializeCloudKitSchema(options:)` 把目前模型寫入 Development schema。此模式只載入 private store（`initializeCloudKitSchema` 不支援 `.shared` scope），完成後移除該參數再正常執行。結果（已寫入、已略過或失敗原因）會以 `[CloudKit schema]` 前綴輸出到主控台；帳號不可用時只會略過並印出說明，不會讓 App 停在 assertion。
+3. 到 [CloudKit Console](https://icloud.developer.apple.com/) → 容器 `iCloud.com.shaunchuang.SharedLedger` → Development 環境確認 `CD_<Entity>` record types 齊全，再執行「Deploy Schema Changes…」部署到 Production。
+4. 部署完成後再送 TestFlight／App Store 建置版本。
 
 參考：Apple 文件 [Deploying an iCloud Container's Schema](https://developer.apple.com/documentation/cloudkit/deploying-an-icloud-container-s-schema) 與 [`initializeCloudKitSchema(options:)`](https://developer.apple.com/documentation/coredata/nspersistentcloudkitcontainer/initializecloudkitschema(options:))。
 
@@ -182,7 +183,7 @@ CloudKit 的 Production 環境不允許在執行期新增 record type 或欄位�
 
 V8 沒有新增 record type，只在既有 `CD_Member` 上新增一個欄位 `CD_cloudParticipantID`（String, optional）。Production schema 同樣不允許執行期新增欄位，因此仍必須先部署再送版。
 
-1. 以 Debug 組態、啟動參數 `-initialize-cloudkit-schema` 執行一次 App，把 V8 寫入 Development schema，完成後移除該參數。
+1. 在已登入 iCloud 的裝置或模擬器上，以 Debug 組態、啟動參數 `-initialize-cloudkit-schema` 執行一次 App，把 V8 寫入 Development schema，完成後移除該參數。
 2. CloudKit Console → `iCloud.com.shaunchuang.SharedLedger` → Development → Schema → Record Types → `CD_Member`，確認欄位 `CD_cloudParticipantID` 存在且型別為 String。
 3. 若之後要用 participant ID 做查詢，於 Development 為該欄位加上 Queryable index；只讀取既有物件欄位則不需要。索引變更同樣要一起部署。
 4. 執行「Deploy Schema Changes…」把 Development 部署到 Production，並在 Production 環境重新確認 `CD_Member.CD_cloudParticipantID` 已存在。

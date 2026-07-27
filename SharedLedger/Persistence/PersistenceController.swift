@@ -54,6 +54,99 @@ final class PersistenceController {
         #endif
     }
 
+    /// `-initialize-cloudkit-schema` 的前置檢查結果。
+    ///
+    /// `initializeCloudKitSchema(options:)` 需要 mirroring delegate 先初始化成功，
+    /// 而 delegate 沒有 iCloud 帳號就無法初始化。少了這個檢查時，未登入 iCloud 的
+    /// 裝置或模擬器只會拿到一層層包起來的
+    /// `CKAccountStatusNoAccount` Core Data 錯誤，看起來像 App 壞掉，實際上只是還沒登入。
+    enum SchemaInitializationReadiness: Equatable {
+        case ready
+        /// 不具備寫入 schema 的條件，附上可以照著做的說明。
+        case blocked(String)
+    }
+
+    /// 把 iCloud 帳號狀態轉成可讀的前置檢查結果；`nil` 代表查詢逾時或失敗。
+    static func schemaInitializationReadiness(
+        for status: CKAccountStatus?
+    ) -> SchemaInitializationReadiness {
+        let undetermined = "目前無法確認 iCloud 帳號狀態，請確認網路與 iCloud 服務狀態後再重新執行。"
+        guard let status else { return .blocked(undetermined) }
+
+        switch status {
+        case .available:
+            return .ready
+        case .noAccount:
+            return .blocked(
+                """
+                此裝置尚未登入 iCloud，無法寫入 CloudKit Development schema。
+                請先在「設定 → 登入 iPhone」（模擬器為 Settings → Sign in to your iPhone）登入 \
+                Apple 帳號並開啟 iCloud Drive，再以 -initialize-cloudkit-schema 重新執行一次。
+                """
+            )
+        case .restricted:
+            return .blocked(
+                "這個 Apple 帳號的 iCloud 功能受到限制（家長控制或裝置管理設定），無法寫入 CloudKit Development schema。"
+            )
+        case .couldNotDetermine, .temporarilyUnavailable:
+            return .blocked(undetermined)
+        @unknown default:
+            return .blocked(
+                "iCloud 帳號狀態為未知值，已略過 CloudKit schema 初始化。"
+            )
+        }
+    }
+
+    /// 只在 `-initialize-cloudkit-schema` 這個開發者維護模式下呼叫。
+    ///
+    /// 先確認 iCloud 帳號可用再寫入 schema，並且不論成功或失敗都只輸出說明、不中斷執行：
+    /// 這條路徑沒有使用者要保護，把 App 停在 `assertionFailure` 只會讓「還沒登入 iCloud」
+    /// 這種環境問題看起來像程式崩潰。寫入是否真的完成，仍要照 `Docs/ARCHITECTURE.md`
+    /// 的步驟到 CloudKit Console 確認後才能部署到 Production。
+    private static func initializeCloudKitSchemaIfPossible(on container: NSPersistentCloudKitContainer) {
+        if case let .blocked(reason) = schemaInitializationReadiness(for: currentAccountStatus()) {
+            report(schema: "已略過 CloudKit schema 初始化。\n\(reason)")
+            return
+        }
+
+        do {
+            try container.initializeCloudKitSchema(options: [])
+            report(
+                schema: """
+                CloudKit Development schema 已寫入。
+                接著到 CloudKit Console 確認 CD_ 開頭的 record types 與欄位齊全，再執行 Deploy Schema Changes…；
+                完成後請移除 -initialize-cloudkit-schema 啟動參數再正常執行 App。
+                """
+            )
+        } catch {
+            report(
+                schema: """
+                CloudKit schema 初始化失敗，App 會繼續以未更新的 schema 執行。
+                \(error)
+                """
+            )
+        }
+    }
+
+    /// 同步取得 iCloud 帳號狀態。這是啟動時的一次性維護檢查，`initializeCloudKitSchema`
+    /// 本身也是同步阻塞呼叫，所以在這裡等待不會比原本多擋住什麼；逾時或查詢失敗回傳 `nil`。
+    private static func currentAccountStatus(timeout: TimeInterval = 15) -> CKAccountStatus? {
+        let semaphore = DispatchSemaphore(value: 0)
+        var resolved: CKAccountStatus?
+        CKContainer(identifier: cloudKitContainerIdentifier).accountStatus { status, error in
+            if error == nil {
+                resolved = status
+            }
+            semaphore.signal()
+        }
+        guard semaphore.wait(timeout: .now() + timeout) == .success else { return nil }
+        return resolved
+    }
+
+    private static func report(schema message: String) {
+        print("[CloudKit schema] \(message)")
+    }
+
     let container: NSPersistentCloudKitContainer
     private(set) var privateStore: NSPersistentStore!
     private(set) var sharedStore: NSPersistentStore!
@@ -162,11 +255,7 @@ final class PersistenceController {
 
         if Self.shouldInitializeCloudKitSchema {
             sharedStore = privateStore
-            do {
-                try container.initializeCloudKitSchema(options: [])
-            } catch {
-                assertionFailure("CloudKit schema initialization failed: \(error)")
-            }
+            Self.initializeCloudKitSchemaIfPossible(on: container)
         }
 
         container.viewContext.automaticallyMergesChangesFromParent = true
