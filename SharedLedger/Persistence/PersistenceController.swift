@@ -254,6 +254,11 @@ final class PersistenceController {
         }
 
         if Self.shouldInitializeCloudKitSchema {
+            // schema 初始化要對已載入的 private store 進行。這些 description 沒有開
+            // shouldAddStoreAsynchronously，載入完成前 loadPersistentStores 不會返回，
+            // 所以這個 wait 目前是立即通過的；寫出來是為了讓「先載入完 store 再初始化
+            // schema」這個相依關係留在程式碼裡，而不是依賴預設值。
+            storeLoadGroup.wait()
             sharedStore = privateStore
             Self.initializeCloudKitSchemaIfPossible(on: container)
         }
