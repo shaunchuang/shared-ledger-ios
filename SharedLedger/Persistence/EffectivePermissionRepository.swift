@@ -54,6 +54,26 @@ struct EffectivePermission: Equatable {
     var isReadOnly: Bool { role == .viewer }
 }
 
+/// What the caller is about to do, so a restriction can be derived from an
+/// `EffectivePermission` that has already been resolved.
+///
+/// Resolving a permission makes a synchronous `fetchShares` call for a shared group,
+/// so a screen that needs both the role and the reason an action is unavailable must
+/// be able to pay for that once rather than per question it asks.
+enum PermissionRequirement {
+    case transactionWrite
+    case ledgerSettings
+    case memberManagement
+
+    func isSatisfied(by permission: EffectivePermission) -> Bool {
+        switch self {
+        case .transactionWrite: return permission.canEditTransactions
+        case .ledgerSettings: return permission.canManageLedgerSettings
+        case .memberManagement: return permission.canManageMembers
+        }
+    }
+}
+
 enum PermissionError: LocalizedError, Equatable {
     /// The current user has a role, but that role does not allow this action.
     case insufficientRole(MemberRole)
@@ -203,23 +223,25 @@ struct EffectivePermissionRepository {
     /// reach a form that fails on save; the `require…` calls throw the same value, so
     /// the UI and the repositories can never disagree.
     func transactionWriteRestriction(in group: LedgerGroup) -> PermissionError? {
-        restriction(in: group) { $0.canEditTransactions }
+        restriction(.transactionWrite, for: permission(in: group))
     }
 
     func ledgerSettingsRestriction(in group: LedgerGroup) -> PermissionError? {
-        restriction(in: group) { $0.canManageLedgerSettings }
+        restriction(.ledgerSettings, for: permission(in: group))
     }
 
     func memberManagementRestriction(in group: LedgerGroup) -> PermissionError? {
-        restriction(in: group) { $0.canManageMembers }
+        restriction(.memberManagement, for: permission(in: group))
     }
 
-    private func restriction(
-        in group: LedgerGroup,
-        _ isAllowed: (EffectivePermission) -> Bool
+    /// Why a requirement is unmet by an already-resolved permission, or `nil` when it
+    /// is met. Callers that need several answers about the same group resolve the
+    /// permission once and ask here, instead of re-resolving it per question.
+    func restriction(
+        _ requirement: PermissionRequirement,
+        for permission: EffectivePermission
     ) -> PermissionError? {
-        let permission = permission(in: group)
-        guard !isAllowed(permission) else { return nil }
+        guard !requirement.isSatisfied(by: permission) else { return nil }
 
         switch permission.source {
         case .missingIdentity:
