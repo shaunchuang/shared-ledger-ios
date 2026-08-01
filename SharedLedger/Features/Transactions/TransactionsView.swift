@@ -189,7 +189,7 @@ private struct BookTransactionsView: View {
                 object: context
             )
         ) { notification in
-            guard contextChange(notification, touches: affectsGroupPermissions) else { return }
+            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
             reloadWriteAccess()
         }
     }
@@ -379,7 +379,7 @@ private struct TransactionListView: View {
                 object: context
             )
         ) { notification in
-            guard contextChange(notification, touches: affectsAuditDerivedState) else { return }
+            guard ContextChangeObserver.touches(notification, .auditLog) else { return }
             reloadVoidedEntryIDs()
         }
     }
@@ -620,10 +620,9 @@ private struct TransactionDetailView: View {
                 object: context
             )
         ) { notification in
-            let isRelevant = contextChange(notification) {
-                affectsAuditDerivedState($0) || affectsGroupPermissions($0)
+            guard ContextChangeObserver.touches(notification, .auditLog, .groupPermissions) else {
+                return
             }
-            guard isRelevant else { return }
             reloadStatus()
         }
         .toolbar {

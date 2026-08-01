@@ -53,7 +53,7 @@ struct GroupsView: View {
                 object: context
             )
         ) { notification in
-            guard contextChange(notification, touches: affectsGroupPermissions) else { return }
+            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
             reloadRemovedGroups()
         }
         .toolbar {

@@ -207,10 +207,10 @@ struct GroupDetailView: View {
                 object: context
             )
         ) { notification in
-            if contextChange(notification, touches: affectsGroupPermissions) {
+            if ContextChangeObserver.touches(notification, .groupPermissions) {
                 reloadAccess()
             }
-            if contextChange(notification, touches: affectsAccountBalances) {
+            if ContextChangeObserver.touches(notification, .accountBalances) {
                 reloadAccountBalance()
             }
         }
