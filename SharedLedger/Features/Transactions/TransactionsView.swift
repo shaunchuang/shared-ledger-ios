@@ -42,49 +42,6 @@ struct TransactionsView: View {
     }
 }
 
-/// Whether a Core Data change notification touched any object the caller cares about.
-///
-/// A `TabView` keeps every tab's views alive while another tab is on screen, so an
-/// unfiltered subscription re-derives cached state for writes the screen does not
-/// depend on — editing an account or a category, for example.
-///
-/// Only the object's type is inspected, never its properties, so invalidated objects
-/// are safe to test here.
-private func contextChange(
-    _ notification: Notification,
-    touches isRelevant: (NSManagedObject) -> Bool
-) -> Bool {
-    // A context reset reports `NSInvalidatedAllObjectsKey` instead of listing the
-    // objects, so there is nothing to match against and it has to count as a hit.
-    if notification.userInfo?[NSInvalidatedAllObjectsKey] != nil { return true }
-
-    let changeKeys = [
-        NSInsertedObjectsKey,
-        NSUpdatedObjectsKey,
-        NSDeletedObjectsKey,
-        NSRefreshedObjectsKey,
-        NSInvalidatedObjectsKey
-    ]
-    return changeKeys.contains { key in
-        guard let objects = notification.userInfo?[key] as? Set<NSManagedObject> else {
-            return false
-        }
-        return objects.contains(where: isRelevant)
-    }
-}
-
-/// The group, its members, and the private `LocalMemberIdentity` that maps this
-/// device's Apple Account onto one of them: everything `TransactionWriteAccess` is
-/// resolved from.
-private func affectsWriteAccess(_ object: NSManagedObject) -> Bool {
-    object is LedgerGroup || object is Member || object is LocalMemberIdentity
-}
-
-/// Voided transactions are derived from the group's audit events.
-private func affectsVoidedEntries(_ object: NSManagedObject) -> Bool {
-    object is AuditEvent
-}
-
 /// Whether this device may add or change transactions in a group, and how to explain
 /// it when it may not.
 ///
@@ -232,7 +189,7 @@ private struct BookTransactionsView: View {
                 object: context
             )
         ) { notification in
-            guard contextChange(notification, touches: affectsWriteAccess) else { return }
+            guard contextChange(notification, touches: affectsGroupPermissions) else { return }
             reloadWriteAccess()
         }
     }
@@ -422,7 +379,7 @@ private struct TransactionListView: View {
                 object: context
             )
         ) { notification in
-            guard contextChange(notification, touches: affectsVoidedEntries) else { return }
+            guard contextChange(notification, touches: affectsAuditDerivedState) else { return }
             reloadVoidedEntryIDs()
         }
     }
@@ -664,7 +621,7 @@ private struct TransactionDetailView: View {
             )
         ) { notification in
             let isRelevant = contextChange(notification) {
-                affectsVoidedEntries($0) || affectsWriteAccess($0)
+                affectsAuditDerivedState($0) || affectsGroupPermissions($0)
             }
             guard isRelevant else { return }
             reloadStatus()

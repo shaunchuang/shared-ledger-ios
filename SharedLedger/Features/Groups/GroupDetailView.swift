@@ -2,8 +2,57 @@ import CoreData
 import Foundation
 import SwiftUI
 
+/// Everything the group management screen shows that is expensive to work out, held
+/// together so it is resolved once and reused across the whole `body` pass.
+///
+/// Each of these questions used to be a computed property, and `body` asked most of
+/// them several times per pass: the role alone was read by four sections, and the
+/// member-management restriction by one more per member group. Every one of those
+/// reads resolves the current member with a Core Data fetch and, for a shared group,
+/// makes a synchronous `fetchShares` call into the CloudKit mirroring metadata — a
+/// call that blocks the main thread for as long as a sync is holding the store. With
+/// `body` re-running on every merged CloudKit change, opening the screen during a
+/// sync froze the app.
+private struct GroupManagementAccess {
+    /// Nothing is known before the first resolution, so every management affordance
+    /// stays hidden and no restriction is explained. Showing a notice for a state
+    /// nobody has checked would flash the wrong reason on the frame before `onAppear`.
+    static var unresolved: GroupManagementAccess { GroupManagementAccess() }
+
+    /// The App role after the CloudKit participant permission has been applied, so
+    /// the management UI matches what the repositories will actually allow.
+    var role: MemberRole?
+    /// Identified by object ID rather than by the object, so a member deleted between
+    /// two resolutions is simply not matched by any row instead of being faulted.
+    var currentMemberID: NSManagedObjectID?
+    /// Why member management is unavailable, or `nil` when it is allowed.
+    var memberManagementRestriction: PermissionError?
+    var participantStatuses: [NSManagedObjectID: CloudParticipantStatus] = [:]
+    /// Only the Apple Account holding the group in its private store can present the
+    /// system sharing controller.
+    var holdsShareLocally = false
+    var isResolved = false
+
+    var canManageMembers: Bool { isResolved && memberManagementRestriction == nil }
+    var canManageGroupSettings: Bool { role?.canManageLedgerSettings == true }
+
+    /// After an ownership transfer the Apple Account that created the share is an
+    /// administrator rather than the App owner — it still has to be able to manage the
+    /// participant list, because nobody else can.
+    var canInviteMembers: Bool { holdsShareLocally && role?.canManageMembers == true }
+
+    /// `nil` unless this device holds the owner seat, because nobody else can hand it
+    /// over.
+    var ownerMemberID: NSManagedObjectID? { role == .owner ? currentMemberID : nil }
+
+    var managementNotice: String? {
+        isResolved ? memberManagementRestriction?.errorDescription : nil
+    }
+}
+
 struct GroupDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var context
 
     @ObservedObject var group: LedgerGroup
     let onInvite: (LedgerGroup) -> Void
@@ -12,6 +61,10 @@ struct GroupDetailView: View {
     @State private var errorMessage: String?
     @State private var pendingAction: PendingMemberAction?
     @State private var isRenamingGroup = false
+    @State private var access = GroupManagementAccess.unresolved
+    /// Summing it fetches every entry that moves money through the group's accounts,
+    /// so it is resolved when that data changes rather than on every `body` pass.
+    @State private var totalAccountBalance: Decimal = 0
 
     init(group: LedgerGroup, onInvite: @escaping (LedgerGroup) -> Void) {
         self.group = group
@@ -22,14 +75,12 @@ struct GroupDetailView: View {
         )
     }
 
+    /// Resolved from the cached identity by scanning the group's already-faulted
+    /// members, so reading it costs nothing beyond the relationship itself.
     private var currentMember: Member? {
-        CurrentMemberIdentityRepository().currentMember(in: group)
-    }
-
-    /// The App role after the CloudKit participant permission has been applied, so
-    /// the management UI matches what the repositories will actually allow.
-    private var currentRole: MemberRole? {
-        EffectivePermissionRepository().permission(in: group).role
+        guard let currentMemberID = access.currentMemberID else { return nil }
+        let members = group.members as? Set<Member> ?? []
+        return members.first { $0.objectID == currentMemberID }
     }
 
     private var activeMembers: [Member] {
@@ -51,21 +102,6 @@ struct GroupDetailView: View {
             member.archivedAt != nil
                 || member.invitationStatus == InvitationStatus.revoked.rawValue
         })
-    }
-
-    /// Why member management is unavailable, or `nil` when it is allowed.
-    private var memberManagementRestriction: PermissionError? {
-        EffectivePermissionRepository().memberManagementRestriction(in: group)
-    }
-
-    /// Resolved once per render rather than per row, because each lookup reads the
-    /// group's share metadata.
-    private var participantStatuses: [NSManagedObjectID: CloudParticipantStatus] {
-        GroupRepository().cloudParticipantStatuses(in: group)
-    }
-
-    private var canManageMembers: Bool {
-        memberManagementRestriction == nil
     }
 
     /// The most notable participant-mapping problem across the group's members, in
@@ -94,15 +130,15 @@ struct GroupDetailView: View {
     }
 
     /// Whether the row offers ownership transfer, and why it is unavailable when the
-    /// member could hold the seat but the CloudKit mapping is not ready. `currentOwner`
-    /// is `nil` unless this device holds the owner seat, because nobody else can hand
-    /// it over.
+    /// member could hold the seat but the CloudKit mapping is not ready. `ownerID` is
+    /// `nil` unless this device holds the owner seat, because nobody else can hand it
+    /// over.
     private func ownershipTransferOption(
         for member: Member,
         status: CloudParticipantStatus,
-        currentOwner: Member?
+        ownerID: NSManagedObjectID?
     ) -> OwnershipTransferOption? {
-        guard let currentOwner, member != currentOwner else { return nil }
+        guard let ownerID, member.objectID != ownerID else { return nil }
         let repository = GroupRepository()
         guard repository.isOwnershipTransferCandidate(member, in: group) else { return nil }
         guard let restriction = repository.ownershipTransferRestriction(
@@ -119,20 +155,6 @@ struct GroupDetailView: View {
         }
     }
 
-    private var canManageGroupSettings: Bool {
-        currentRole?.canManageLedgerSettings == true
-    }
-
-    /// Only the Apple Account holding the group in its private store can present the
-    /// system sharing controller, and after an ownership transfer that account is an
-    /// administrator rather than the App owner — it still has to be able to manage the
-    /// participant list, because nobody else can.
-    private var canInviteMembers: Bool {
-        let persistence = PersistenceController.shared
-        return persistence.store(for: group) === persistence.privateStore
-            && currentRole?.canManageMembers == true
-    }
-
     private var activeBooks: [LedgerBook] {
         BookRepository().books(in: group)
     }
@@ -146,10 +168,6 @@ struct GroupDetailView: View {
     private var accounts: [LedgerAccount] {
         let set = group.accounts as? Set<LedgerAccount> ?? []
         return Array(set)
-    }
-
-    private var totalAccountBalance: Decimal {
-        AccountRepository().totalBalance(for: accounts)
     }
 
     private var currencyCode: String {
@@ -175,9 +193,26 @@ struct GroupDetailView: View {
         }
         .navigationTitle(group.name ?? "群組")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear(perform: normalizeSelectedBook)
+        .onAppear {
+            normalizeSelectedBook()
+            reloadAccess()
+            reloadAccountBalance()
+        }
         .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            if contextChange(notification, touches: affectsGroupPermissions) {
+                reloadAccess()
+            }
+            if contextChange(notification, touches: affectsAccountBalances) {
+                reloadAccountBalance()
+            }
         }
         .sheet(isPresented: $isRenamingGroup) {
             NavigationStack {
@@ -202,19 +237,18 @@ struct GroupDetailView: View {
     }
 
     private var memberSection: some View {
-        let statuses = participantStatuses
-        // Resolved once per render alongside the statuses: both read the group's share
-        // metadata, and every row needs to know whether this device holds the seat it
-        // would be handing over.
-        let currentOwner = currentRole == .owner ? currentMember : nil
+        let statuses = access.participantStatuses
+        // Every row needs to know whether this device holds the seat it would be
+        // handing over.
+        let ownerID = access.ownerMemberID
         return VStack(alignment: .leading, spacing: 12) {
             LedgerSectionHeader(title: "成員")
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
-                    memberRows(activeMembers, statuses: statuses, currentOwner: currentOwner)
+                    memberRows(activeMembers, statuses: statuses, ownerID: ownerID)
                     if !pendingMembers.isEmpty {
                         if !activeMembers.isEmpty { Divider().padding(.leading, 72) }
-                        memberRows(pendingMembers, statuses: statuses, currentOwner: currentOwner)
+                        memberRows(pendingMembers, statuses: statuses, ownerID: ownerID)
                     }
                     if activeMembers.isEmpty && pendingMembers.isEmpty {
                         Text("目前沒有有效成員。")
@@ -226,7 +260,7 @@ struct GroupDetailView: View {
                 }
             }
 
-            if let message = memberManagementRestriction?.errorDescription {
+            if let message = access.managementNotice {
                 LedgerNotice(message: message)
             }
 
@@ -238,7 +272,7 @@ struct GroupDetailView: View {
                 DisclosureGroup("已離開或已撤回（\(inactiveMembers.count)）") {
                     LedgerCard(padding: 0) {
                         VStack(spacing: 0) {
-                            memberRows(inactiveMembers, statuses: statuses, currentOwner: currentOwner)
+                            memberRows(inactiveMembers, statuses: statuses, ownerID: ownerID)
                         }
                     }
                     .padding(.top, 8)
@@ -253,18 +287,18 @@ struct GroupDetailView: View {
     private func memberRows(
         _ members: [Member],
         statuses: [NSManagedObjectID: CloudParticipantStatus],
-        currentOwner: Member?
+        ownerID: NSManagedObjectID?
     ) -> some View {
         ForEach(Array(members.enumerated()), id: \.element.objectID) { index, member in
             MemberRow(
                 member: member,
                 participantStatus: statuses[member.objectID] ?? .notShared,
-                isCurrentUser: member == currentMember,
-                canManage: canManageMembers,
+                isCurrentUser: member.objectID == access.currentMemberID,
+                canManage: access.canManageMembers,
                 ownershipTransfer: ownershipTransferOption(
                     for: member,
                     status: statuses[member.objectID] ?? .notShared,
-                    currentOwner: currentOwner
+                    ownerID: ownerID
                 ),
                 onResend: { resendInvitation(member) },
                 onRevoke: {
@@ -288,7 +322,7 @@ struct GroupDetailView: View {
             LedgerSectionHeader(title: "群組設定")
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
-                    if canManageGroupSettings {
+                    if access.canManageGroupSettings {
                         Button {
                             isRenamingGroup = true
                         } label: {
@@ -362,7 +396,7 @@ struct GroupDetailView: View {
 
     @ViewBuilder
     private var sharingSection: some View {
-        if canInviteMembers {
+        if access.canInviteMembers {
             VStack(spacing: 10) {
                 Button {
                     onInvite(group)
@@ -390,7 +424,7 @@ struct GroupDetailView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-        } else if currentRole == .owner {
+        } else if access.role == .owner {
             Text("群組擁有者不能直接退出。請先從成員清單將擁有權移轉給另一位已完成 iCloud 對應的成員，移轉後你會成為管理員並可以退出。iCloud 共享本身仍由建立共享的 Apple Account 管理。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -495,6 +529,32 @@ struct GroupDetailView: View {
         )
     }
 
+    /// The repositories refuse the same actions with the same `PermissionError` this
+    /// resolves, so the management UI and the write paths can never disagree.
+    ///
+    /// The permission is resolved once and every question is answered from it, because
+    /// each resolution makes a synchronous `fetchShares` call for a shared group.
+    private func reloadAccess() {
+        let persistence = PersistenceController.shared
+        let permissions = EffectivePermissionRepository(persistence: persistence)
+        let permission = permissions.permission(in: group)
+        access = GroupManagementAccess(
+            role: permission.role,
+            currentMemberID: CurrentMemberIdentityRepository(persistence: persistence)
+                .currentMember(in: group)?
+                .objectID,
+            memberManagementRestriction: permissions.restriction(.memberManagement, for: permission),
+            participantStatuses: GroupRepository(persistence: persistence)
+                .cloudParticipantStatuses(in: group),
+            holdsShareLocally: persistence.store(for: group) === persistence.privateStore,
+            isResolved: true
+        )
+    }
+
+    private func reloadAccountBalance() {
+        totalAccountBalance = AccountRepository().totalBalance(for: accounts)
+    }
+
     private func members(matching predicate: (Member) -> Bool) -> [Member] {
         let set = group.members as? Set<Member> ?? []
         return set
@@ -505,7 +565,7 @@ struct GroupDetailView: View {
     private func resendInvitation(_ member: Member) {
         do {
             try GroupRepository().resendInvitation(member, in: group)
-            if canInviteMembers {
+            if access.canInviteMembers {
                 onInvite(group)
             }
         } catch {
