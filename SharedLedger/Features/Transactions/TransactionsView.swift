@@ -366,13 +366,11 @@ private struct TransactionListView: View {
         }
     }
 
-    /// Cached rather than computed: `voidedEntryIDs(in:)` faults every audit event
-    /// the group has ever recorded to read its action — and that log only grows —
-    /// then decodes the payload of each voided one. `body` re-runs on every merged
-    /// CloudKit change, so recomputing it inline walks the whole audit history
-    /// several times a second during a sync and the tab stops responding. The set is
-    /// the same for every row here, so it is rebuilt only when an audit event
-    /// actually changes.
+    /// Cached rather than computed: `voidedEntryIDs(in:)` hits the store and decodes
+    /// a payload per voided transaction. `body` re-runs on every merged CloudKit
+    /// change, so recomputing it inline puts that on the render path several times a
+    /// second during a sync. The set is the same for every row here, so it is rebuilt
+    /// only when an audit event actually changes.
     private func reloadVoidedEntryIDs() {
         voidedEntryIDs = EntryRepository().voidedEntryIDs(in: group)
     }
@@ -510,10 +508,10 @@ private struct TransactionDetailView: View {
     @State private var isEditing = false
     @State private var showVoidConfirmation = false
     @State private var errorMessage: String?
-    /// Both of these are expensive to derive — `isVoided` walks every audit event the
-    /// group holds, and the write access makes a synchronous `fetchShares` call — and
-    /// `body` reads each of them several times per pass. They are resolved once per
-    /// change instead of once per read.
+    /// Both of these reach outside the entry to resolve — `isVoided` fetches the
+    /// group's void audits, and the write access makes a synchronous `fetchShares`
+    /// call — and `body` reads each of them several times per pass. They are resolved
+    /// once per change instead of once per read.
     @State private var isVoided = false
     @State private var writeAccess = TransactionWriteAccess.unresolved
 

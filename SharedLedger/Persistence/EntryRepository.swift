@@ -231,12 +231,24 @@ struct EntryRepository {
         return voidedEntryIDs(in: group).contains(entryID)
     }
 
+    /// Fetched rather than walked through `group.auditEvents`: the audit log grows
+    /// with every ledger change and never shrinks, so traversing the relationship
+    /// pulls the whole thing into memory just to keep the void events. The predicate
+    /// pushes that filter down to the store, leaving only the rows this actually
+    /// decodes. Pending inserts are included, so a void is visible to the same
+    /// `save()` that recorded it.
     func voidedEntryIDs(in group: LedgerGroup) -> Set<UUID> {
-        let audits = group.auditEvents as? Set<AuditEvent> ?? []
-        return Set(audits.compactMap { audit in
-            guard audit.action == "transaction.voided" else { return nil }
-            return TransactionAuditPayload.decode(audit.summary)?.entryID
-        })
+        let request = NSFetchRequest<AuditEvent>(entityName: "AuditEvent")
+        request.predicate = NSPredicate(
+            format: "group == %@ AND action == %@",
+            group,
+            "transaction.voided"
+        )
+        // Every returned row is decoded below, so hydrate them in one step instead of
+        // firing a fault per row.
+        request.returnsObjectsAsFaults = false
+        guard let audits = try? persistence.container.viewContext.fetch(request) else { return [] }
+        return Set(audits.compactMap { TransactionAuditPayload.decode($0.summary)?.entryID })
     }
 
     func auditPayloads(for entry: LedgerEntry) -> [TransactionAuditPayload] {
