@@ -434,6 +434,18 @@ final class PersistenceController {
                 } catch {
                     assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
                 }
+
+                // A CloudKit import posts remote-change notifications in bursts, and
+                // every one of them sets `shouldRepeatDataRepair`. Without this pause
+                // the loop runs a whole pass — a group fetch plus a share lookup per
+                // group, then four full-table scans — back to back for as long as the
+                // sync lasts, and because it all runs on the main actor the UI never
+                // gets a turn: tapping a tab does nothing until the sync settles.
+                // Waiting lets the rest of the burst collapse into the single pass
+                // that follows.
+                if self.shouldRepeatDataRepair {
+                    try? await Task.sleep(nanoseconds: NSEC_PER_SEC)
+                }
             } while self.shouldRepeatDataRepair
         }
     }

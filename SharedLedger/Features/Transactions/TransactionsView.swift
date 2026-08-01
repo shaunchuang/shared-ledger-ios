@@ -42,6 +42,74 @@ struct TransactionsView: View {
     }
 }
 
+/// Whether a Core Data change notification touched any object the caller cares about.
+///
+/// A `TabView` keeps every tab's views alive while another tab is on screen, so an
+/// unfiltered subscription re-derives cached state for writes the screen does not
+/// depend on — editing an account or a category, for example.
+///
+/// Only the object's type is inspected, never its properties, so invalidated objects
+/// are safe to test here.
+private func contextChange(
+    _ notification: Notification,
+    touches isRelevant: (NSManagedObject) -> Bool
+) -> Bool {
+    // A context reset reports `NSInvalidatedAllObjectsKey` instead of listing the
+    // objects, so there is nothing to match against and it has to count as a hit.
+    if notification.userInfo?[NSInvalidatedAllObjectsKey] != nil { return true }
+
+    let changeKeys = [
+        NSInsertedObjectsKey,
+        NSUpdatedObjectsKey,
+        NSDeletedObjectsKey,
+        NSRefreshedObjectsKey,
+        NSInvalidatedObjectsKey
+    ]
+    return changeKeys.contains { key in
+        guard let objects = notification.userInfo?[key] as? Set<NSManagedObject> else {
+            return false
+        }
+        return objects.contains(where: isRelevant)
+    }
+}
+
+/// The group, its members, and the private `LocalMemberIdentity` that maps this
+/// device's Apple Account onto one of them: everything `TransactionWriteAccess` is
+/// resolved from.
+private func affectsWriteAccess(_ object: NSManagedObject) -> Bool {
+    object is LedgerGroup || object is Member || object is LocalMemberIdentity
+}
+
+/// Voided transactions are derived from the group's audit events.
+private func affectsVoidedEntries(_ object: NSManagedObject) -> Bool {
+    object is AuditEvent
+}
+
+/// Whether this device may add or change transactions in a group, and how to explain
+/// it when it may not.
+///
+/// Resolving it walks the current member identity and, for a shared group, makes a
+/// synchronous `fetchShares` call into the CloudKit mirroring metadata. The screens
+/// below therefore cache it in `@State` and refresh it when the data behind it
+/// changes, instead of recomputing it on every `body` pass.
+private struct TransactionWriteAccess {
+    /// Writes are refused until the first resolution, and nothing is explained yet:
+    /// a notice for a state nobody has checked would flash the wrong message on the
+    /// frame before `onAppear` runs.
+    static let unresolved = TransactionWriteAccess(restriction: .missingCurrentMember, isResolved: false)
+
+    let restriction: PermissionError?
+    let isResolved: Bool
+
+    init(restriction: PermissionError?, isResolved: Bool = true) {
+        self.restriction = restriction
+        self.isResolved = isResolved
+    }
+
+    var canWrite: Bool { isResolved && restriction == nil }
+    var noticeMessage: String? { isResolved ? restriction?.errorDescription : nil }
+}
+
 private struct BookTransactionsView: View {
     private enum Filter: String, CaseIterable, Identifiable {
         case all = "全部"
@@ -65,9 +133,12 @@ private struct BookTransactionsView: View {
     let groups: [LedgerGroup]
     @Binding var selectedGroupID: NSManagedObjectID?
 
+    @Environment(\.managedObjectContext) private var context
+
     @AppStorage private var selectedBookID: String
     @State private var filter: Filter = .all
     @State private var isPresentingNewEntry = false
+    @State private var writeAccess = TransactionWriteAccess.unresolved
 
     init(
         group: LedgerGroup,
@@ -93,11 +164,12 @@ private struct BookTransactionsView: View {
             ?? activeBooks.first
     }
 
-    /// Why adding a transaction is unavailable, or `nil` when it is allowed. The
-    /// repositories throw the same value, so the entry point and the save path can
-    /// never disagree.
-    private var writeRestriction: PermissionError? {
-        EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    /// The repositories refuse the write with the same `PermissionError` this
+    /// resolves, so the entry point and the save path can never disagree.
+    private func reloadWriteAccess() {
+        writeAccess = TransactionWriteAccess(
+            restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
+        )
     }
 
     var body: some View {
@@ -106,8 +178,9 @@ private struct BookTransactionsView: View {
             if let selectedBook {
                 TransactionListView(
                     book: selectedBook,
+                    group: group,
                     kind: filter.kind,
-                    writeRestriction: writeRestriction
+                    writeAccess: writeAccess
                 ) {
                     isPresentingNewEntry = true
                 }
@@ -125,7 +198,7 @@ private struct BookTransactionsView: View {
             }
         }
         .toolbar {
-            if selectedBook != nil, writeRestriction == nil {
+            if selectedBook != nil, writeAccess.canWrite {
                 Button {
                     isPresentingNewEntry = true
                 } label: {
@@ -146,9 +219,21 @@ private struct BookTransactionsView: View {
                 .presentationDragIndicator(.visible)
             }
         }
-        .onAppear(perform: normalizeSelectedBook)
+        .onAppear {
+            normalizeSelectedBook()
+            reloadWriteAccess()
+        }
         .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard contextChange(notification, touches: affectsWriteAccess) else { return }
+            reloadWriteAccess()
         }
     }
 
@@ -240,16 +325,26 @@ private struct BookTransactionsView: View {
 
 private struct TransactionListView: View {
     @FetchRequest private var entries: FetchedResults<LedgerEntry>
-    let writeRestriction: PermissionError?
+    /// The book's group, passed in rather than derived from the fetched entries: it
+    /// is the same for every row, and reading it back off each entry faults the whole
+    /// result set just to rebuild one set of voided ids.
+    let group: LedgerGroup
+    let writeAccess: TransactionWriteAccess
     let onAddFirst: () -> Void
+
+    @Environment(\.managedObjectContext) private var context
+
+    @State private var voidedEntryIDs: Set<UUID> = []
 
     init(
         book: LedgerBook,
+        group: LedgerGroup,
         kind: EntryKind?,
-        writeRestriction: PermissionError?,
+        writeAccess: TransactionWriteAccess,
         onAddFirst: @escaping () -> Void
     ) {
-        self.writeRestriction = writeRestriction
+        self.group = group
+        self.writeAccess = writeAccess
         self.onAddFirst = onAddFirst
         let predicate: NSPredicate
         if let kind {
@@ -265,32 +360,33 @@ private struct TransactionListView: View {
     }
 
     private var visibleEntries: [LedgerEntry] {
-        // `isVoided(_:)` rebuilds the group's voided-ID set from its audit events on
-        // every call, so filtering with it costs O(entries × audits) and re-decodes
-        // every audit payload once per row. The set is the same for all entries in a
-        // group, so build it once and match by id instead.
-        let repository = EntryRepository()
-        let voidedEntryIDs = Set(entries.compactMap(\.group))
-            .reduce(into: Set<UUID>()) { $0.formUnion(repository.voidedEntryIDs(in: $1)) }
-        return entries.filter { entry in
+        entries.filter { entry in
             guard let entryID = entry.id else { return true }
             return !voidedEntryIDs.contains(entryID)
         }
     }
 
+    /// Cached rather than computed: `voidedEntryIDs(in:)` hits the store and decodes
+    /// a payload per voided transaction. `body` re-runs on every merged CloudKit
+    /// change, so recomputing it inline puts that on the render path several times a
+    /// second during a sync. The set is the same for every row here, so it is rebuilt
+    /// only when an audit event actually changes.
+    private func reloadVoidedEntryIDs() {
+        voidedEntryIDs = EntryRepository().voidedEntryIDs(in: group)
+    }
+
     private var addAction: (() -> Void)? {
-        guard writeRestriction == nil else { return nil }
+        guard writeAccess.canWrite else { return nil }
         return onAddFirst
     }
 
     var body: some View {
-        // Read once per render: both branches below need it, and each read rebuilds
-        // the group's voided-ID set.
+        // Read once per render: both branches below need it.
         let visible = visibleEntries
 
         ScrollView {
             LazyVStack(spacing: 12) {
-                if let message = writeRestriction?.errorDescription {
+                if let message = writeAccess.noticeMessage {
                     LedgerNotice(message: message)
                 }
 
@@ -298,10 +394,10 @@ private struct TransactionListView: View {
                     LedgerEmptyState(
                         systemImage: "receipt",
                         title: "沒有有效交易",
-                        message: writeRestriction == nil
+                        message: writeAccess.canWrite
                             ? "新增共同收支後，就能在這裡查看、編輯與核對交易。"
                             : "目前還沒有可檢視的交易。",
-                        actionTitle: writeRestriction == nil ? "新增交易" : nil,
+                        actionTitle: writeAccess.canWrite ? "新增交易" : nil,
                         action: addAction
                     )
                 } else {
@@ -318,6 +414,16 @@ private struct TransactionListView: View {
             .padding(.horizontal, LedgerTheme.pagePadding)
             .padding(.top, 16)
             .padding(.bottom, 28)
+        }
+        .onAppear(perform: reloadVoidedEntryIDs)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard contextChange(notification, touches: affectsVoidedEntries) else { return }
+            reloadVoidedEntryIDs()
         }
     }
 }
@@ -397,15 +503,19 @@ private struct EntryRow: View {
 private struct TransactionDetailView: View {
     @ObservedObject var entry: LedgerEntry
 
+    @Environment(\.managedObjectContext) private var context
+
     @State private var isEditing = false
     @State private var showVoidConfirmation = false
     @State private var errorMessage: String?
+    /// Both of these reach outside the entry to resolve — `isVoided` fetches the
+    /// group's void audits, and the write access makes a synchronous `fetchShares`
+    /// call — and `body` reads each of them several times per pass. They are resolved
+    /// once per change instead of once per read.
+    @State private var isVoided = false
+    @State private var writeAccess = TransactionWriteAccess.unresolved
 
     private var repository: EntryRepository { EntryRepository() }
-
-    private var isVoided: Bool {
-        repository.isVoided(entry)
-    }
 
     private var kind: EntryKind {
         EntryKind(rawValue: entry.kind ?? "") ?? .expense
@@ -428,10 +538,16 @@ private struct TransactionDetailView: View {
             .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
     }
 
-    /// Why editing or voiding this entry is unavailable, or `nil` when allowed.
-    private var writeRestriction: PermissionError? {
-        guard let group = entry.group else { return .missingCurrentMember }
-        return EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    private func reloadStatus() {
+        guard let group = entry.group else {
+            isVoided = false
+            writeAccess = .unresolved
+            return
+        }
+        isVoided = repository.isVoided(entry)
+        writeAccess = TransactionWriteAccess(
+            restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
+        )
     }
 
     private var originalSnapshot: TransactionAuditPayload.Snapshot? {
@@ -521,13 +637,13 @@ private struct TransactionDetailView: View {
             }
 
             if !isVoided {
-                if let message = writeRestriction?.errorDescription {
+                if let message = writeAccess.noticeMessage {
                     Section {
                         Label(message, systemImage: "lock")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                } else {
+                } else if writeAccess.canWrite {
                     Section {
                         Button("作廢交易", role: .destructive) {
                             showVoidConfirmation = true
@@ -540,8 +656,21 @@ private struct TransactionDetailView: View {
         }
         .navigationTitle("交易詳情")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: reloadStatus)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            let isRelevant = contextChange(notification) {
+                affectsVoidedEntries($0) || affectsWriteAccess($0)
+            }
+            guard isRelevant else { return }
+            reloadStatus()
+        }
         .toolbar {
-            if !isVoided, entry.book?.archivedAt == nil, writeRestriction == nil {
+            if !isVoided, entry.book?.archivedAt == nil, writeAccess.canWrite {
                 Button("編輯") {
                     isEditing = true
                 }
@@ -607,6 +736,7 @@ private struct TransactionDetailView: View {
     private func voidEntry() {
         do {
             try repository.voidEntry(entry)
+            reloadStatus()
         } catch {
             errorMessage = error.localizedDescription
         }
