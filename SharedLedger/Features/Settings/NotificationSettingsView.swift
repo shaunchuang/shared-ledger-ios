@@ -156,7 +156,9 @@ struct NotificationSettingsRow: View {
         case 0: return LedgerStringKey.notificationRowSummaryAllOff.string()
         case LedgerNotificationCategory.allCases.count:
             return LedgerStringKey.notificationRowSummaryAllOn.string()
-        default: return LedgerStringKey.notificationRowSummaryPartial.string(arguments: [enabled])
+        default:
+            return LedgerStringKey.notificationRowSummaryPartial
+                .string(arguments: [Int64(enabled)])
         }
     }
 }

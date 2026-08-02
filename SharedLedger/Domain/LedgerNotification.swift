@@ -199,7 +199,7 @@ struct LedgerSettlementReminder: Equatable, Sendable {
         case .both: key = .notificationBodySettlementReminderBoth
         }
         return key.string(
-            arguments: [groupName, bookName, outstandingTransferCount],
+            arguments: [groupName, bookName, Int64(outstandingTransferCount)],
             locale: locale
         )
     }

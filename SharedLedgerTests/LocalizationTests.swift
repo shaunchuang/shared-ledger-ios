@@ -93,9 +93,9 @@ final class LocalizationTests: XCTestCase {
         // `.stringsdict`，只有英文驗得出來。
         let english = Locale(identifier: "en")
         let one = LedgerStringKey.notificationRowSummaryPartial
-            .string(arguments: [1], locale: english)
+            .string(arguments: [Int64(1)], locale: english)
         let many = LedgerStringKey.notificationRowSummaryPartial
-            .string(arguments: [3], locale: english)
+            .string(arguments: [Int64(3)], locale: english)
 
         XCTAssertEqual(one, "1 type on")
         XCTAssertEqual(many, "3 types on")

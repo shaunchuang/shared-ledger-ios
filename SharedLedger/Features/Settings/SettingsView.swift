@@ -22,7 +22,7 @@ struct SettingsView: View {
                     syncCard
                     dataCard
                     preferencesCard
-                    Text(verbatim: LedgerStringKey.settingsVersion.string(arguments: ["0.1.0"]))
+                    Text(verbatim: LedgerStringKey.settingsVersion.string(arguments: [Self.appVersion]))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .padding(.top, 4)
@@ -126,6 +126,14 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    /// 版本號只有一個來源：實際打包出去的 bundle。
+    ///
+    /// 原本寫死的 `0.1.0` 已經和專案的 `MARKETING_VERSION` 分岔，畫面上顯示的是一個
+    /// 不存在的版本；使用者回報問題時對不上版本，比沒有版本號更麻煩。
+    private static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
     private var profileCard: some View {

@@ -32,6 +32,10 @@ enum LedgerLocalization {
     /// 參數一律走 `String(format:)` 而不是字串串接：語序在不同語言會變，
     /// catalog 裡的 `%1$@`、`%2$@` 讓譯者能自由調換位置。複數規則也在這一層生效，
     /// 因為 `.stringsdict` 是在同一次查表裡被解析的。
+    ///
+    /// 驅動複數的數字在 catalog 裡寫成 `%lld`，對應的參數要傳 `Int64`。目前支援的
+    /// 裝置上 `Int` 就是 64 位元，但 `String(format:)` 是 varargs，型別對不上不會有
+    /// 編譯錯誤可以擋，所以在呼叫端就轉好，不留這個假設。
     static func string(
         _ key: LedgerStringKey,
         arguments: [CVarArg],
