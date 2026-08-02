@@ -8,10 +8,7 @@ struct SettingsView: View {
                 VStack(spacing: 18) {
                     profileCard
                     groupManagementCard
-                    settingsCard(title: "資料與同步", rows: [
-                        SettingRow(title: "iCloud 同步", detail: "保持最新", icon: "icloud.fill", tint: LedgerTheme.primary),
-                        SettingRow(title: "匯出資料", detail: "CSV、PDF", icon: "square.and.arrow.up", tint: .blue)
-                    ])
+                    dataCard
                     settingsCard(title: "偏好設定", rows: [
                         SettingRow(title: "通知", detail: "結算與邀請", icon: "bell.fill", tint: LedgerTheme.amber),
                         SettingRow(title: "外觀", detail: "跟隨系統", icon: "circle.lefthalf.filled", tint: .purple)
@@ -26,6 +23,41 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+    }
+
+    private var dataCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LedgerSectionHeader(title: "資料")
+            LedgerCard(padding: 0) {
+                VStack(spacing: 0) {
+                    NavigationLink {
+                        DataExportView()
+                    } label: {
+                        SettingRow(
+                            title: "匯出資料",
+                            detail: "CSV",
+                            icon: "square.and.arrow.up",
+                            tint: .blue
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider().padding(.leading, 68)
+
+                    NavigationLink {
+                        DataPrivacyView()
+                    } label: {
+                        SettingRow(
+                            title: "刪除資料",
+                            detail: "群組與帳務",
+                            icon: "trash",
+                            tint: LedgerTheme.coral
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     private var groupManagementCard: some View {

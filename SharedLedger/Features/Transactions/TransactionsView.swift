@@ -843,13 +843,7 @@ private struct TransactionDetailView: View {
         SplitMode(rawValue: entry.splitMode ?? "") ?? .equal
     }
 
-    private var splitModeName: String {
-        switch splitMode {
-        case .equal: return "平均"
-        case .percentage: return "比例"
-        case .fixedAmount: return "指定金額"
-        }
-    }
+    private var splitModeName: String { splitMode.displayName }
 
     private var errorBinding: Binding<Bool> {
         Binding(

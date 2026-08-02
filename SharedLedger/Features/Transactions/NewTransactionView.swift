@@ -488,12 +488,3 @@ struct NewTransactionView: View {
     }
 }
 
-private extension SplitMode {
-    var displayName: String {
-        switch self {
-        case .equal: "平均"
-        case .percentage: "比例"
-        case .fixedAmount: "指定金額"
-        }
-    }
-}

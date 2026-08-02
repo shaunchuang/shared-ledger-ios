@@ -157,6 +157,13 @@ struct EffectivePermissionRepository {
         self.shareResolver = shareResolver
     }
 
+    /// Drops the cached CloudKit write permission for a group that is going away.
+    /// The cache is keyed by group id in `UserDefaults`, so without this a deleted
+    /// group leaves an entry behind for an id nothing can look up again.
+    func forgetCachedPermission(for group: LedgerGroup) {
+        cache.clear(for: group)
+    }
+
     func permission(in group: LedgerGroup) -> EffectivePermission {
         guard let member = CurrentMemberIdentityRepository(persistence: persistence)
             .currentMember(in: group),
