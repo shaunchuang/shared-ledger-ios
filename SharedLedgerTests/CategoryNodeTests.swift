@@ -786,8 +786,9 @@ final class BookRepositoryTests: XCTestCase {
 
     func testNewBookCanUseAllCopyOrEmptyCategoryAssignments() throws {
         let persistence = PersistenceController(inMemory: true)
+        // 這個測試比對的是完整的分類集合，所以從空目錄開始，不受內建分類影響。
         let group = try GroupRepository(persistence: persistence).createGroup(
-            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明", usesDefaultCategories: false)
         )
         let bookRepository = BookRepository(persistence: persistence)
         let defaultBook = try XCTUnwrap(bookRepository.defaultBook(in: group))
@@ -1019,6 +1020,322 @@ final class BookRepositoryTests: XCTestCase {
         XCTAssertEqual(book.objectID.persistentStore, persistence.sharedStore)
         XCTAssertEqual(category.objectID.persistentStore, persistence.sharedStore)
         XCTAssertEqual(assignment.objectID.persistentStore, persistence.sharedStore)
+    }
+}
+
+@MainActor
+final class CategoryManagementTests: XCTestCase {
+    func testRenameKeepsOneCategoryForEveryBookAndHistory() throws {
+        let fixture = try makeFixture()
+        let travelBook = try fixture.books.createBook(from: BookDraft(name: "旅行"), in: fixture.group)
+        let category = try fixture.categories.createCategory(
+            from: CategoryDraft(name: "餐飲"),
+            in: fixture.group,
+            parent: nil
+        )
+        let entry = try fixture.addExpense(100, category: category, in: fixture.book)
+
+        try fixture.categories.renameCategory(category, using: CategoryDraft(name: "吃飯"))
+
+        // 分類是群組共用的一份，所以帳本、歷史交易與報表看到的都是同一個新名稱。
+        XCTAssertEqual(category.name, "吃飯")
+        XCTAssertEqual(entry.category?.name, "吃飯")
+        XCTAssertEqual(
+            fixture.categories.availableCategories(in: travelBook).first(where: { $0 == category })?.name,
+            "吃飯"
+        )
+        XCTAssertTrue(fixture.auditActions().contains("category.renamed"))
+        XCTAssertEqual(fixture.categories.impact(of: category).entryCount, 1)
+        XCTAssertEqual(fixture.categories.impact(of: category).bookCount, 2)
+    }
+
+    func testRenameRejectsEmptyNameAndArchivedCategory() throws {
+        let fixture = try makeFixture()
+        let category = try fixture.categories.createCategory(
+            from: CategoryDraft(name: "餐飲"),
+            in: fixture.group,
+            parent: nil
+        )
+
+        XCTAssertThrowsError(
+            try fixture.categories.renameCategory(category, using: CategoryDraft(name: "   "))
+        ) { error in
+            guard case CategoryRepository.CategoryError.invalidDraft = error else {
+                return XCTFail("Expected invalidDraft, got \(error)")
+            }
+        }
+
+        try fixture.categories.archiveCategory(category)
+        XCTAssertThrowsError(
+            try fixture.categories.renameCategory(category, using: CategoryDraft(name: "吃飯"))
+        ) { error in
+            guard case CategoryRepository.CategoryError.archivedCategory = error else {
+                return XCTFail("Expected archivedCategory, got \(error)")
+            }
+        }
+    }
+
+    func testGroupOrderIsSharedWhileBookOrderStaysLocal() throws {
+        let fixture = try makeFixture()
+        let travelBook = try fixture.books.createBook(from: BookDraft(name: "旅行"), in: fixture.group)
+        let food = try fixture.makeCategory("餐飲")
+        let transport = try fixture.makeCategory("交通")
+        let home = try fixture.makeCategory("居家")
+
+        try fixture.categories.reorderCategories(
+            [transport, home, food],
+            parent: nil,
+            in: fixture.group
+        )
+
+        XCTAssertEqual(
+            fixture.categories.siblings(of: nil, in: fixture.group),
+            [transport, home, food]
+        )
+        XCTAssertEqual(fixture.categories.availableCategories(in: fixture.book), [transport, home, food])
+        XCTAssertEqual(fixture.categories.availableCategories(in: travelBook), [transport, home, food])
+
+        try fixture.categories.reorderCategories(
+            [food, transport, home],
+            parent: nil,
+            in: travelBook
+        )
+
+        // 帳本順序只寫在 assignment 上，群組目錄與其他帳本都不受影響。
+        XCTAssertEqual(fixture.categories.availableCategories(in: travelBook), [food, transport, home])
+        XCTAssertEqual(fixture.categories.availableCategories(in: fixture.book), [transport, home, food])
+        XCTAssertEqual(
+            fixture.categories.siblings(of: nil, in: fixture.group),
+            [transport, home, food]
+        )
+    }
+
+    func testBookOrderRejectsAnIncompleteSiblingList() throws {
+        let fixture = try makeFixture()
+        let food = try fixture.makeCategory("餐飲")
+        let transport = try fixture.makeCategory("交通")
+        try fixture.categories.setCategory(transport, enabled: false, in: fixture.book)
+
+        // 停用的分類在這本帳本沒有位置，混進排序代表畫面與資料已經不同步。
+        XCTAssertThrowsError(
+            try fixture.categories.reorderCategories(
+                [transport, food],
+                parent: nil,
+                in: fixture.book
+            )
+        ) { error in
+            guard case CategoryRepository.CategoryError.invalidOrder = error else {
+                return XCTFail("Expected invalidOrder, got \(error)")
+            }
+        }
+        XCTAssertEqual(fixture.categories.enabledSiblings(of: nil, in: fixture.book), [food])
+    }
+
+    func testMergeMovesEntriesAndChildrenThenArchivesTheSource() throws {
+        let fixture = try makeFixture()
+        let travelBook = try fixture.books.createBook(from: BookDraft(name: "旅行"), in: fixture.group)
+        let food = try fixture.makeCategory("餐飲")
+        let dining = try fixture.makeCategory("外食")
+        let child = try fixture.categories.createCategory(
+            from: CategoryDraft(name: "早餐"),
+            in: fixture.group,
+            parent: dining
+        )
+        // 目標在旅行帳本被停用，合併之後必須跟著搬過去的交易一起重新啟用。
+        try fixture.categories.setCategory(food, enabled: false, in: travelBook)
+        let entry = try fixture.addExpense(120, category: dining, in: travelBook)
+
+        try fixture.categories.mergeCategory(dining, into: food)
+
+        XCTAssertEqual(entry.category, food)
+        XCTAssertEqual(child.parent, food)
+        XCTAssertNotNil(dining.archivedAt)
+        XCTAssertFalse(fixture.categories.isCategoryAvailable(dining, in: fixture.book))
+        XCTAssertTrue(fixture.categories.isCategoryAvailable(food, in: travelBook))
+        XCTAssertTrue(fixture.categories.isCategoryAvailable(child, in: travelBook))
+        XCTAssertTrue(fixture.auditActions().contains("category.merged"))
+
+        // 合併只是換一個分類，帳務金額不能因此改變。
+        XCTAssertEqual(entry.amount as Decimal?, 120)
+        XCTAssertEqual(fixture.categories.impact(of: food).entryCount, 1)
+    }
+
+    func testMergeRefusesItselfAndItsOwnDescendants() throws {
+        let fixture = try makeFixture()
+        let parent = try fixture.makeCategory("交通")
+        let child = try fixture.categories.createCategory(
+            from: CategoryDraft(name: "捷運"),
+            in: fixture.group,
+            parent: parent
+        )
+
+        XCTAssertThrowsError(try fixture.categories.mergeCategory(parent, into: parent)) { error in
+            guard case CategoryRepository.CategoryError.invalidMergeTarget = error else {
+                return XCTFail("Expected invalidMergeTarget, got \(error)")
+            }
+        }
+        XCTAssertThrowsError(try fixture.categories.mergeCategory(parent, into: child)) { error in
+            guard case CategoryRepository.CategoryError.invalidMergeTarget = error else {
+                return XCTFail("Expected invalidMergeTarget, got \(error)")
+            }
+        }
+        XCTAssertFalse(fixture.categories.mergeTargets(for: parent).contains(child))
+        XCTAssertNil(parent.archivedAt)
+    }
+
+    func testMergeAcrossGroupsIsRejected() throws {
+        let fixture = try makeFixture()
+        let source = try fixture.makeCategory("餐飲")
+        let otherGroup = try GroupRepository(persistence: fixture.persistence).createGroup(
+            from: GroupDraft(name: "室友", ownerDisplayName: "小華", usesDefaultCategories: false)
+        )
+        let foreign = try fixture.categories.createCategory(
+            from: CategoryDraft(name: "餐飲"),
+            in: otherGroup,
+            parent: nil
+        )
+
+        XCTAssertThrowsError(try fixture.categories.mergeCategory(source, into: foreign)) { error in
+            guard case CategoryRepository.CategoryError.crossGroupCategory = error else {
+                return XCTFail("Expected crossGroupCategory, got \(error)")
+            }
+        }
+    }
+
+    func testNewGroupsStartWithTheBuiltInCatalog() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
+        )
+        let repository = CategoryRepository(persistence: persistence)
+        let book = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
+
+        let roots = repository.siblings(of: nil, in: group)
+        XCTAssertEqual(roots.map { $0.name ?? "" }, DefaultCategoryCatalog.categories.map(\.name))
+        for node in DefaultCategoryCatalog.categories {
+            let category = try XCTUnwrap(roots.first { $0.name == node.name })
+            XCTAssertEqual(
+                repository.siblings(of: category, in: group).map { $0.name ?? "" },
+                node.children.map(\.name)
+            )
+            XCTAssertTrue(repository.isCategoryAvailable(category, in: book))
+        }
+    }
+
+    func testDefaultCatalogCanBeSkippedAndReappliedWithoutDuplicates() throws {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明", usesDefaultCategories: false)
+        )
+        let repository = CategoryRepository(persistence: persistence)
+        XCTAssertTrue(repository.categories(in: group).isEmpty)
+
+        let created = try repository.installDefaultCategories(in: group)
+        let afterFirstRun = repository.categories(in: group).count
+        XCTAssertEqual(created, afterFirstRun)
+
+        // 重複套用只會沿用同名分類，不會長出第二份目錄。
+        XCTAssertEqual(try repository.installDefaultCategories(in: group), 0)
+        XCTAssertEqual(repository.categories(in: group).count, afterFirstRun)
+    }
+
+    func testManagementActionsRequireLedgerSettingsPermission() throws {
+        let fixture = try makeFixture()
+        let source = try fixture.makeCategory("餐飲")
+        let target = try fixture.makeCategory("交通")
+        let owner = try XCTUnwrap(
+            CurrentMemberIdentityRepository(persistence: fixture.persistence)
+                .currentMember(in: fixture.group)
+        )
+        owner.role = MemberRole.viewer.rawValue
+
+        XCTAssertThrowsError(
+            try fixture.categories.renameCategory(source, using: CategoryDraft(name: "吃飯"))
+        ) { assertViewerRefused($0) }
+        XCTAssertThrowsError(
+            try fixture.categories.reorderCategories([target, source], parent: nil, in: fixture.group)
+        ) { assertViewerRefused($0) }
+        XCTAssertThrowsError(
+            try fixture.categories.reorderCategories([target, source], parent: nil, in: fixture.book)
+        ) { assertViewerRefused($0) }
+        XCTAssertThrowsError(
+            try fixture.categories.mergeCategory(source, into: target)
+        ) { assertViewerRefused($0) }
+        XCTAssertThrowsError(
+            try fixture.categories.installDefaultCategories(in: fixture.group)
+        ) { assertViewerRefused($0) }
+
+        XCTAssertEqual(source.name, "餐飲")
+        XCTAssertNil(source.archivedAt)
+    }
+
+    private func assertViewerRefused(_ error: Error, file: StaticString = #filePath, line: UInt = #line) {
+        guard case PermissionError.insufficientRole(.viewer) = error else {
+            return XCTFail("Expected insufficientRole(.viewer), got \(error)", file: file, line: line)
+        }
+    }
+
+    /// 這些測試比對的是自己建立的分類，所以群組從空目錄開始，不受內建分類影響。
+    private func makeFixture() throws -> Fixture {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明", usesDefaultCategories: false)
+        )
+        let books = BookRepository(persistence: persistence)
+        return Fixture(
+            persistence: persistence,
+            group: group,
+            book: try XCTUnwrap(books.defaultBook(in: group)),
+            account: try AccountRepository(persistence: persistence).createAccount(
+                from: AccountDraft(name: "現金"),
+                in: group
+            ),
+            categories: CategoryRepository(persistence: persistence),
+            books: books
+        )
+    }
+
+    @MainActor
+    private struct Fixture {
+        let persistence: PersistenceController
+        let group: LedgerGroup
+        let book: LedgerBook
+        let account: LedgerAccount
+        let categories: CategoryRepository
+        let books: BookRepository
+
+        func makeCategory(_ name: String) throws -> LedgerCategory {
+            try categories.createCategory(from: CategoryDraft(name: name), in: group, parent: nil)
+        }
+
+        @discardableResult
+        func addExpense(
+            _ amount: Decimal,
+            category: LedgerCategory,
+            in book: LedgerBook
+        ) throws -> LedgerEntry {
+            let members = Array(group.members as? Set<Member> ?? [])
+            let ownerID = try XCTUnwrap(members.first?.id)
+            return try EntryRepository(persistence: persistence).createEntry(
+                from: TransactionDraft(
+                    kind: .expense,
+                    amountText: "\(amount)",
+                    categoryID: category.id,
+                    sourceAccountID: account.id,
+                    payerMemberID: ownerID,
+                    splitMemberIDs: [ownerID]
+                ),
+                in: book,
+                accounts: [account],
+                categories: Array(group.categories as? Set<LedgerCategory> ?? []),
+                members: members
+            )
+        }
+
+        func auditActions() -> [String] {
+            let events = group.auditEvents as? Set<AuditEvent> ?? []
+            return events.compactMap(\.action)
+        }
     }
 }
 

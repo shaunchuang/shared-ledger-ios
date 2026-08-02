@@ -53,6 +53,15 @@ struct GroupRepository {
         defaultBook.sortOrder = 0
         defaultBook.group = group
 
+        if draft.usesDefaultCategories {
+            // 一起寫入，讓「群組 + 主要帳本 + 內建分類」是同一次存檔的結果；分開存的話，
+            // 中途失敗會留下一個沒有分類的群組，而使用者只會看到建立失敗。
+            CategoryRepository(persistence: persistence).insertDefaultCategories(
+                in: group,
+                books: [defaultBook]
+            )
+        }
+
         insertAudit(
             action: "group.created",
             actorDisplayName: draft.trimmedOwnerDisplayName,

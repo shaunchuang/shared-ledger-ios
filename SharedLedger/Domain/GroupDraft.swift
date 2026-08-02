@@ -12,6 +12,8 @@ struct GroupDraft: Equatable, Sendable {
     var ownerDisplayName = "我"
     var currencyCode = LedgerCurrency.defaultCode
     var invitees: [InviteeContact] = []
+    /// 建立群組時是否一併套用內建分類目錄。
+    var usesDefaultCategories = true
 
     var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
