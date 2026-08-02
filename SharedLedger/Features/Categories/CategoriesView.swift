@@ -35,14 +35,14 @@ struct CategoriesRootView: View {
                     ScrollView {
                         LedgerEmptyState(
                             systemImage: "square.grid.2x2",
-                            title: "先建立一個群組",
-                            message: "請先到「設定」的「群組管理」建立群組，再回來管理共用分類。"
+                            title: .categoryGroupEmptyTitle,
+                            message: .categoryGroupEmptyMessage
                         )
                         .padding(.horizontal, LedgerTheme.pagePadding)
                         .padding(.top, 24)
                     }
                 }
-                .navigationTitle("分類")
+                .navigationTitle(Text(.categoryTitle))
             }
         }
     }
@@ -53,18 +53,31 @@ struct CategoriesRootView: View {
                 Button {
                     selectedGroupID = candidate.objectID
                 } label: {
+                    let name = candidate.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
                     if candidate == selectedGroup {
-                        Label(candidate.name ?? "未命名群組", systemImage: "checkmark")
+                        Label {
+                            Text(verbatim: name)
+                        } icon: {
+                            Image(systemName: "checkmark")
+                        }
                     } else {
-                        Text(candidate.name ?? "未命名群組")
+                        Text(verbatim: name)
                     }
                 }
             }
         } label: {
-            Label(selectedGroup.name ?? "未命名群組", systemImage: "person.3.fill")
-                .labelStyle(.titleAndIcon)
+            Label {
+                Text(verbatim: selectedGroup.name
+                    ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string())
+            } icon: {
+                Image(systemName: "person.3.fill")
+            }
+            .labelStyle(.titleAndIcon)
         }
-        .accessibilityLabel("切換分類群組")
+        .accessibilityLabel(Text(.categoryGroupPickerAccessibilityLabel))
+        .accessibilityValue(Text(verbatim: selectedGroup.name
+            ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()))
     }
 }
 
@@ -109,15 +122,15 @@ struct CategoriesView: View {
                     if rootCategories.isEmpty {
                         LedgerEmptyState(
                             systemImage: "square.grid.2x2",
-                            title: "還沒有群組分類",
-                            message: "建立一次即可讓群組內的多本帳本共用，再由各帳本選擇要使用的分類。",
-                            actionTitle: canManage ? "新增分類" : nil,
+                            title: .categoryEmptyTitle,
+                            message: .categoryEmptyMessage,
+                            actionTitle: canManage ? LedgerStringKey.categoryNewActionAdd : nil,
                             action: canManage ? presentRootCategory : nil
                         )
 
                         if canManage {
                             Button(action: installDefaults) {
-                                Label("套用內建分類", systemImage: "square.grid.2x2.fill")
+                                Label(.categoryActionInstallDefaults, systemImage: "square.grid.2x2.fill")
                                     .font(.subheadline.weight(.semibold))
                             }
                             .buttonStyle(.plain)
@@ -143,7 +156,7 @@ struct CategoriesView: View {
                         }
                     }
 
-                    Text("分類名稱與階層由整個群組共用；帳本設定只控制是否啟用，不會複製分類。")
+                    Text(.categoryFooter)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,7 +166,7 @@ struct CategoriesView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("分類")
+        .navigationTitle(Text(.categoryTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if canManage {
@@ -161,7 +174,7 @@ struct CategoriesView: View {
                     Image(systemName: "plus")
                         .fontWeight(.bold)
                 }
-                .accessibilityLabel("新增群組分類")
+                .accessibilityLabel(Text(.categoryActionAddGroupCategory))
             }
         }
         .sheet(isPresented: $isPresentingNewCategory) {
@@ -193,27 +206,42 @@ struct CategoriesView: View {
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
-            "封存分類？",
+            Text(.categoryArchiveConfirmTitle),
             isPresented: archiveConfirmationBinding,
             titleVisibility: .visible,
             presenting: categoryPendingArchive
         ) { category in
-            Button("封存「\(category.name ?? "未命名分類")」", role: .destructive) {
+            Button(role: .destructive) {
                 categoryPendingArchive = nil
                 archive(category)
+            } label: {
+                Text(verbatim: LedgerStringKey.categoryArchiveConfirmAction.string(
+                    arguments: [categoryName(category)]
+                ))
             }
-            Button("取消", role: .cancel) {
+            Button(role: .cancel) {
                 categoryPendingArchive = nil
+            } label: {
+                Text(.commonActionCancel)
             }
         } message: { category in
-            Text("封存後會從所有帳本的新交易選單隱藏，但既有交易與歷史報表仍會保留。"
-                + CategoryRepository().impact(of: category).summary)
+            // 影響說明由 `CategoryRepository` 產生，那一層還沒遷移；它是這句話的參數，
+            // 不是自己接在後面的另一句。
+            Text(verbatim: LedgerStringKey.categoryArchiveConfirmMessage.string(
+                arguments: [CategoryRepository().impact(of: category).summary]
+            ))
         }
-        .alert("無法更新分類", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.categoryErrorUpdateTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
+    }
+
+    private func categoryName(_ category: LedgerCategory) -> String {
+        category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
     }
 
     private var archiveConfirmationBinding: Binding<Bool> {
@@ -327,8 +355,8 @@ struct BookCategoriesView: View {
                     if rootCategories.isEmpty {
                         LedgerEmptyState(
                             systemImage: "square.grid.2x2",
-                            title: "群組還沒有分類",
-                            message: "請先到群組分類建立共用分類，再回來選擇這本帳本要使用的項目。",
+                            title: .categoryBookEmptyTitle,
+                            message: .categoryBookEmptyMessage,
                             actionTitle: nil,
                             action: nil
                         )
@@ -351,7 +379,7 @@ struct BookCategoriesView: View {
                         }
                     }
 
-                    Text("停用只會從這本帳本的新交易選單隱藏分類，既有交易與其他帳本不受影響；顯示順序也只套用在這本帳本。")
+                    Text(.categoryBookFooter)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -361,7 +389,7 @@ struct BookCategoriesView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("帳本可用分類")
+        .navigationTitle(Text(.categoryBookTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if canManage, book.group != nil {
@@ -371,7 +399,7 @@ struct BookCategoriesView: View {
                     Image(systemName: "plus")
                         .fontWeight(.bold)
                 }
-                .accessibilityLabel("新增分類")
+                .accessibilityLabel(Text(.categoryNewActionAdd))
             }
         }
         .sheet(isPresented: $isPresentingNewCategory) {
@@ -386,10 +414,12 @@ struct BookCategoriesView: View {
                 .presentationDragIndicator(.visible)
             }
         }
-        .alert("無法更新帳本分類", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.categoryBookErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -442,6 +472,10 @@ private struct GroupCategoryTreeRow: View {
         siblings.firstIndex(of: category)
     }
 
+    private var name: String {
+        category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
+    }
+
     private var enabledBookCount: Int {
         let assignments = category.bookAssignments as? Set<BookCategoryAssignment> ?? []
         return assignments.filter { $0.isEnabled && $0.book?.archivedAt == nil }.count
@@ -454,13 +488,17 @@ private struct GroupCategoryTreeRow: View {
                     .font(.system(size: 5))
                     .foregroundStyle(.tertiary)
                     .opacity(depth > 0 ? 1 : 0)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(category.name ?? "未命名分類")
+                    Text(verbatim: name)
                         .font(.subheadline.weight(depth == 0 ? .semibold : .regular))
-                    Text("\(enabledBookCount) 本帳本使用")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(verbatim: LedgerStringKey.categoryRowEnabledBooks.string(
+                        arguments: [Int64(enabledBookCount)]
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
+                .accessibilityElement(children: .combine)
                 Spacer()
                 if canManage {
                     // 一列可以做的事已經超過兩個圖示放得下的數量，收進選單也讓
@@ -469,42 +507,43 @@ private struct GroupCategoryTreeRow: View {
                         Button {
                             onRename(category)
                         } label: {
-                            Label("重新命名", systemImage: "pencil")
+                            Label(.categoryActionRename, systemImage: "pencil")
                         }
                         Button {
                             onAddChild(category)
                         } label: {
-                            Label("新增子分類", systemImage: "plus.circle")
+                            Label(.categoryActionAddChild, systemImage: "plus.circle")
                         }
                         if let index = siblingIndex {
                             Button {
                                 onMove(category, -1)
                             } label: {
-                                Label("上移", systemImage: "arrow.up")
+                                Label(.categoryActionMoveUp, systemImage: "arrow.up")
                             }
                             .disabled(index == 0)
                             Button {
                                 onMove(category, 1)
                             } label: {
-                                Label("下移", systemImage: "arrow.down")
+                                Label(.categoryActionMoveDown, systemImage: "arrow.down")
                             }
                             .disabled(index == siblings.count - 1)
                         }
                         Button {
                             onMerge(category)
                         } label: {
-                            Label("合併到其他分類", systemImage: "arrow.triangle.merge")
+                            Label(.categoryActionMerge, systemImage: "arrow.triangle.merge")
                         }
                         Button(role: .destructive) {
                             onArchive(category)
                         } label: {
-                            Label("封存分類", systemImage: "archivebox")
+                            Label(.categoryActionArchive, systemImage: "archivebox")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
                             .frame(width: 36, height: 36)
                     }
-                    .accessibilityLabel("分類「\(category.name ?? "未命名分類")」選項")
+                    .accessibilityLabel(Text(verbatim: LedgerStringKey
+                        .categoryMenuAccessibilityLabel.string(arguments: [name])))
                 }
             }
             .padding(.leading, CGFloat(depth) * 18)
@@ -545,29 +584,37 @@ private struct RenameCategoryView: View {
     var body: some View {
         Form {
             Section {
-                TextField("分類名稱", text: $draft.name)
+                TextField("", text: $draft.name, prompt: Text(.categoryRenameNamePlaceholder))
+                    .accessibilityLabel(Text(.categoryRenameNamePlaceholder))
             } header: {
-                Text("名稱")
+                Text(.categoryRenameSectionName)
             } footer: {
-                Text("名稱屬於整個群組，改名後所有使用這個分類的帳本、報表與歷史交易都會顯示新名稱。"
-                    + CategoryRepository().impact(of: category).summary)
+                Text(verbatim: LedgerStringKey.categoryRenameFooter.string(
+                    arguments: [CategoryRepository().impact(of: category).summary]
+                ))
             }
         }
-        .navigationTitle("重新命名分類")
+        .navigationTitle(Text(.categoryRenameTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("儲存", action: save)
-                    .disabled(!draft.canCreate)
+                Button(action: save) {
+                    Text(.commonActionSave)
+                }
+                .disabled(!draft.canCreate)
             }
         }
-        .alert("無法重新命名", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.commonErrorRenameFailed), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -609,16 +656,20 @@ private struct MergeCategoryView: View {
     var body: some View {
         Form {
             Section {
-                Text(CategoryRepository().impact(of: category).summary)
+                // 影響說明由 `CategoryRepository` 產生，那一層還沒遷移。
+                Text(verbatim: CategoryRepository().impact(of: category).summary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } header: {
-                Text("將「\(category.name ?? "未命名分類")」合併到")
+                Text(verbatim: LedgerStringKey.categoryMergeHeader.string(
+                    arguments: [category.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()]
+                ))
             }
 
             Section {
                 if targets.isEmpty {
-                    Text("這個群組沒有其他可以合併的分類。")
+                    Text(.categoryMergeTargetsEmpty)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(targets, id: \.objectID) { target in
@@ -626,38 +677,50 @@ private struct MergeCategoryView: View {
                             selectedTargetID = target.objectID
                         } label: {
                             HStack {
-                                Text(path(of: target))
+                                Text(verbatim: path(of: target))
                                     .foregroundStyle(.primary)
                                 Spacer()
                                 if target.objectID == selectedTargetID {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(LedgerTheme.primary)
+                                        .accessibilityHidden(true)
                                 }
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityAddTraits(
+                            target.objectID == selectedTargetID
+                                ? [.isButton, .isSelected]
+                                : .isButton
+                        )
                     }
                 }
             } footer: {
-                Text("歷史交易與子分類會改掛到目標分類，來源分類則會封存；已經記錄的金額與報表總額不會改變。")
+                Text(.categoryMergeFooter)
             }
         }
-        .navigationTitle("合併分類")
+        .navigationTitle(Text(.categoryMergeTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("合併", action: merge)
-                    .disabled(selectedTarget == nil)
+                Button(action: merge) {
+                    Text(.categoryMergeTitle)
+                }
+                .disabled(selectedTarget == nil)
             }
         }
-        .alert("無法合併分類", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.categoryMergeErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -674,7 +737,10 @@ private struct MergeCategoryView: View {
         var current: LedgerCategory? = category
         var visited = Set<NSManagedObjectID>()
         while let value = current, visited.insert(value.objectID).inserted {
-            names.insert(value.name ?? "未命名分類", at: 0)
+            names.insert(
+                value.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string(),
+                at: 0
+            )
             current = value.parent
         }
         return names.joined(separator: " › ")
@@ -706,6 +772,10 @@ private struct BookCategoryToggleRow: View {
         CategoryRepository().manageableSiblings(of: category, in: book)
     }
 
+    private var name: String {
+        category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
+    }
+
     private var isEnabled: Bool {
         CategoryRepository().isCategoryAvailable(category, in: book)
     }
@@ -721,7 +791,7 @@ private struct BookCategoryToggleRow: View {
                     get: { isEnabled },
                     set: updateAvailability
                 )) {
-                    Text(category.name ?? "未命名分類")
+                    Text(verbatim: name)
                         .font(.subheadline.weight(depth == 0 ? .semibold : .regular))
                 }
                 .disabled(!canManage)
@@ -731,20 +801,21 @@ private struct BookCategoryToggleRow: View {
                         Button {
                             onMove(category, -1)
                         } label: {
-                            Label("上移", systemImage: "arrow.up")
+                            Label(.categoryActionMoveUp, systemImage: "arrow.up")
                         }
                         .disabled(index == 0)
                         Button {
                             onMove(category, 1)
                         } label: {
-                            Label("下移", systemImage: "arrow.down")
+                            Label(.categoryActionMoveDown, systemImage: "arrow.down")
                         }
                         .disabled(index == orderableSiblings.count - 1)
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
                             .frame(width: 36, height: 36)
                     }
-                    .accessibilityLabel("調整「\(category.name ?? "未命名分類")」的顯示順序")
+                    .accessibilityLabel(Text(verbatim: LedgerStringKey
+                        .categoryBookReorderAccessibilityLabel.string(arguments: [name])))
                 }
             }
             .padding(.leading, CGFloat(depth) * 18)

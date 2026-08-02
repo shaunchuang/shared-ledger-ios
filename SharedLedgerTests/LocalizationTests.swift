@@ -169,6 +169,23 @@ final class LocalizationTests: XCTestCase {
         )
     }
 
+    func testDefaultCategoryNamesComeFromTheCatalog() {
+        // 內建分類的名稱在建立群組時就寫進 Core Data，之後是使用者自己的資料；
+        // 但寫進去的那一刻必須是使用者的語言，而不是永遠的正體中文。
+        XCTAssertEqual(
+            LedgerStringKey.defaultCategoryFood.string(locale: Locale(identifier: "zh-Hant")),
+            "餐飲"
+        )
+        XCTAssertEqual(
+            LedgerStringKey.defaultCategoryFood.string(locale: Locale(identifier: "en")),
+            "Food & drink"
+        )
+        // 目錄本身要組得出來，且不會有任何一層掉回鍵名。
+        let names = DefaultCategoryCatalog.categories.flatMap { [$0] + $0.children }.map(\.name)
+        XCTAssertFalse(names.isEmpty)
+        XCTAssertFalse(names.contains { $0.hasPrefix("defaultCategory.") }, "\(names)")
+    }
+
     func testArgumentsAreSubstitutedInBothLanguages() {
         for language in Self.requiredLanguages {
             let locale = Locale(identifier: language)
