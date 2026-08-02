@@ -30,15 +30,15 @@ struct TransactionsView: View {
                 ScrollView {
                     LedgerEmptyState(
                         systemImage: "person.3",
-                        title: "先建立一個群組",
-                        message: "交易記錄屬於群組，請先到「設定」的「群組管理」建立群組，再回來新增交易。"
+                        title: .transactionEmptyNoGroupTitle,
+                        message: .transactionEmptyNoGroupMessage
                     )
                     .padding(.horizontal, LedgerTheme.pagePadding)
                     .padding(.top, 24)
                 }
             }
         }
-        .navigationTitle("交易")
+        .navigationTitle(Text(.transactionTitle))
     }
 }
 
@@ -71,12 +71,21 @@ private struct BookTransactionsView: View {
     /// 交易類型的快速切換。搜尋面板不再重複提供類型選擇，讓 `query.kinds` 只有
     /// 這一個入口，畫面上就不會出現兩個彼此矛盾的類型狀態。
     private enum Filter: String, CaseIterable, Identifiable {
-        case all = "全部"
-        case expense = "支出"
-        case income = "收入"
-        case transfer = "轉帳"
+        case all
+        case expense
+        case income
+        case transfer
 
         var id: Self { self }
+
+        var titleKey: LedgerStringKey {
+            switch self {
+            case .all: return .transactionKindFilterAll
+            case .expense: return .entryKindExpense
+            case .income: return .entryKindIncome
+            case .transfer: return .entryKindTransfer
+            }
+        }
 
         var kinds: Set<EntryKind> {
             switch self {
@@ -177,8 +186,8 @@ private struct BookTransactionsView: View {
                 ScrollView {
                     LedgerEmptyState(
                         systemImage: "book.closed",
-                        title: "正在準備主要帳本",
-                        message: "完成資料準備後，就能在這裡新增交易。"
+                        title: .transactionEmptyPreparingBookTitle,
+                        message: .transactionEmptyPreparingBookMessage
                     )
                     .padding(.horizontal, LedgerTheme.pagePadding)
                     .padding(.top, 24)
@@ -188,7 +197,7 @@ private struct BookTransactionsView: View {
         .searchable(
             text: $query.keyword,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "搜尋備註、分類、帳戶或成員"
+            prompt: Text(.transactionSearchPrompt)
         )
         .toolbar {
             ToolbarItem {
@@ -201,11 +210,7 @@ private struct BookTransactionsView: View {
                             : "line.3.horizontal.decrease.circle"
                     )
                 }
-                .accessibilityLabel(
-                    query.hasActiveFilters
-                        ? "篩選交易，已套用 \(query.activeFilterCount) 個條件"
-                        : "篩選交易"
-                )
+                .accessibilityLabel(Text(verbatim: filterAccessibilityLabel))
             }
             if selectedBook != nil, writeAccess.canWrite {
                 ToolbarItem {
@@ -215,7 +220,7 @@ private struct BookTransactionsView: View {
                         Image(systemName: "plus")
                             .fontWeight(.bold)
                     }
-                    .accessibilityLabel("新增交易")
+                    .accessibilityLabel(Text(.transactionActionAdd))
                 }
             }
         }
@@ -237,7 +242,8 @@ private struct BookTransactionsView: View {
                     query: $query,
                     scope: $scope,
                     selectedBookIDs: $selectedCustomBookIDs,
-                    currentBookName: selectedBook?.name ?? "未選擇帳本"
+                    currentBookName: selectedBook?.name
+                        ?? LedgerStringKey.transactionScopeNoBookSelected.string()
                 )
             }
             .presentationDetents([.large])
@@ -286,6 +292,21 @@ private struct BookTransactionsView: View {
         )
     }
 
+    /// 已套用的條件數量要唸出來，否則 VoiceOver 使用者只知道有一個「篩選」按鈕，
+    /// 不知道目前的結果已經被收斂過。
+    private var filterAccessibilityLabel: String {
+        guard query.hasActiveFilters else {
+            return LedgerStringKey.transactionActionFilter.string()
+        }
+        return LedgerStringKey.transactionActionFilterActive.string(
+            arguments: [Int64(query.activeFilterCount)]
+        )
+    }
+
+    private var groupName: String {
+        group.name ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
@@ -295,51 +316,74 @@ private struct BookTransactionsView: View {
                             Button {
                                 selectedGroupID = candidate.objectID
                             } label: {
+                                let name = candidate.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
                                 if candidate.objectID == group.objectID {
-                                    Label(candidate.name ?? "未命名群組", systemImage: "checkmark")
+                                    Label {
+                                        Text(verbatim: name)
+                                    } icon: {
+                                        Image(systemName: "checkmark")
+                                    }
                                 } else {
-                                    Text(candidate.name ?? "未命名群組")
+                                    Text(verbatim: name)
                                 }
                             }
                         }
                     } label: {
-                        selectorLabel(group.name ?? "未命名群組", systemImage: "person.3.fill")
+                        selectorLabel(groupName, systemImage: "person.3.fill")
                     }
-                    .accessibilityLabel("切換群組")
+                    .accessibilityLabel(Text(.transactionGroupPickerAccessibilityLabel))
+                    .accessibilityValue(Text(verbatim: groupName))
                 } else {
-                    Label(group.name ?? "未命名群組", systemImage: "person.3.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    Label {
+                        Text(verbatim: groupName)
+                    } icon: {
+                        Image(systemName: "person.3.fill")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 8)
 
                 if let selectedBook {
+                    let selectedBookName = selectedBook.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
                     Menu {
                         ForEach(activeBooks, id: \.objectID) { book in
                             Button {
                                 select(book)
                             } label: {
+                                let name = book.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
                                 if book == selectedBook {
-                                    Label(book.name ?? "未命名帳本", systemImage: "checkmark")
+                                    Label {
+                                        Text(verbatim: name)
+                                    } icon: {
+                                        Image(systemName: "checkmark")
+                                    }
                                 } else {
-                                    Text(book.name ?? "未命名帳本")
+                                    Text(verbatim: name)
                                 }
                             }
                         }
                     } label: {
-                        selectorLabel(selectedBook.name ?? "未命名帳本", systemImage: "book.closed.fill")
+                        selectorLabel(selectedBookName, systemImage: "book.closed.fill")
                     }
-                    .accessibilityLabel("切換目前帳本")
+                    .accessibilityLabel(Text(.transactionBookPickerAccessibilityLabel))
+                    .accessibilityValue(Text(verbatim: selectedBookName))
                 }
             }
 
-            Picker("交易類型", selection: kindFilter) {
+            Picker(selection: kindFilter) {
                 ForEach(Filter.allCases) { item in
-                    Text(item.rawValue).tag(item)
+                    Text(item.titleKey).tag(item)
                 }
+            } label: {
+                Text(.transactionKindFilterTitle)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel(Text(.transactionKindFilterTitle))
 
             scopeSummary
         }
@@ -351,40 +395,56 @@ private struct BookTransactionsView: View {
     /// 交易，還是被條件收斂過的一部分。
     private var scopeSummary: some View {
         HStack(spacing: 8) {
-            Label(scopeLabel, systemImage: "book.closed.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            Label {
+                Text(verbatim: scopeLabel)
+            } icon: {
+                Image(systemName: "book.closed.fill")
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
 
             Spacer(minLength: 8)
 
             if query.isEmpty {
-                Text("\(result.matchCount) 筆")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(verbatim: LedgerStringKey.transactionResultCount.string(
+                    arguments: [Int64(result.matchCount)]
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
             } else {
-                Text("符合 \(result.matchCount) / \(result.scopedCount) 筆")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(LedgerTheme.primaryStrong)
+                Text(verbatim: LedgerStringKey.transactionResultMatchCount.string(
+                    arguments: [Int64(result.matchCount), Int64(result.scopedCount)]
+                ))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(LedgerTheme.primaryStrong)
 
-                Button("清除") {
+                Button {
                     query = TransactionQuery()
+                } label: {
+                    Text(.transactionResultClear)
                 }
                 .font(.caption.weight(.semibold))
                 .buttonStyle(.borderless)
             }
         }
-        .accessibilityElement(children: .combine)
+        // 範圍與筆數合起來才是一句話；「清除」保留成自己的按鈕，否則 VoiceOver
+        // 使用者會讀得到這個狀態，卻沒有辦法動它。
+        .accessibilityElement(children: .contain)
     }
 
     private var scopeLabel: String {
         switch scope {
         case .allActiveBooks:
-            return "全部帳本（\(result.includedBookIDs.count) 本）"
+            return LedgerStringKey.transactionScopeAllBooks.string(
+                arguments: [Int64(result.includedBookIDs.count)]
+            )
         case .currentBook:
-            return selectedBook?.name ?? "未選擇帳本"
+            return selectedBook?.name ?? LedgerStringKey.transactionScopeNoBookSelected.string()
         case .selectedBookIDs:
-            return "自選帳本（\(result.includedBookIDs.count) 本）"
+            return LedgerStringKey.transactionScopeSelectedBooks.string(
+                arguments: [Int64(result.includedBookIDs.count)]
+            )
         }
     }
 
@@ -475,21 +535,21 @@ private struct TransactionResultListView: View {
     private var matchTotals: some View {
         LedgerCard {
             HStack(spacing: 16) {
-                totalColumn(title: "收入", amount: result.income, tint: LedgerTheme.primary)
+                totalColumn(title: .entryKindIncome, amount: result.income, tint: LedgerTheme.primary)
                 Divider().frame(height: 30)
-                totalColumn(title: "支出", amount: result.expense, tint: LedgerTheme.coral)
+                totalColumn(title: .entryKindExpense, amount: result.expense, tint: LedgerTheme.coral)
                 Divider().frame(height: 30)
-                totalColumn(title: "淨額", amount: result.net, tint: .primary)
+                totalColumn(title: .transactionTotalsNet, amount: result.net, tint: .primary)
             }
         }
     }
 
-    private func totalColumn(title: String, amount: Decimal, tint: Color) -> some View {
+    private func totalColumn(title: LedgerStringKey, amount: Decimal, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(LedgerCurrency.format(amount, currencyCode: currencyCode))
+            Text(verbatim: LedgerCurrency.format(amount, currencyCode: currencyCode))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(tint)
                 .lineLimit(1)
@@ -501,10 +561,11 @@ private struct TransactionResultListView: View {
 
     private func monthHeader(_ section: TransactionSearchSection) -> some View {
         HStack {
-            Text(section.title)
+            // 標題是搜尋服務用 `Date.FormatStyle` 依目前 locale 排出來的年月，不是文案。
+            Text(verbatim: section.title)
                 .font(.subheadline.weight(.bold))
             Spacer()
-            Text(LedgerCurrency.format(section.net, currencyCode: currencyCode))
+            Text(verbatim: LedgerCurrency.format(section.net, currencyCode: currencyCode))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
@@ -520,28 +581,35 @@ private struct TransactionResultListView: View {
         if !hasSearchableBooks {
             LedgerEmptyState(
                 systemImage: "book.closed",
-                title: "沒有選擇任何帳本",
-                message: "請在篩選面板選擇至少一本帳本，才能搜尋交易。"
+                title: .transactionEmptyNoBookSelectedTitle,
+                message: .transactionEmptyNoBookSelectedMessage
             )
         } else if isFiltered {
             LedgerEmptyState(
                 systemImage: "magnifyingglass",
-                title: "沒有符合的交易",
-                message: result.scopedCount > 0
-                    ? "這個範圍內有 \(result.scopedCount) 筆交易，但都不符合目前的關鍵字與篩選條件。"
-                    : "這個範圍內還沒有任何交易。"
+                title: .transactionEmptyNoMatchTitle,
+                message: Text(verbatim: noMatchMessage)
             )
         } else {
             LedgerEmptyState(
                 systemImage: "receipt",
-                title: "沒有有效交易",
+                title: .transactionEmptyNoneTitle,
                 message: writeAccess.canWrite
-                    ? "新增共同收支後，就能在這裡查看、編輯與核對交易。"
-                    : "目前還沒有可檢視的交易。",
-                actionTitle: addAction == nil ? nil : "新增交易",
+                    ? LedgerStringKey.transactionEmptyNoneMessageWritable
+                    : LedgerStringKey.transactionEmptyNoneMessageReadOnly,
+                actionTitle: addAction == nil ? nil : LedgerStringKey.transactionActionAdd,
                 action: addAction
             )
         }
+    }
+
+    private var noMatchMessage: String {
+        guard result.scopedCount > 0 else {
+            return LedgerStringKey.transactionEmptyNoMatchMessageEmpty.string()
+        }
+        return LedgerStringKey.transactionEmptyNoMatchMessageScoped.string(
+            arguments: [Int64(result.scopedCount)]
+        )
     }
 }
 
@@ -568,10 +636,12 @@ private struct EntryRow: View {
     private var subtitle: String {
         var parts: [String] = []
         if let date = entry.date {
-            parts.append(date.formatted(date: .abbreviated, time: .omitted))
+            parts.append(LedgerFormatters.day(date))
         }
         if kind == .transfer, let from = entry.sourceAccount?.name, let to = entry.destinationAccount?.name {
-            parts.append("\(from) → \(to)")
+            parts.append(
+                LedgerStringKey.transactionRowTransferRoute.string(arguments: [from, to])
+            )
         } else if let account = entry.sourceAccount?.name {
             parts.append(account)
         }
@@ -604,11 +674,12 @@ private struct EntryRow: View {
                 LedgerIconBadge(systemImage: kind.systemImage, tint: kind.tint)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(title)
+                        // 標題是分類、備註或交易種類，三者都是資料而不是文案。
+                        Text(verbatim: title)
                             .font(.subheadline.weight(.semibold))
                             .strikethrough(isVoided)
                         if isVoided {
-                            Text("已作廢")
+                            Text(.transactionRowVoided)
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 7)
@@ -617,22 +688,26 @@ private struct EntryRow: View {
                         }
                     }
                     if !subtitle.isEmpty {
-                        Text(subtitle)
+                        Text(verbatim: subtitle)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
-                Text(amountText)
+                Text(verbatim: amountText)
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(isVoided ? .secondary : amountColor)
                     .strikethrough(isVoided)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
         }
         .opacity(isVoided ? 0.75 : 1)
+        // 一列就是一筆交易：分開唸成標題、日期、金額三個元素，使用者要滑三次才知道
+        // 自己停在哪一筆。
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -703,15 +778,19 @@ private struct TransactionDetailView: View {
         List {
             if isVoided {
                 Section {
-                    Label("此交易已作廢，保留於稽核歷史中。", systemImage: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+                    Label {
+                        Text(.transactionDetailVoidedNotice)
+                    } icon: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .foregroundStyle(.secondary)
                 }
             }
 
-            Section("交易") {
-                detailRow("類型", value: kind.displayName)
+            Section {
+                detailRow(.transactionDetailFieldKind, value: kind.displayName)
                 detailRow(
-                    "金額",
+                    .transactionDetailFieldAmount,
                     value: LedgerCurrency.formatSigned(
                         detailAmount,
                         kind: kind,
@@ -719,41 +798,51 @@ private struct TransactionDetailView: View {
                     )
                 )
                 if let date = entry.date {
-                    detailRow("日期", value: date.formatted(date: .long, time: .omitted))
+                    detailRow(.transactionDetailFieldDate, value: LedgerFormatters.longDay(date))
                 }
-                detailRow("帳本", value: entry.book?.name ?? "未命名帳本")
+                detailRow(
+                    .transactionDetailFieldBook,
+                    value: entry.book?.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
+                )
                 if let category = entry.category?.name, !category.isEmpty {
-                    detailRow("分類", value: category)
+                    detailRow(.transactionDetailFieldCategory, value: category)
                 }
                 if kind == .transfer {
-                    detailRow("轉出帳戶", value: entry.sourceAccount?.name ?? "-")
-                    detailRow("轉入帳戶", value: entry.destinationAccount?.name ?? "-")
+                    detailRow(.transactionDetailFieldSourceAccount, value: accountName(entry.sourceAccount))
+                    detailRow(
+                        .transactionDetailFieldDestinationAccount,
+                        value: accountName(entry.destinationAccount)
+                    )
                 } else {
-                    detailRow("帳戶", value: entry.sourceAccount?.name ?? "-")
+                    detailRow(.transactionDetailFieldAccount, value: accountName(entry.sourceAccount))
                 }
                 if let note = entry.note, !note.isEmpty {
-                    detailRow("備註", value: note)
+                    detailRow(.transactionDetailFieldNote, value: note)
                 }
+            } header: {
+                Text(.transactionDetailSectionTransaction)
             }
 
             if kind != .transfer {
-                Section("付款人") {
+                Section {
                     ForEach(payments, id: \.objectID) { payment in
                         detailRow(
-                            payment.member?.displayName ?? "未命名成員",
+                            memberName(payment.member),
                             value: LedgerCurrency.format(
                                 (payment.amount as Decimal?) ?? 0,
                                 currencyCode: currencyCode
                             )
                         )
                     }
+                } header: {
+                    Text(.transactionDetailSectionPayers)
                 }
 
-                Section("分攤 · \(splitModeName)") {
+                Section {
                     ForEach(splits, id: \.objectID) { split in
                         VStack(alignment: .leading, spacing: 4) {
                             detailRow(
-                                split.member?.displayName ?? "未命名成員",
+                                memberName(split.member),
                                 value: LedgerCurrency.format(
                                     (split.amount as Decimal?) ?? 0,
                                     currencyCode: currencyCode
@@ -761,36 +850,46 @@ private struct TransactionDetailView: View {
                             )
                             if let input = split.inputValue as Decimal?,
                                splitMode != .equal {
-                                Text(splitMode == .percentage
-                                     ? "原始輸入：\(NSDecimalNumber(decimal: input).stringValue)%"
-                                     : "原始輸入：\(LedgerCurrency.format(input, currencyCode: currencyCode))")
+                                Text(verbatim: originalInputText(input))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        .accessibilityElement(children: .combine)
                     }
+                } header: {
+                    Text(verbatim: LedgerStringKey.transactionDetailSectionSplits.string(
+                        arguments: [splitModeName]
+                    ))
                 }
             }
 
             if !isVoided {
                 if let message = writeAccess.noticeMessage {
                     Section {
-                        Label(message, systemImage: "lock")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Label {
+                            // 權限說明來自資料層的 `PermissionError`，那一層還沒遷移。
+                            Text(verbatim: message)
+                        } icon: {
+                            Image(systemName: "lock")
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     }
                 } else if writeAccess.canWrite {
                     Section {
-                        Button("作廢交易", role: .destructive) {
+                        Button(role: .destructive) {
                             showVoidConfirmation = true
+                        } label: {
+                            Text(.transactionDetailActionVoid)
                         }
                     } footer: {
-                        Text("作廢不會刪除歷史紀錄；系統會保存交易當下的付款與分攤快照。")
+                        Text(.transactionDetailVoidFooter)
                     }
                 }
             }
         }
-        .navigationTitle("交易詳情")
+        .navigationTitle(Text(.transactionDetailTitle))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: reloadStatus)
         .onReceive(
@@ -806,8 +905,10 @@ private struct TransactionDetailView: View {
         }
         .toolbar {
             if !isVoided, entry.book?.archivedAt == nil, writeAccess.canWrite {
-                Button("編輯") {
+                Button {
                     isEditing = true
+                } label: {
+                    Text(.commonActionEdit)
                 }
             }
         }
@@ -823,19 +924,26 @@ private struct TransactionDetailView: View {
             }
         }
         .confirmationDialog(
-            "確定要作廢這筆交易？",
+            Text(.transactionDetailVoidConfirmTitle),
             isPresented: $showVoidConfirmation,
             titleVisibility: .visible
         ) {
-            Button("作廢交易", role: .destructive, action: voidEntry)
-            Button("取消", role: .cancel) {}
+            Button(role: .destructive, action: voidEntry) {
+                Text(.transactionDetailActionVoid)
+            }
+            Button(role: .cancel) {} label: {
+                Text(.commonActionCancel)
+            }
         } message: {
-            Text("作廢後不能再編輯，但完整交易快照仍會保留在稽核紀錄。")
+            Text(.transactionDetailVoidConfirmMessage)
         }
-        .alert("無法處理交易", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.transactionDetailErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            // 錯誤內容來自資料層，那一層還沒遷移到 catalog。
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -852,14 +960,45 @@ private struct TransactionDetailView: View {
         )
     }
 
+    private func detailRow(_ title: LedgerStringKey, value: String) -> some View {
+        detailRow(Text(title), value: value)
+    }
+
+    /// 標題是成員名稱這類資料時用這一個；欄位名稱一律走上面的鍵。
     private func detailRow(_ title: String, value: String) -> some View {
+        detailRow(Text(verbatim: title), value: value)
+    }
+
+    private func detailRow(_ title: Text, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title)
+            title
                 .foregroundStyle(.secondary)
             Spacer(minLength: 16)
-            Text(value)
+            Text(verbatim: value)
                 .multilineTextAlignment(.trailing)
         }
+        // 欄位名稱與值分開唸，使用者要滑兩次才聽得懂一行；合成一個元素才是一句話。
+        .accessibilityElement(children: .combine)
+    }
+
+    private func accountName(_ account: LedgerAccount?) -> String {
+        guard let account else { return "—" }
+        return account.name ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string()
+    }
+
+    private func memberName(_ member: Member?) -> String {
+        member?.displayName ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
+    }
+
+    private func originalInputText(_ input: Decimal) -> String {
+        if splitMode == .percentage {
+            return LedgerStringKey.transactionDetailSplitOriginalPercentage.string(
+                arguments: [NSDecimalNumber(decimal: input).stringValue]
+            )
+        }
+        return LedgerStringKey.transactionDetailSplitOriginalAmount.string(
+            arguments: [LedgerCurrency.format(input, currencyCode: currencyCode)]
+        )
     }
 
     private func voidEntry() {

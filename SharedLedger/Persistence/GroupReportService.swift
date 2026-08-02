@@ -83,7 +83,8 @@ struct GroupReportService {
             let categoryKey = categoryID?.uuidString ?? "uncategorized"
             var category = categoryTotals[categoryKey] ?? MutableCategorySummary(
                 categoryID: categoryID,
-                name: entry.category?.name ?? "未分類"
+                name: entry.category?.name
+                    ?? LedgerStringKey.transactionFormCategoryNone.string()
             )
             if kind == .income {
                 category.income += amount
@@ -94,7 +95,7 @@ struct GroupReportService {
 
             var bookSummary = bookTotals[bookID] ?? MutableBookSummary(
                 bookID: bookID,
-                name: book.name ?? "未命名帳本"
+                name: book.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
             )
             if kind == .income {
                 bookSummary.income += amount
@@ -107,9 +108,11 @@ struct GroupReportService {
                 GroupReportSourceEntry(
                     id: entryID,
                     bookID: bookID,
-                    bookName: book.name ?? "未命名帳本",
+                    bookName: book.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedBook.string(),
                     categoryID: categoryID,
-                    categoryName: entry.category?.name ?? "未分類",
+                    categoryName: entry.category?.name
+                        ?? LedgerStringKey.transactionFormCategoryNone.string(),
                     kind: kind,
                     amount: amount,
                     date: date,

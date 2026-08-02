@@ -48,13 +48,6 @@ struct LedgerExportService {
     private let dayFormatter: DateFormatter
     private let timestampFormatter: DateFormatter
 
-    /// 匯出檔目前固定使用正體中文。
-    ///
-    /// 欄位標題還是這個檔案裡的硬編碼字串，值卻已經走 catalog；讓值跟著裝置語言跑，
-    /// 英文使用者拿到的就是中文標題配英文內容的檔案。標題進 catalog 的那一次，這裡
-    /// 要一起改成跟隨使用者語言，兩邊才會同時變。
-    private static let exportLocale = Locale(identifier: "zh-Hant")
-
     init(persistence: PersistenceController = .shared, calendar: Calendar = .current) {
         self.persistence = persistence
         self.calendar = calendar
@@ -100,7 +93,7 @@ struct LedgerExportService {
 
         var documents = [
             LedgerExportDocument(
-                fileName: "\(prefix)-交易.csv",
+                fileName: fileName(prefix: prefix, kind: .exportFileTransactions),
                 contents: transactionsDocument(
                     entries: entries,
                     voidedEntryIDs: result.voidedEntryIDs,
@@ -112,7 +105,7 @@ struct LedgerExportService {
         if request.includesAccounts {
             documents.append(
                 LedgerExportDocument(
-                    fileName: "\(prefix)-帳戶.csv",
+                    fileName: fileName(prefix: prefix, kind: .exportFileAccounts),
                     contents: accountsDocument(in: group, currencyCode: currencyCode)
                 )
             )
@@ -121,7 +114,7 @@ struct LedgerExportService {
         if request.includesSettlements {
             documents.append(
                 LedgerExportDocument(
-                    fileName: "\(prefix)-結算.csv",
+                    fileName: fileName(prefix: prefix, kind: .exportFileSettlements),
                     contents: settlementsDocument(books: includedBooks, currencyCode: currencyCode)
                 )
             )
@@ -130,7 +123,9 @@ struct LedgerExportService {
         return LedgerExportSummary(
             documents: documents,
             transactionCount: entries.count,
-            includedBookNames: includedBooks.map { $0.name ?? "未命名帳本" }
+            includedBookNames: includedBooks.map {
+                $0.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
+            }
         )
     }
 
@@ -142,19 +137,31 @@ struct LedgerExportService {
         currencyCode: String
     ) -> String {
         let header = [
-            "帳本", "日期", "類型", "分類", "金額", "貨幣",
-            "轉出帳戶", "轉入帳戶", "付款明細", "分攤方式", "分攤明細",
-            "備註", "狀態", "交易識別碼"
-        ]
+            LedgerStringKey.exportColumnBook,
+            .exportColumnDate,
+            .exportColumnKind,
+            .exportColumnCategory,
+            .exportColumnAmount,
+            .exportColumnCurrency,
+            .exportColumnSourceAccount,
+            .exportColumnDestinationAccount,
+            .exportColumnPayments,
+            .exportColumnSplitMode,
+            .exportColumnSplits,
+            .exportColumnNote,
+            .exportColumnStatus,
+            .exportColumnEntryID
+        ].map { $0.string() }
         let rows = entries.map { entry -> [CSVValue] in
             let kind = entry.kind.flatMap(EntryKind.init(rawValue:)) ?? .expense
             let amount = (entry.amount as Decimal?) ?? 0
             let isVoided = entry.id.map(voidedEntryIDs.contains) == true
             return [
-                .text(entry.book?.name ?? "未命名帳本"),
+                .text(entry.book?.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()),
                 .generated(entry.date.map(isoDay) ?? ""),
-                .generated(kind.displayNameKey.string(locale: Self.exportLocale)),
-                .text(entry.category?.name ?? "未分類"),
+                .generated(kind.displayName),
+                .text(entry.category?.name
+                    ?? LedgerStringKey.transactionFormCategoryNone.string()),
                 // 匯出的是可再計算的原始數值，不是畫面上的貨幣字串：帶著貨幣符號與
                 // 千分位的欄位在試算表裡是文字，沒辦法直接加總。
                 .generated(decimalString(amount)),
@@ -165,7 +172,7 @@ struct LedgerExportService {
                 .generated(splitMode(of: entry).displayName),
                 .text(splitDetail(of: entry)),
                 .text(entry.note ?? ""),
-                .generated(isVoided ? "已作廢" : "有效"),
+                .generated(statusText(isVoided ? .exportStatusVoided : .exportStatusActive)),
                 .generated(entry.id?.uuidString ?? "")
             ]
         }
@@ -186,14 +193,14 @@ struct LedgerExportService {
             return "\(payer):\(decimalString((entry.amount as Decimal?) ?? 0))"
         }
         return payments
-            .map { "\($0.member?.displayName ?? "未命名成員"):\(decimalString(($0.amount as Decimal?) ?? 0))" }
+            .map { detailPair(for: $0.member, amount: ($0.amount as Decimal?) ?? 0) }
             .joined(separator: ";")
     }
 
     private func splitDetail(of entry: LedgerEntry) -> String {
         (entry.splits as? Set<EntrySplit> ?? [])
             .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
-            .map { "\($0.member?.displayName ?? "未命名成員"):\(decimalString(($0.amount as Decimal?) ?? 0))" }
+            .map { detailPair(for: $0.member, amount: ($0.amount as Decimal?) ?? 0) }
             .joined(separator: ";")
     }
 
@@ -204,22 +211,32 @@ struct LedgerExportService {
     // MARK: - 帳戶
 
     private func accountsDocument(in group: LedgerGroup, currencyCode: String) -> String {
-        let header = ["帳戶", "類型", "期初餘額", "目前餘額", "貨幣", "最後對帳日", "狀態"]
+        let header = [
+            LedgerStringKey.exportColumnAccount,
+            .exportColumnKind,
+            .exportColumnOpeningBalance,
+            .exportColumnCurrentBalance,
+            .exportColumnCurrency,
+            .exportColumnLastReconciledAt,
+            .exportColumnStatus
+        ].map { $0.string() }
         let repository = AccountRepository(persistence: persistence)
         let accounts = (group.accounts as? Set<LedgerAccount> ?? [])
             .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
         let rows = accounts.map { account -> [CSVValue] in
             let type = account.accountType.flatMap(AccountType.init(rawValue:)) ?? .other
             return [
-                .text(account.name ?? "未命名帳戶"),
-                .generated(type.displayNameKey.string(locale: Self.exportLocale)),
+                .text(account.name ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string()),
+                .generated(type.displayName),
                 .generated(decimalString((account.openingBalance as Decimal?) ?? 0)),
                 // 帳戶餘額是整個群組範圍，不隨匯出的帳本範圍或日期區間改變，
                 // 所以這份檔案不套用交易的篩選條件。
                 .generated(decimalString(repository.currentBalance(for: account))),
                 .generated(currencyCode),
                 .generated(account.lastReconciledAt.map(isoDay) ?? ""),
-                .generated(account.archivedAt == nil ? "使用中" : "已封存")
+                .generated(statusText(
+                    account.archivedAt == nil ? .exportStatusInUse : .exportStatusArchived
+                ))
             ]
         }
         return CSVWriter.document(header: header, rows: rows)
@@ -228,20 +245,33 @@ struct LedgerExportService {
     // MARK: - 結算
 
     private func settlementsDocument(books: [LedgerBook], currencyCode: String) -> String {
-        let header = ["帳本", "記錄時間", "付款人", "收款人", "金額", "貨幣", "備註", "狀態"]
+        let header = [
+            LedgerStringKey.exportColumnBook,
+            .exportColumnRecordedAt,
+            .exportColumnPayer,
+            .exportColumnRecipient,
+            .exportColumnAmount,
+            .exportColumnCurrency,
+            .exportColumnNote,
+            .exportColumnStatus
+        ].map { $0.string() }
         let repository = SettlementRepository(persistence: persistence)
         let rows = books.flatMap { book -> [[CSVValue]] in
             let names = memberNames(in: book.group)
             return repository.history(in: book).map { item in
                 [
-                    .text(book.name ?? "未命名帳本"),
+                    .text(book.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()),
                     .generated(isoTimestamp(item.recordedAt)),
-                    .text(names[item.fromMemberID] ?? "未命名成員"),
-                    .text(names[item.toMemberID] ?? "未命名成員"),
+                    .text(names[item.fromMemberID]
+                        ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()),
+                    .text(names[item.toMemberID]
+                        ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()),
                     .generated(decimalString(item.amount)),
                     .generated(currencyCode),
                     .text(item.note),
-                    .generated(item.isReversed ? "已撤銷" : "有效")
+                    .generated(statusText(
+                        item.isReversed ? .exportStatusReversed : .exportStatusActive
+                    ))
                 ]
             }
         }
@@ -251,7 +281,10 @@ struct LedgerExportService {
     private func memberNames(in group: LedgerGroup?) -> [UUID: String] {
         let members = group?.members as? Set<Member> ?? []
         return Dictionary(uniqueKeysWithValues: members.compactMap { member in
-            member.id.map { ($0, member.displayName ?? "未命名成員") }
+            member.id.map {
+                ($0, member.displayName
+                    ?? LedgerStringKey.commonPlaceholderUnnamedMember.string())
+            }
         })
     }
 
@@ -270,13 +303,34 @@ struct LedgerExportService {
         timestampFormatter.string(from: date)
     }
 
+    /// 欄位標題、狀態值與檔名都跟著使用者的語言：整份檔案要嘛全中文、要嘛全英文，
+    /// 不能是中文標題配英文內容。
+    ///
+    /// 代價是同一個群組在不同語言的裝置上匯出的欄位標題不同，未來要做 CSV 匯入時，
+    /// 不能靠標題文字認欄位，得改用欄位順序或另外寫一行版本標記。
+    private func statusText(_ key: LedgerStringKey) -> String {
+        key.string()
+    }
+
+    private func fileName(prefix: String, kind: LedgerStringKey) -> String {
+        "\(prefix)-\(kind.string()).csv"
+    }
+
+    private func detailPair(for member: Member?, amount: Decimal) -> String {
+        let name = member?.displayName
+            ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
+        return "\(name):\(decimalString(amount))"
+    }
+
     /// 檔名要能在檔案 App 裡一眼分辨來源與時間，同時避開路徑分隔字元。
     private func fileNamePrefix(for group: LedgerGroup) -> String {
-        let name = (group.name ?? "群組")
+        let name = (group.name ?? LedgerStringKey.exportFileGroupFallback.string())
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let safeName = name.isEmpty ? "群組" : name
+        let safeName = name.isEmpty
+            ? LedgerStringKey.exportFileGroupFallback.string()
+            : name
         return "\(safeName)-\(isoDay(Date()))"
     }
 }

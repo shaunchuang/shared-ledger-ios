@@ -72,7 +72,7 @@ struct CloudSharingView: UIViewControllerRepresentable {
             failedToSaveShareWithError error: Error
         ) {
             report(
-                title: "無法儲存共享邀請",
+                title: .groupShareErrorSave,
                 error: error
             )
         }
@@ -85,7 +85,7 @@ struct CloudSharingView: UIViewControllerRepresentable {
             ) { [weak self] _, error in
                 if let error {
                     self?.report(
-                        title: "無法同步共享邀請",
+                        title: .groupShareErrorSync,
                         error: error
                     )
                 }
@@ -120,14 +120,17 @@ struct CloudSharingView: UIViewControllerRepresentable {
             } catch {
                 context.rollback()
                 report(
-                    title: "已停止 iCloud 共享，但無法清除舊的參與者對應",
+                    title: .groupShareErrorStopped,
                     error: error
                 )
             }
         }
 
-        private func report(title: String, error: Error) {
-            let message = "\(title)：\(error.localizedDescription)"
+        private func report(title: LedgerStringKey, error: Error) {
+            // 錯誤本身還是系統或資料層給的字串，只有前半句是文案。
+            let message = LedgerStringKey.groupShareErrorFormat.string(
+                arguments: [title.string(), error.localizedDescription]
+            )
             DispatchQueue.main.async { [onError] in
                 onError(message)
             }

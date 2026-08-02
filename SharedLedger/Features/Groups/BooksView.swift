@@ -52,9 +52,14 @@ struct BooksView: View {
             List {
                 if let message = settingsRestriction?.errorDescription {
                     Section {
-                        Label(message, systemImage: "lock")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Label {
+                            // 權限說明來自資料層的 `PermissionError`，那一層還沒遷移。
+                            Text(verbatim: message)
+                        } icon: {
+                            Image(systemName: "lock")
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     }
                 }
 
@@ -64,13 +69,13 @@ struct BooksView: View {
                     }
                     .onMove(perform: moveBooksHandler)
                 } header: {
-                    Text("使用中的帳本")
+                    Text(.bookSectionActive)
                 } footer: {
-                    Text("目前帳本決定交易與報表範圍；群組帳戶與分類目錄可供所有帳本共用。")
+                    Text(.bookSectionActiveFooter)
                 }
 
                 if !archivedBooks.isEmpty {
-                    Section("已封存") {
+                    Section {
                         ForEach(archivedBooks, id: \.objectID) { book in
                             NavigationLink {
                                 ArchivedBookHistoryView(book: book)
@@ -78,9 +83,9 @@ struct BooksView: View {
                                 HStack(spacing: 12) {
                                     LedgerIconBadge(systemImage: "archivebox.fill", tint: .secondary)
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(book.name ?? "未命名帳本")
+                                        Text(verbatim: bookName(book))
                                             .font(.subheadline.weight(.semibold))
-                                        Text("查看保留的分類與交易歷史")
+                                        Text(.bookArchivedDetail)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -88,12 +93,14 @@ struct BooksView: View {
                                 .accessibilityElement(children: .combine)
                             }
                         }
+                    } header: {
+                        Text(.bookSectionArchived)
                     }
                 }
             }
             .scrollContentBackground(.hidden)
         }
-        .navigationTitle("管理帳本")
+        .navigationTitle(Text(.bookManageTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -107,7 +114,7 @@ struct BooksView: View {
                         Image(systemName: "plus")
                             .fontWeight(.bold)
                     }
-                    .accessibilityLabel("新增帳本")
+                    .accessibilityLabel(Text(.bookActionAdd))
                 }
             }
         }
@@ -131,22 +138,30 @@ struct BooksView: View {
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
-            "封存帳本？",
+            Text(.bookArchiveConfirmTitle),
             isPresented: archiveConfirmationBinding,
             titleVisibility: .visible,
             presenting: bookPendingArchive
         ) { book in
-            Button("封存「\(book.name ?? "未命名帳本")」", role: .destructive) {
+            Button(role: .destructive) {
                 archive(book)
+            } label: {
+                Text(verbatim: LedgerStringKey.bookArchiveConfirmAction.string(
+                    arguments: [bookName(book)]
+                ))
             }
-            Button("取消", role: .cancel) {}
-        } message: { book in
-            Text("帳本的分類啟用設定與交易都會保留，但不能再新增交易；群組帳戶與分類目錄不受影響。")
+            Button(role: .cancel) {} label: {
+                Text(.commonActionCancel)
+            }
+        } message: { _ in
+            Text(.bookArchiveConfirmMessage)
         }
-        .alert("無法更新帳本", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.bookErrorUpdateTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
         .onAppear(perform: normalizeSelection)
         .onChange(of: activeBooks.count) {
@@ -165,16 +180,16 @@ struct BooksView: View {
                         tint: isSelected(book) ? LedgerTheme.primary : .secondary
                     )
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(book.name ?? "未命名帳本")
+                        Text(verbatim: bookName(book))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
                         HStack(spacing: 6) {
                             if isSelected(book) {
-                                Text("目前帳本")
+                                Text(.bookLabelCurrent)
                                     .foregroundStyle(LedgerTheme.primary)
                             }
                             if book.isDefault {
-                                Text("預設")
+                                Text(.bookBadgeDefault)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -184,13 +199,18 @@ struct BooksView: View {
                     if isSelected(book) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(LedgerTheme.primary)
+                            .accessibilityHidden(true)
                     }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("選擇帳本「\(book.name ?? "未命名帳本")」")
-            .accessibilityValue(isSelected(book) ? "目前帳本" : "")
+            .accessibilityLabel(Text(verbatim: LedgerStringKey.bookRowAccessibilityLabel.string(
+                arguments: [bookName(book)]
+            )))
+            // 選中與否交給 `.isSelected`，VoiceOver 會自己唸出「已選取」，
+            // 不必再塞一個只有選中時才有內容的 value。
+            .accessibilityAddTraits(isSelected(book) ? [.isButton, .isSelected] : .isButton)
 
             if settingsRestriction == nil {
                 Menu {
@@ -198,24 +218,24 @@ struct BooksView: View {
                         Button {
                             setDefault(book)
                         } label: {
-                            Label("設為預設帳本", systemImage: "star")
+                            Label(.bookActionSetDefault, systemImage: "star")
                         }
                     }
                     Button {
                         bookPendingRename = book
                     } label: {
-                        Label("重新命名", systemImage: "pencil")
+                        Label(.bookActionRename, systemImage: "pencil")
                     }
                     Button(role: .destructive) {
                         bookPendingArchive = book
                     } label: {
-                        Label("封存帳本", systemImage: "archivebox")
+                        Label(.bookActionArchive, systemImage: "archivebox")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
                         .frame(width: 36, height: 44)
                 }
-                .accessibilityLabel("帳本選項")
+                .accessibilityLabel(Text(.bookMenuAccessibilityLabel))
             }
         }
     }
@@ -232,6 +252,10 @@ struct BooksView: View {
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )
+    }
+
+    private func bookName(_ book: LedgerBook) -> String {
+        book.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
     }
 
     private func isSelected(_ book: LedgerBook) -> Bool {
@@ -306,26 +330,43 @@ private struct ArchivedBookHistoryView: View {
         ZStack {
             LedgerBackground()
             List {
-                Section("摘要") {
-                    LabeledContent("狀態", value: "已封存")
-                    LabeledContent("分類", value: "\(categoryCount)")
-                    LabeledContent("交易", value: "\(entries.count)")
+                Section {
+                    LabeledContent {
+                        Text(.bookSectionArchived)
+                    } label: {
+                        Text(.bookArchivedSummaryStatus)
+                    }
+                    LabeledContent {
+                        Text(verbatim: categoryCount.formatted())
+                    } label: {
+                        Text(.bookArchivedSummaryCategories)
+                    }
+                    LabeledContent {
+                        Text(verbatim: entries.count.formatted())
+                    } label: {
+                        Text(.bookArchivedSummaryEntries)
+                    }
+                } header: {
+                    Text(.bookArchivedSectionSummary)
                 }
 
-                Section("交易歷史") {
+                Section {
                     if entries.isEmpty {
-                        Text("這個帳本沒有交易紀錄。")
+                        Text(.bookArchivedHistoryEmpty)
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(entries, id: \.objectID) { entry in
                             ArchivedBookEntryRow(entry: entry)
                         }
                     }
+                } header: {
+                    Text(.bookArchivedSectionHistory)
                 }
             }
             .scrollContentBackground(.hidden)
         }
-        .navigationTitle(book.name ?? "已封存帳本")
+        .navigationTitle(Text(verbatim: book.name
+            ?? LedgerStringKey.bookArchivedTitleFallback.string()))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -341,34 +382,33 @@ private struct ArchivedBookEntryRow: View {
         entry.category?.name ?? entry.note ?? kind.displayName
     }
 
+    private var dateText: String {
+        entry.date.map { LedgerFormatters.day($0) }
+            ?? LedgerStringKey.bookArchivedEntryNoDate.string()
+    }
+
+    /// 金額走群組保存的貨幣，不再硬編碼 `$`：這個畫面原本假設所有群組都是美金符號，
+    /// 而群組貨幣是建立時就決定的。
     private var amountText: String {
-        let amount = (entry.amount as Decimal?) ?? 0
-        let absoluteAmount = amount < 0 ? -amount : amount
-        let formatted = (absoluteAmount as NSDecimalNumber).stringValue
-        switch kind {
-        case .income:
-            return "+$\(formatted)"
-        case .expense:
-            return "-$\(formatted)"
-        case .transfer:
-            return "$\(formatted)"
-        case .balanceAdjustment:
-            return amount >= 0 ? "+$\(formatted)" : "-$\(formatted)"
-        }
+        LedgerCurrency.formatSigned(
+            (entry.amount as Decimal?) ?? 0,
+            kind: kind,
+            currencyCode: LedgerCurrency.normalizedCode(entry.group?.currencyCode)
+        )
     }
 
     var body: some View {
         HStack(spacing: 12) {
             LedgerIconBadge(systemImage: kind.systemImage, tint: kind.tint)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
+                Text(verbatim: title)
                     .font(.subheadline.weight(.semibold))
-                Text(entry.date?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定")
+                Text(verbatim: dateText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text(amountText)
+            Text(verbatim: amountText)
                 .font(.subheadline.weight(.bold))
         }
         .accessibilityElement(children: .combine)
@@ -392,46 +432,61 @@ private struct NewBookView: View {
 
     var body: some View {
         Form {
-            Section("名稱") {
-                TextField("例如：日本旅行", text: $draft.name)
+            Section {
+                TextField("", text: $draft.name, prompt: Text(.bookNewNamePlaceholder))
                     .textInputAutocapitalization(.never)
+                    .accessibilityLabel(Text(.bookFieldName))
+            } header: {
+                Text(.bookFieldName)
             }
 
             Section {
-                Picker("分類設定", selection: $categorySetup) {
+                Picker(selection: $categorySetup) {
                     ForEach(NewBookCategorySetup.allCases, id: \.self) { option in
-                        Text(option.title).tag(option)
+                        Text(option.titleKey).tag(option)
                     }
+                } label: {
+                    Text(.bookNewFieldCategorySetup)
                 }
 
                 if categorySetup == .copyBook {
-                    Picker("沿用帳本", selection: $sourceBookID) {
+                    Picker(selection: $sourceBookID) {
                         ForEach(activeBooks, id: \.objectID) { book in
-                            Text(book.name ?? "未命名帳本").tag(book.id)
+                            Text(verbatim: book.name
+                                ?? LedgerStringKey.commonPlaceholderUnnamedBook.string())
+                                .tag(book.id)
                         }
+                    } label: {
+                        Text(.bookNewFieldSourceBook)
                     }
                 }
             } header: {
-                Text("可用分類")
+                Text(.bookNewSectionCategories)
             } footer: {
-                Text(categorySetup.detail)
+                Text(categorySetup.detailKey)
             }
         }
-        .navigationTitle("新增帳本")
+        .navigationTitle(Text(.bookActionAdd))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("新增", action: create)
-                    .disabled(!draft.canCreate)
+                Button(action: create) {
+                    Text(.commonActionAdd)
+                }
+                .disabled(!draft.canCreate)
             }
         }
-        .alert("無法新增帳本", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.bookNewErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
         .onAppear {
             if sourceBookID == nil {
@@ -455,7 +510,7 @@ private struct NewBookView: View {
                 categorySource = .allGroupCategories
             case .copyBook:
                 guard let sourceBook = activeBooks.first(where: { $0.id == sourceBookID }) else {
-                    errorMessage = "請選擇要沿用分類設定的帳本。"
+                    errorMessage = LedgerStringKey.bookNewErrorMissingSourceBook.string()
                     return
                 }
                 categorySource = .copy(sourceBook)
@@ -480,25 +535,19 @@ private enum NewBookCategorySetup: String, CaseIterable {
     case copyBook
     case empty
 
-    var title: String {
+    var titleKey: LedgerStringKey {
         switch self {
-        case .groupCategories:
-            return "使用所有群組分類"
-        case .copyBook:
-            return "沿用其他帳本"
-        case .empty:
-            return "空白開始"
+        case .groupCategories: return .bookNewCategorySetupGroupCategories
+        case .copyBook: return .bookNewCategorySetupCopyBook
+        case .empty: return .bookNewCategorySetupEmpty
         }
     }
 
-    var detail: String {
+    var detailKey: LedgerStringKey {
         switch self {
-        case .groupCategories:
-            return "預設啟用群組目前所有未封存分類。"
-        case .copyBook:
-            return "沿用另一個帳本的啟用設定，不會複製分類資料。"
-        case .empty:
-            return "建立後再到帳本設定選擇要使用的分類。"
+        case .groupCategories: return .bookNewCategorySetupGroupCategoriesDetail
+        case .copyBook: return .bookNewCategorySetupCopyBookDetail
+        case .empty: return .bookNewCategorySetupEmptyDetail
         }
     }
 }
@@ -520,26 +569,35 @@ private struct RenameBookView: View {
 
     var body: some View {
         Form {
-            Section("名稱") {
-                TextField("帳本名稱", text: $draft.name)
+            Section {
+                TextField("", text: $draft.name, prompt: Text(.bookRenameNamePlaceholder))
                     .textInputAutocapitalization(.never)
+                    .accessibilityLabel(Text(.bookRenameNamePlaceholder))
+            } header: {
+                Text(.bookFieldName)
             }
         }
-        .navigationTitle("重新命名帳本")
+        .navigationTitle(Text(.bookRenameTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("儲存", action: save)
-                    .disabled(!draft.canCreate)
+                Button(action: save) {
+                    Text(.commonActionSave)
+                }
+                .disabled(!draft.canCreate)
             }
         }
-        .alert("無法重新命名", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.commonErrorRenameFailed), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 

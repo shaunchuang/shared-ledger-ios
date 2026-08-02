@@ -11,6 +11,12 @@ struct CategoryNode: Identifiable, Equatable, Sendable {
         self.children = children
     }
 
+    /// 內建分類的名稱來自 catalog；名稱一旦寫進 Core Data 就是使用者自己的資料，
+    /// 之後改名或切換語言都不會再回頭動它。
+    init(id: UUID = UUID(), name key: LedgerStringKey, children: [CategoryNode] = []) {
+        self.init(id: id, name: key.string(), children: children)
+    }
+
     var depth: Int {
         guard let deepestChild = children.map(\.depth).max() else { return 1 }
         return deepestChild + 1
@@ -29,70 +35,70 @@ struct CategoryNode: Identifiable, Equatable, Sendable {
 enum DefaultCategoryCatalog {
     static let categories: [CategoryNode] = [
         CategoryNode(
-            name: "餐飲",
+            name: .defaultCategoryFood,
             children: [
-                CategoryNode(name: "三餐"),
-                CategoryNode(name: "飲料點心"),
-                CategoryNode(name: "外食聚餐")
+                CategoryNode(name: .defaultCategoryFoodMeals),
+                CategoryNode(name: .defaultCategoryFoodDrinks),
+                CategoryNode(name: .defaultCategoryFoodEatingOut)
             ]
         ),
         CategoryNode(
-            name: "居家",
+            name: .defaultCategoryHome,
             children: [
-                CategoryNode(name: "房租房貸"),
-                CategoryNode(name: "水電瓦斯"),
-                CategoryNode(name: "網路電信"),
-                CategoryNode(name: "家用雜支")
+                CategoryNode(name: .defaultCategoryHomeRent),
+                CategoryNode(name: .defaultCategoryHomeUtilities),
+                CategoryNode(name: .defaultCategoryHomeTelecom),
+                CategoryNode(name: .defaultCategoryHomeHousehold)
             ]
         ),
         CategoryNode(
-            name: "交通",
+            name: .defaultCategoryTransport,
             children: [
-                CategoryNode(name: "大眾運輸"),
-                CategoryNode(name: "計程車"),
-                CategoryNode(name: "汽機車")
+                CategoryNode(name: .defaultCategoryTransportPublic),
+                CategoryNode(name: .defaultCategoryTransportTaxi),
+                CategoryNode(name: .defaultCategoryTransportVehicle)
             ]
         ),
         CategoryNode(
-            name: "生活",
+            name: .defaultCategoryEveryday,
             children: [
-                CategoryNode(name: "日用品"),
-                CategoryNode(name: "服飾"),
-                CategoryNode(name: "美容保養")
+                CategoryNode(name: .defaultCategoryEverydayGoods),
+                CategoryNode(name: .defaultCategoryEverydayClothing),
+                CategoryNode(name: .defaultCategoryEverydayBeauty)
             ]
         ),
         CategoryNode(
-            name: "醫療健康",
+            name: .defaultCategoryHealth,
             children: [
-                CategoryNode(name: "門診用藥"),
-                CategoryNode(name: "保險")
+                CategoryNode(name: .defaultCategoryHealthMedicine),
+                CategoryNode(name: .defaultCategoryHealthInsurance)
             ]
         ),
         CategoryNode(
-            name: "娛樂",
+            name: .defaultCategoryLeisure,
             children: [
-                CategoryNode(name: "旅遊"),
-                CategoryNode(name: "訂閱服務"),
-                CategoryNode(name: "休閒活動")
+                CategoryNode(name: .defaultCategoryLeisureTravel),
+                CategoryNode(name: .defaultCategoryLeisureSubscriptions),
+                CategoryNode(name: .defaultCategoryLeisureActivities)
             ]
         ),
         CategoryNode(
-            name: "教育",
+            name: .defaultCategoryEducation,
             children: [
-                CategoryNode(name: "學費"),
-                CategoryNode(name: "書籍課程")
+                CategoryNode(name: .defaultCategoryEducationTuition),
+                CategoryNode(name: .defaultCategoryEducationBooks)
             ]
         ),
-        CategoryNode(name: "人情往來"),
+        CategoryNode(name: .defaultCategoryGifts),
         CategoryNode(
-            name: "收入",
+            name: .defaultCategoryIncome,
             children: [
-                CategoryNode(name: "薪資"),
-                CategoryNode(name: "獎金"),
-                CategoryNode(name: "其他收入")
+                CategoryNode(name: .defaultCategoryIncomeSalary),
+                CategoryNode(name: .defaultCategoryIncomeBonus),
+                CategoryNode(name: .defaultCategoryIncomeOther)
             ]
         ),
-        CategoryNode(name: "其他")
+        CategoryNode(name: .defaultCategoryOther)
     ]
 }
 

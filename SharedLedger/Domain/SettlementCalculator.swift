@@ -303,15 +303,15 @@ enum SettlementCalculator {
         var errorDescription: String? {
             switch self {
             case .invalidCurrencyAmount(let code):
-                return "結算金額不符合 \(code) 的最小貨幣單位。"
+                return LedgerStringKey.errorSettlementMinorUnit.string(arguments: [code])
             case .invalidTransactionAmount:
-                return "交易的付款或分攤金額無效，無法計算結算。"
+                return LedgerStringKey.errorSettlementInvalidEntry.string()
             case .transactionTotalsMismatch:
-                return "交易的付款與分攤總額不一致，無法計算結算。"
+                return LedgerStringKey.errorSettlementUnbalancedEntry.string()
             case .invalidSettlement:
-                return "結算付款人、收款人與金額必須有效。"
+                return LedgerStringKey.errorSettlementInvalidTransfer.string()
             case .unbalancedResult:
-                return "成員淨額無法平衡，請先檢查交易資料。"
+                return LedgerStringKey.errorSettlementBalanceMismatch.string()
             }
         }
     }

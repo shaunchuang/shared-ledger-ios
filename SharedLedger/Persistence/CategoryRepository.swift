@@ -734,7 +734,7 @@ struct CategoryRepository {
         audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
             .currentMember(in: group)?
             .displayName
-            ?? "目前使用者"
+            ?? LedgerStringKey.defaultMemberCurrentUser.string()
         audit.createdAt = Date()
         audit.summary = summary
         audit.group = group
@@ -758,13 +758,30 @@ struct CategoryRepository {
 
         var isEmpty: Bool { entryCount == 0 && bookCount == 0 && childCount == 0 }
 
+        /// 影響範圍會直接接在封存、改名與合併的說明後面，所以它必須自己就是一句完整
+        /// 的話。三段各自帶自己的複數規則，串接交給 `ListFormatter`：中文用頓號、
+        /// 英文用逗號與 and，不是同一種寫法。
         var summary: String {
             var parts: [String] = []
-            if bookCount > 0 { parts.append("\(bookCount) 本帳本使用") }
-            if childCount > 0 { parts.append("\(childCount) 個子分類") }
-            if entryCount > 0 { parts.append("\(entryCount) 筆歷史交易") }
-            guard !parts.isEmpty else { return "目前沒有帳本或交易使用這個分類。" }
-            return "影響 " + parts.joined(separator: "、") + "。"
+            if bookCount > 0 {
+                parts.append(
+                    LedgerStringKey.categoryImpactBooks.string(arguments: [Int64(bookCount)])
+                )
+            }
+            if childCount > 0 {
+                parts.append(
+                    LedgerStringKey.categoryImpactChildren.string(arguments: [Int64(childCount)])
+                )
+            }
+            if entryCount > 0 {
+                parts.append(
+                    LedgerStringKey.categoryImpactEntries.string(arguments: [Int64(entryCount)])
+                )
+            }
+            guard !parts.isEmpty else { return LedgerStringKey.categoryImpactNone.string() }
+            return LedgerStringKey.categoryImpactSummary.string(
+                arguments: [ListFormatter.localizedString(byJoining: parts)]
+            )
         }
     }
 
@@ -785,29 +802,29 @@ struct CategoryRepository {
         var errorDescription: String? {
             switch self {
             case .invalidDraft:
-                return "請輸入分類名稱。"
+                return LedgerStringKey.errorCategoryMissingName.string()
             case .missingGroup:
-                return "找不到分類或帳本所屬的群組。"
+                return LedgerStringKey.errorCategoryMissingGroup.string()
             case .archivedBook:
-                return "已封存的帳本不能修改可用分類。"
+                return LedgerStringKey.errorCategoryArchivedBook.string()
             case .archivedCategory:
-                return "已封存的分類不能重新啟用或修改。"
+                return LedgerStringKey.errorCategoryArchived.string()
             case .archivedParent:
-                return "已封存的分類不能新增子分類。"
+                return LedgerStringKey.errorCategoryArchivedParent.string()
             case .crossGroupBook:
-                return "分類只能啟用於同一群組的帳本。"
+                return LedgerStringKey.errorCategoryCrossGroupBook.string()
             case .crossGroupCategory:
-                return "分類與帳本必須屬於同一個群組。"
+                return LedgerStringKey.errorCategoryCrossGroupCategory.string()
             case .crossGroupParent:
-                return "子分類與父分類必須屬於同一個群組。"
+                return LedgerStringKey.errorCategoryCrossGroupParent.string()
             case .hasActiveChildren:
-                return "請先封存所有子分類，再封存這個分類。"
+                return LedgerStringKey.errorCategoryActiveChildren.string()
             case .invalidMergeTarget:
-                return "請選擇另一個不在這個分類底下的分類作為合併目標。"
+                return LedgerStringKey.errorCategoryInvalidMergeTarget.string()
             case .invalidOrder:
-                return "分類排序資料不完整，請重新整理後再試。"
+                return LedgerStringKey.errorCategoryIncompleteOrder.string()
             case .inconsistentLegacyGroup:
-                return "既有分類的群組與帳本資料不一致，無法自動遷移。"
+                return LedgerStringKey.errorCategoryInconsistentMigration.string()
             }
         }
     }

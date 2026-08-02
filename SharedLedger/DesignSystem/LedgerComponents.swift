@@ -80,46 +80,75 @@ struct LedgerAvatar: View {
 }
 
 struct LedgerSectionHeader: View {
-    private let title: Text
-    private let actionTitle: String?
-    private let action: (() -> Void)?
+    private let title: LedgerStringKey
 
-    init(title: LedgerStringKey, actionTitle: String? = nil, action: (() -> Void)? = nil) {
-        self.init(title: Text(title), actionTitle: actionTitle, action: action)
-    }
-
-    /// 還沒進 catalog 的畫面暫時仍傳字串。遷移完成後這個入口要移除，
-    /// 讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
-    init(title: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
-        self.init(title: Text(verbatim: title), actionTitle: actionTitle, action: action)
-    }
-
-    private init(title: Text, actionTitle: String?, action: (() -> Void)?) {
+    init(title: LedgerStringKey) {
         self.title = title
-        self.actionTitle = actionTitle
-        self.action = action
     }
 
     var body: some View {
         HStack {
-            title
+            Text(title)
                 .font(.title3.weight(.bold))
             Spacer()
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(LedgerTheme.primary)
-            }
         }
     }
 }
 
 struct LedgerEmptyState: View {
-    let systemImage: String
-    let title: String
-    let message: String
-    var actionTitle: String?
-    var action: (() -> Void)?
+    private let systemImage: String
+    private let title: Text
+    private let message: Text
+    private let actionTitle: Text?
+    private let action: (() -> Void)?
+
+    init(
+        systemImage: String,
+        title: LedgerStringKey,
+        message: LedgerStringKey,
+        actionTitle: LedgerStringKey? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.init(
+            systemImage: systemImage,
+            title: Text(title),
+            message: Text(message),
+            actionTitle: actionTitle.map { Text($0) },
+            action: action
+        )
+    }
+
+    /// 說明文字帶參數時由呼叫端先組好，但仍必須來自 catalog 的鍵——
+    /// `LedgerStringKey.string(arguments:)` 的結果包進 `Text(verbatim:)` 再傳進來。
+    init(
+        systemImage: String,
+        title: LedgerStringKey,
+        message: Text,
+        actionTitle: LedgerStringKey? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.init(
+            systemImage: systemImage,
+            title: Text(title),
+            message: message,
+            actionTitle: actionTitle.map { Text($0) },
+            action: action
+        )
+    }
+
+    private init(
+        systemImage: String,
+        title: Text,
+        message: Text,
+        actionTitle: Text?,
+        action: (() -> Void)?
+    ) {
+        self.systemImage = systemImage
+        self.title = title
+        self.message = message
+        self.actionTitle = actionTitle
+        self.action = action
+    }
 
     var body: some View {
         LedgerCard {
@@ -135,11 +164,13 @@ struct LedgerEmptyState: View {
                         .font(.system(size: 34, weight: .medium))
                         .foregroundStyle(LedgerTheme.primary)
                 }
+                // 圖示只是裝飾，說明全在標題與內文；讓 VoiceOver 唸出符號名稱只是噪音。
+                .accessibilityHidden(true)
 
                 VStack(spacing: 7) {
-                    Text(title)
+                    title
                         .font(.title3.weight(.bold))
-                    Text(message)
+                    message
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -147,7 +178,7 @@ struct LedgerEmptyState: View {
                 }
 
                 if let actionTitle, let action {
-                    Button(actionTitle, action: action)
+                    Button(action: action) { actionTitle }
                         .buttonStyle(LedgerPrimaryButtonStyle())
                 }
             }
@@ -179,27 +210,56 @@ struct LedgerPrimaryButtonStyle: ButtonStyle {
 }
 
 struct LedgerNavRow: View {
-    let title: String
-    let detail: String
-    let icon: String
-    var tint: Color = LedgerTheme.primary
+    private let title: Text
+    private let detail: Text
+    private let icon: String
+    private let tint: Color
+
+    init(
+        title: LedgerStringKey,
+        detail: LedgerStringKey,
+        icon: String,
+        tint: Color = LedgerTheme.primary
+    ) {
+        self.init(title: Text(title), detail: Text(detail), icon: icon, tint: tint)
+    }
+
+    /// 說明文字是群組名稱、帳本名稱這類資料時用這一個；標題一律走鍵。
+    init(
+        title: LedgerStringKey,
+        detail: String,
+        icon: String,
+        tint: Color = LedgerTheme.primary
+    ) {
+        self.init(title: Text(title), detail: Text(verbatim: detail), icon: icon, tint: tint)
+    }
+
+    private init(title: Text, detail: Text, icon: String, tint: Color) {
+        self.title = title
+        self.detail = detail
+        self.icon = icon
+        self.tint = tint
+    }
 
     var body: some View {
         HStack(spacing: 14) {
             LedgerIconBadge(systemImage: icon, tint: tint)
-            Text(title)
+            title
                 .font(.subheadline.weight(.medium))
             Spacer()
-            Text(detail)
+            detail
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        // 標題與說明是同一列的一句話，分開唸只會讓人多滑一次。
+        .accessibilityElement(children: .combine)
     }
 }
 

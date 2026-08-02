@@ -47,7 +47,13 @@ final class GroupReportServiceTests: XCTestCase {
         let snapshot = fixture.snapshot()
 
         XCTAssertEqual(fixture.share(of: "餐飲", in: snapshot), Decimal(string: "0.7"))
-        XCTAssertEqual(fixture.share(of: "未分類", in: snapshot), Decimal(string: "0.3"))
+        XCTAssertEqual(
+            fixture.share(
+                of: LedgerStringKey.transactionFormCategoryNone.string(),
+                in: snapshot
+            ),
+            Decimal(string: "0.3")
+        )
     }
 
     func testSharesAreZeroWhenPeriodHasNoExpense() throws {
@@ -81,7 +87,11 @@ final class GroupReportServiceTests: XCTestCase {
 
         // Each source book keeps its own contribution.
         XCTAssertEqual(snapshot.books.count, 2)
-        XCTAssertEqual(fixture.bookShare(of: "主要帳本", in: snapshot), Decimal(string: "0.4"))
+        // 預設帳本的名稱跟著建立當下的語言走，所以比對鍵而不是寫死中文。
+        XCTAssertEqual(
+            fixture.bookShare(of: BookDraft.defaultName, in: snapshot),
+            Decimal(string: "0.4")
+        )
         XCTAssertEqual(fixture.bookShare(of: "旅遊帳本", in: snapshot), Decimal(string: "0.6"))
     }
 

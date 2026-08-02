@@ -79,7 +79,7 @@ struct DataExportView: View {
         Form {
             if selectedGroup == nil {
                 Section {
-                    Text("還沒有可以匯出的群組。請先建立群組並開始記帳。")
+                    Text(.exportEmpty)
                         .foregroundStyle(.secondary)
                 }
             } else {
@@ -90,7 +90,7 @@ struct DataExportView: View {
                 summarySection
             }
         }
-        .navigationTitle("匯出資料")
+        .navigationTitle(Text(.settingsRowExportTitle))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: reloadSummary)
         .onChange(of: selectedGroupID) { _, _ in reloadSummary() }
@@ -98,10 +98,12 @@ struct DataExportView: View {
         .sheet(item: $exportedFiles) { files in
             ShareSheet(items: files.urls)
         }
-        .alert("無法建立匯出檔", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.exportErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -110,24 +112,33 @@ struct DataExportView: View {
         // 先解出目前群組再建 binding，選取狀態就永遠有一個真實的 objectID 可用，
         // 不需要為了填滿 binding 生一個不指向任何東西的哨兵值。
         if groups.count > 1, let selectedGroup {
-            Section("群組") {
-                Picker("群組", selection: groupSelection(fallingBackTo: selectedGroup)) {
+            Section {
+                Picker(selection: groupSelection(fallingBackTo: selectedGroup)) {
                     ForEach(Array(groups), id: \.objectID) { group in
-                        Text(group.name ?? "未命名群組").tag(group.objectID)
+                        Text(verbatim: group.name
+                            ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string())
+                            .tag(group.objectID)
                     }
+                } label: {
+                    Text(.exportFieldGroup)
                 }
+            } header: {
+                Text(.exportSectionGroup)
             }
         }
     }
 
     private var scopeSection: some View {
         Section {
-            Picker("帳本範圍", selection: $request.scope) {
+            Picker(selection: $request.scope) {
                 ForEach(ReportBookScope.allCases) { option in
-                    Text(option.displayName).tag(option)
+                    Text(option.displayNameKey).tag(option)
                 }
+            } label: {
+                Text(.exportFieldBookScope)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel(Text(.exportFieldBookScope))
 
             if request.scope == .selectedBookIDs {
                 ForEach(activeBooks, id: \.objectID) { book in
@@ -140,84 +151,121 @@ struct DataExportView: View {
                             }
                         } label: {
                             HStack {
-                                Text(book.name ?? "未命名帳本")
+                                Text(verbatim: book.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedBook.string())
                                     .foregroundStyle(.primary)
                                 Spacer()
                                 if request.selectedBookIDs.contains(id) {
                                     Image(systemName: "checkmark")
                                         .foregroundStyle(LedgerTheme.primary)
+                                        .accessibilityHidden(true)
                                 }
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityAddTraits(
+                            request.selectedBookIDs.contains(id)
+                                ? [.isButton, .isSelected]
+                                : .isButton
+                        )
                     }
                 }
             }
         } header: {
-            Text("範圍")
+            Text(.exportSectionScope)
         } footer: {
-            Text("交易只會匯出所選帳本的內容，每一列都標示所屬帳本。帳戶餘額屬於整個群組，不隨這個範圍改變。")
+            Text(.exportScopeFooter)
         }
     }
 
     private var dateSection: some View {
         Section {
-            Toggle("限定日期範圍", isOn: dateRangeBinding)
+            Toggle(isOn: dateRangeBinding) {
+                Text(.exportDateToggle)
+            }
             if request.startDate != nil || request.endDate != nil {
                 DatePicker(
-                    "開始日期",
                     selection: dateBinding(for: \.startDate, fallback: defaultStartDate),
                     displayedComponents: .date
-                )
+                ) {
+                    Text(.exportDateStart)
+                }
                 DatePicker(
-                    "結束日期",
                     selection: dateBinding(for: \.endDate, fallback: Date()),
                     displayedComponents: .date
-                )
+                ) {
+                    Text(.exportDateEnd)
+                }
             }
         } header: {
-            Text("日期")
+            Text(.exportSectionDate)
         } footer: {
-            Text("開始與結束當天的交易都會包含在內。不限定時會匯出這些帳本的全部交易。")
+            Text(.exportDateFooter)
         }
     }
 
     private var contentSection: some View {
         Section {
-            Toggle("包含帳戶餘額", isOn: $request.includesAccounts)
-            Toggle("包含結算紀錄", isOn: $request.includesSettlements)
-            Toggle("包含已作廢的交易", isOn: $request.includesVoided)
+            Toggle(isOn: $request.includesAccounts) {
+                Text(.exportContentIncludesAccounts)
+            }
+            Toggle(isOn: $request.includesSettlements) {
+                Text(.exportContentIncludesSettlements)
+            }
+            Toggle(isOn: $request.includesVoided) {
+                Text(.exportContentIncludesVoided)
+            }
         } header: {
-            Text("內容")
+            Text(.exportSectionContent)
         } footer: {
-            Text("匯出的金額是純數值，不含貨幣符號與千分位，可以直接在試算表計算；貨幣代碼（\(currencyCode)）另外獨立成一欄。")
+            Text(verbatim: LedgerStringKey.exportContentFooter.string(
+                arguments: [currencyCode]
+            ))
         }
     }
 
     private var summarySection: some View {
         Section {
-            LabeledContent("交易筆數", value: "\(summary.transactionCount)")
-            LabeledContent("涵蓋帳本", value: bookSummaryText)
-            LabeledContent("檔案", value: "\(summary.documents.count) 個 CSV")
+            LabeledContent {
+                Text(verbatim: summary.transactionCount.formatted())
+            } label: {
+                Text(.exportSummaryTransactions)
+            }
+            LabeledContent {
+                Text(verbatim: bookSummaryText)
+            } label: {
+                Text(.exportSummaryBooks)
+            }
+            LabeledContent {
+                Text(verbatim: LedgerStringKey.exportSummaryFilesCount.string(
+                    arguments: [Int64(summary.documents.count)]
+                ))
+            } label: {
+                Text(.exportSummaryFiles)
+            }
 
             Button {
                 share()
             } label: {
-                Label("匯出並分享", systemImage: "square.and.arrow.up")
+                Label(.exportActionShare, systemImage: "square.and.arrow.up")
             }
             .disabled(summary.isEmpty)
         } footer: {
-            Text("匯出檔含有群組成員的顯示名稱與交易備註，分享前請確認對象。")
+            Text(.exportSummaryFooter)
         }
     }
 
     private var bookSummaryText: String {
-        guard !summary.includedBookNames.isEmpty else { return "未選擇" }
-        if summary.includedBookNames.count <= 2 {
-            return summary.includedBookNames.joined(separator: "、")
+        guard !summary.includedBookNames.isEmpty else {
+            return LedgerStringKey.exportSummaryBooksNone.string()
         }
-        return "\(summary.includedBookNames.count) 本帳本"
+        if summary.includedBookNames.count <= 2 {
+            return ListFormatter.localizedString(byJoining: summary.includedBookNames)
+        }
+        return LedgerStringKey.exportSummaryBooksCount.string(
+            arguments: [Int64(summary.includedBookNames.count)]
+        )
     }
 
     private func groupSelection(fallingBackTo group: LedgerGroup) -> Binding<NSManagedObjectID> {

@@ -171,9 +171,10 @@ final class LedgerNotificationCoordinator: ObservableObject {
             return LedgerAuditEventSummary(
                 id: id,
                 groupID: groupID,
-                groupName: group.name ?? "未命名群組",
+                groupName: group.name ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string(),
                 action: action,
-                actorDisplayName: event.actorDisplayName ?? "群組成員",
+                actorDisplayName: event.actorDisplayName
+                    ?? LedgerStringKey.defaultMemberGroupMember.string(),
                 createdAt: createdAt
             )
         }
@@ -218,8 +219,10 @@ final class LedgerNotificationCoordinator: ObservableObject {
                     LedgerSettlementReminder(
                         groupID: groupID,
                         bookID: bookID,
-                        groupName: group.name ?? "未命名群組",
-                        bookName: book.name ?? "未命名帳本",
+                        groupName: group.name
+                            ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string(),
+                        bookName: book.name
+                            ?? LedgerStringKey.commonPlaceholderUnnamedBook.string(),
                         direction: direction(of: transfers, for: memberID),
                         outstandingTransferCount: transfers.count
                     )

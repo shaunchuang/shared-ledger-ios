@@ -50,18 +50,31 @@
 
 ## 遷移進度
 
-基礎建設與下列範圍已完成：分頁、設定頁、iCloud 同步、通知（含系統通知內容），以及 `EntryKind`、`AccountType`、`MemberRole`、`ReportBookScope` 這些跨畫面共用的列舉與貨幣顯示名稱。
+基礎建設與下列範圍已完成：分頁、設定頁、iCloud 同步、通知（含系統通知內容）、交易（列表、詳情、新增與編輯、篩選面板）、群組與帳本（群組列表與詳情、建立群組、身分確認、成員管理、帳本管理與封存歷史、iCloud 共享錯誤）、帳戶（列表、明細、餘額調整、對帳與新增）、分類（群組分類管理、帳本可用分類、新增、重新命名、合併與內建分類名稱）、設定裡的匯出資料與刪除資料、總覽與報表（含來源交易下鑽）、結算（淨額、建議付款、記錄與撤銷），以及 `EntryKind`、`AccountType`、`MemberRole`、`ReportBookScope`、`SplitMode` 這些跨畫面共用的列舉與貨幣顯示名稱。
 
-尚未進 catalog 的畫面仍保留硬編碼的正體中文字串，依字串數量排序如下（遷移時一併補上該畫面的 VoiceOver 標籤）：
+跨畫面重複出現的文字集中在 `common.*`：取消、儲存、完成、編輯、好、「請稍後再試。」，以及群組／帳本／帳戶／分類／成員的「未命名」佔位字。遷移其他畫面時直接用這些鍵，不要各自再加一份。
 
-| 範圍 | 主要檔案 |
-| --- | --- |
-| 交易 | `TransactionsView`、`NewTransactionView`、`TransactionFilterView` |
-| 群組與帳本 | `GroupDetailView`、`BooksView`、`GroupsView`、`CreateGroupView`、`CloudSharingView` |
-| 分類 | `CategoriesView`、`NewCategoryView`、`CategoryNode` |
-| 帳戶 | `AccountsView`、`NewAccountView` |
-| 總覽與結算 | `DashboardView`、`SettlementView` |
-| 設定 | `DataExportView`、`DataPrivacyView` |
-| 資料層錯誤訊息 | `GroupRepository`、`CategoryRepository`、`BookRepository`、`EntryRepository`、`AccountRepository`、`SettlementRepository`、`EffectivePermissionRepository`、`PersistenceController`、`LedgerExportService`、`GroupReportService`、`LedgerNotificationCoordinator`、`AllocationCalculator`、`SettlementCalculator`、`CloudParticipantStatus` |
+遷移已完成：畫面、資料層訊息與 CSV 匯出全部走 catalog。剩下的只有下面刻意留著的幾類。
 
-遷移過程中 `LedgerSectionHeader` 暫時同時接受 `LedgerStringKey` 與 `String`；全部遷移完成後要移除 `String` 入口，讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
+## 什麼不進 catalog
+
+- **寫進 Core Data 的稽核摘要（`AuditEvent.summary`）。** 這些是寫下當時就固定的紀錄，而且會同步給其他成員；在顯示時翻譯做不到（原文已經沒了），在寫入時翻譯則會把作者的語言存進共享資料。通知不受影響：它從稽核事件的「動作 + 對象」重新組句，走 `notification.body.*` 的鍵。這一條要改，得先把 summary 換成結構化欄位，那是另一件事。
+- **`-initialize-cloudkit-schema` 的主控台輸出。** 那是開發者維護模式的 `print`，不是使用者看得到的文字。
+- **使用者自己輸入或建立的名稱。** 群組、帳本、帳戶、分類、成員名稱與備註都原樣保存。建立時寫入的預設值（`主要帳本`、`我`、內建分類）是例外：它們查一次 catalog 之後就變成使用者的資料。
+
+`LedgerSectionHeader`、`LedgerEmptyState` 與 `LedgerNavRow` 的 `String` 入口已經移除：這些元件只收 `LedgerStringKey`，「顯示文字」與「先有一個鍵」在型別上是同一件事。說明文字需要帶參數時，走 `LedgerEmptyState`／`LedgerNavRow` 收 `Text` 的那個初始化，內容仍必須來自 `LedgerStringKey.string(arguments:)`。
+
+內建分類（`DefaultCategoryCatalog`）的名稱在建立群組時查一次 catalog 後就寫進 Core Data，之後是使用者自己的資料：改名、合併、封存都照常，切換語言不會回頭改寫。MVP 要求的「用穩定識別碼讓名稱跟著語言走」需要在 `LedgerCategory` 加一個識別欄位與一次 migration，仍留在 P1。
+
+`LedgerExportService` 的欄位標題、狀態值與檔名都跟著使用者的語言，`exportLocale` 已經移除：整份檔案要嘛全中文、要嘛全英文，不會出現中文標題配英文內容。代價是同一個群組在不同語言的裝置上匯出的標題不同，未來做 CSV 匯入時不能靠標題文字認欄位，得改用欄位順序或另外寫一行版本標記。日期與金額不受影響：它們固定用 `en_US_POSIX` 與原始數值，匯出檔的意義不隨開檔者的地區設定改變。
+
+## VoiceOver
+
+遷移一個畫面時，同一個 PR 補上這個畫面的 VoiceOver 標籤，不另外排一輪：
+
+- **只有圖示的按鈕一定要有 `accessibilityLabel`。** 工具列的加號、篩選、勾選圖示，沒有標籤就只會被唸成「按鈕」。
+- **狀態要進標籤或 `accessibilityValue`。** 「篩選交易」與「篩選交易，已套用 3 個條件」是兩件事；群組與帳本選單用 `accessibilityValue` 帶出目前選的是哪一個。
+- **一列資料合成一個元素。** 交易列、明細列這種「欄位名稱 + 值」的組合用 `.accessibilityElement(children: .combine)`，否則使用者要滑三次才聽得懂一行。列裡還有按鈕時改用 `.contain`，才不會把按鈕吃掉。
+- **裝飾性圖示標 `accessibilityHidden(true)`。** 空狀態的插圖、列尾的 chevron、金額旁的貨幣代碼都屬於這一類。
+- **表單裡沒有可見標籤的輸入框要自己補標籤。** 付款金額、分攤比例這種一列多欄的欄位，標籤要帶上是誰的（「小美 的付款金額」），否則聽起來每一格都一樣。
+- **切換型的按鈕補 `.isSelected` trait 與 `accessibilityHint`。** 有沒有被選中不能只靠顏色或勾勾。

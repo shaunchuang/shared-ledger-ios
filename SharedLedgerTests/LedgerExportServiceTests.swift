@@ -13,17 +13,17 @@ final class LedgerExportServiceTests: XCTestCase {
 
         XCTAssertEqual(rows.count, 1)
         let row = try XCTUnwrap(rows.first)
-        XCTAssertEqual(row["帳本"], "主要帳本")
-        XCTAssertEqual(row["類型"], "支出")
-        XCTAssertEqual(row["分類"], "餐飲")
-        XCTAssertEqual(row["金額"], "120")
-        XCTAssertEqual(row["貨幣"], "TWD")
-        XCTAssertEqual(row["轉出帳戶"], "現金")
-        XCTAssertEqual(row["付款明細"], "小明:120")
-        XCTAssertEqual(row["分攤方式"], "平均")
-        XCTAssertEqual(row["分攤明細"], "小明:120")
-        XCTAssertEqual(row["備註"], "早餐")
-        XCTAssertEqual(row["狀態"], "有效")
+        XCTAssertEqual(row[column(.exportColumnBook)], BookDraft.defaultName)
+        XCTAssertEqual(row[column(.exportColumnKind)], EntryKind.expense.displayName)
+        XCTAssertEqual(row[column(.exportColumnCategory)], "餐飲")
+        XCTAssertEqual(row[column(.exportColumnAmount)], "120")
+        XCTAssertEqual(row[column(.exportColumnCurrency)], "TWD")
+        XCTAssertEqual(row[column(.exportColumnSourceAccount)], "現金")
+        XCTAssertEqual(row[column(.exportColumnPayments)], "小明:120")
+        XCTAssertEqual(row[column(.exportColumnSplitMode)], SplitMode.equal.displayName)
+        XCTAssertEqual(row[column(.exportColumnSplits)], "小明:120")
+        XCTAssertEqual(row[column(.exportColumnNote)], "早餐")
+        XCTAssertEqual(row[column(.exportColumnStatus)], status(.exportStatusActive))
     }
 
     func testAmountsAreRawNumbersRatherThanFormattedCurrency() throws {
@@ -33,9 +33,9 @@ final class LedgerExportServiceTests: XCTestCase {
         let row = try XCTUnwrap(try transactionRows(fixture.export()).first)
 
         // 帶著貨幣符號或千分位就會變成試算表裡的文字，沒辦法直接加總。
-        XCTAssertEqual(row["金額"], "1200")
-        XCTAssertFalse(row["金額"]?.contains(",") ?? true)
-        XCTAssertFalse(row["金額"]?.contains("$") ?? true)
+        XCTAssertEqual(row[column(.exportColumnAmount)], "1200")
+        XCTAssertFalse(row[column(.exportColumnAmount)]?.contains(",") ?? true)
+        XCTAssertFalse(row[column(.exportColumnAmount)]?.contains("$") ?? true)
     }
 
     func testMultiplePayersAndUnevenSplitsSurviveTheFlattening() throws {
@@ -53,10 +53,10 @@ final class LedgerExportServiceTests: XCTestCase {
 
         let row = try XCTUnwrap(try transactionRows(fixture.export()).first)
 
-        XCTAssertEqual(row["分攤方式"], "指定金額")
-        XCTAssertEqual(row["付款明細"], "小明:600;小美:400")
+        XCTAssertEqual(row[column(.exportColumnSplitMode)], SplitMode.fixedAmount.displayName)
+        XCTAssertEqual(row[column(.exportColumnPayments)], "小明:600;小美:400")
         // 依顯示名稱排序，同一筆交易每次匯出的欄位內容才會一致。
-        XCTAssertEqual(row["分攤明細"], "小明:700;小美:300")
+        XCTAssertEqual(row[column(.exportColumnSplits)], "小明:700;小美:300")
     }
 
     func testVoidedTransactionsAreExcludedUnlessRequested() throws {
@@ -73,7 +73,10 @@ final class LedgerExportServiceTests: XCTestCase {
         let withVoided = try transactionRows(fixture.export(request))
 
         XCTAssertEqual(withVoided.count, 2)
-        XCTAssertEqual(Set(withVoided.compactMap { $0["狀態"] }), ["有效", "已作廢"])
+        XCTAssertEqual(
+            Set(withVoided.compactMap { $0[column(.exportColumnStatus)] }),
+            [status(.exportStatusActive), status(.exportStatusVoided)]
+        )
     }
 
     func testScopeDecidesWhichBooksAreExported() throws {
@@ -84,17 +87,20 @@ final class LedgerExportServiceTests: XCTestCase {
 
         let currentOnly = fixture.export()
         XCTAssertEqual(currentOnly.transactionCount, 1)
-        XCTAssertEqual(currentOnly.includedBookNames, ["主要帳本"])
+        XCTAssertEqual(currentOnly.includedBookNames, [BookDraft.defaultName])
 
         var allBooks = LedgerExportRequest()
         allBooks.scope = .allActiveBooks
         let everything = fixture.export(allBooks)
 
         XCTAssertEqual(everything.transactionCount, 2)
-        XCTAssertEqual(Set(everything.includedBookNames), ["主要帳本", "旅遊帳本"])
+        XCTAssertEqual(Set(everything.includedBookNames), [BookDraft.defaultName, "旅遊帳本"])
 
         let rows = try transactionRows(everything)
-        XCTAssertEqual(Set(rows.compactMap { $0["帳本"] }), ["主要帳本", "旅遊帳本"])
+        XCTAssertEqual(
+            Set(rows.compactMap { $0[column(.exportColumnBook)] }),
+            [BookDraft.defaultName, "旅遊帳本"]
+        )
     }
 
     func testDateRangeIncludesBothBoundaryDays() throws {
@@ -115,7 +121,7 @@ final class LedgerExportServiceTests: XCTestCase {
         let summary = fixture.export(request)
 
         XCTAssertEqual(summary.transactionCount, 2)
-        let amounts = try transactionRows(summary).compactMap { $0["金額"] }
+        let amounts = try transactionRows(summary).compactMap { $0[column(.exportColumnAmount)] }
         XCTAssertEqual(Set(amounts), ["200", "300"])
     }
 
@@ -135,11 +141,11 @@ final class LedgerExportServiceTests: XCTestCase {
         let summary = fixture.export(request)
         XCTAssertEqual(summary.transactionCount, 1)
 
-        let accountRow = try XCTUnwrap(try rows(in: summary, fileNameContains: "帳戶").first)
+        let accountRow = try XCTUnwrap(try rows(in: summary, fileNameContains: column(.exportFileAccounts)).first)
         // 帳戶餘額是資產狀態，不是期間現金流：把它跟著日期篩選會匯出一個對不起來的數字。
-        XCTAssertEqual(accountRow["目前餘額"], "-350")
-        XCTAssertEqual(accountRow["帳戶"], "現金")
-        XCTAssertEqual(accountRow["狀態"], "使用中")
+        XCTAssertEqual(accountRow[column(.exportColumnCurrentBalance)], "-350")
+        XCTAssertEqual(accountRow[column(.exportColumnAccount)], "現金")
+        XCTAssertEqual(accountRow[column(.exportColumnStatus)], status(.exportStatusInUse))
     }
 
     func testSettlementHistoryIsExportedWithMemberNames() throws {
@@ -162,14 +168,14 @@ final class LedgerExportServiceTests: XCTestCase {
         )
 
         let settlementRow = try XCTUnwrap(
-            try rows(in: fixture.export(), fileNameContains: "結算").first
+            try rows(in: fixture.export(), fileNameContains: column(.exportFileSettlements)).first
         )
 
-        XCTAssertEqual(settlementRow["付款人"], "小美")
-        XCTAssertEqual(settlementRow["收款人"], "小明")
-        XCTAssertEqual(settlementRow["金額"], "500")
-        XCTAssertEqual(settlementRow["備註"], "現金還款")
-        XCTAssertEqual(settlementRow["狀態"], "有效")
+        XCTAssertEqual(settlementRow[column(.exportColumnPayer)], "小美")
+        XCTAssertEqual(settlementRow[column(.exportColumnRecipient)], "小明")
+        XCTAssertEqual(settlementRow[column(.exportColumnAmount)], "500")
+        XCTAssertEqual(settlementRow[column(.exportColumnNote)], "現金還款")
+        XCTAssertEqual(settlementRow[column(.exportColumnStatus)], status(.exportStatusActive))
     }
 
     func testOptionalDocumentsCanBeLeftOut() throws {
@@ -182,7 +188,10 @@ final class LedgerExportServiceTests: XCTestCase {
         let summary = fixture.export(request)
 
         XCTAssertEqual(summary.documents.count, 1)
-        XCTAssertTrue(summary.documents[0].fileName.hasSuffix("-交易.csv"))
+        XCTAssertTrue(
+            summary.documents[0].fileName
+                .hasSuffix("-\(column(.exportFileTransactions)).csv")
+        )
     }
 
     func testNotesAreQuotedRatherThanBreakingTheRow() throws {
@@ -278,7 +287,7 @@ final class LedgerExportServiceTests: XCTestCase {
     }
 
     private func transactionRows(_ summary: LedgerExportSummary) throws -> [[String: String]] {
-        try rows(in: summary, fileNameContains: "交易")
+        try rows(in: summary, fileNameContains: column(.exportFileTransactions))
     }
 
     private func rows(
@@ -290,6 +299,12 @@ final class LedgerExportServiceTests: XCTestCase {
         )
         return try parse(document.contents)
     }
+
+
+    /// 欄位標題與狀態值跟著使用者語言走，測試不能寫死其中一種。
+    private func column(_ key: LedgerStringKey) -> String { key.string() }
+
+    private func status(_ key: LedgerStringKey) -> String { key.string() }
 
     private func makeFixture(groupName: String = "家庭") throws -> ExportFixture {
         let persistence = PersistenceController(inMemory: true)

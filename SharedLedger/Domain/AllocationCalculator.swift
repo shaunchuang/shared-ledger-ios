@@ -5,13 +5,15 @@ enum SplitMode: String, CaseIterable, Codable, Sendable {
     case percentage
     case fixedAmount
 
-    var displayName: String {
+    var displayNameKey: LedgerStringKey {
         switch self {
-        case .equal: return "平均"
-        case .percentage: return "比例"
-        case .fixedAmount: return "指定金額"
+        case .equal: return .splitModeEqual
+        case .percentage: return .splitModePercentage
+        case .fixedAmount: return .splitModeFixedAmount
         }
     }
+
+    var displayName: String { displayNameKey.string() }
 }
 
 struct SplitInput: Equatable, Sendable {
@@ -198,25 +200,25 @@ enum AllocationCalculator {
         var errorDescription: String? {
             switch self {
             case .invalidTotal:
-                return "交易金額與分攤成員必須有效。"
+                return LedgerStringKey.errorAllocationInvalidInput.string()
             case .invalidCurrencyAmount(let code):
-                return "金額不符合 \(code) 的最小貨幣單位。"
+                return LedgerStringKey.errorCurrencyMinorUnit.string(arguments: [code])
             case .duplicateMember:
-                return "同一位成員不能重複分攤。"
+                return LedgerStringKey.errorAllocationDuplicateSplitMember.string()
             case .invalidPercentage:
-                return "每位成員的分攤比例必須大於 0%。"
+                return LedgerStringKey.errorAllocationPercentagePositive.string()
             case .percentageTotalMismatch:
-                return "分攤比例合計必須等於 100%。"
+                return LedgerStringKey.errorAllocationPercentageTotal.string()
             case .invalidFixedAmount:
-                return "指定分攤金額不可小於 0。"
+                return LedgerStringKey.errorAllocationFixedAmountNegative.string()
             case .fixedAmountTotalMismatch:
-                return "指定分攤金額合計必須等於交易金額。"
+                return LedgerStringKey.errorAllocationFixedAmountTotal.string()
             case .duplicatePayer:
-                return "同一位付款人不能重複加入。"
+                return LedgerStringKey.errorAllocationDuplicatePayer.string()
             case .invalidPaymentAmount(let code):
-                return "每位付款人的金額必須大於 0，並符合 \(code) 的最小貨幣單位。"
+                return LedgerStringKey.errorAllocationPaymentAmount.string(arguments: [code])
             case .paymentTotalMismatch:
-                return "付款金額合計必須等於交易金額。"
+                return LedgerStringKey.errorAllocationPaymentTotal.string()
             }
         }
     }

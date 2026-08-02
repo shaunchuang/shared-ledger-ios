@@ -60,7 +60,7 @@ struct ContactPicker: UIViewControllerRepresentable {
                 InviteeContact(
                     contactIdentifier: $0.identifier,
                     displayName: CNContactFormatter.string(from: $0, style: .fullName)
-                        ?? "未命名聯絡人"
+                        ?? LedgerStringKey.commonPlaceholderUnnamedContact.string()
                 )
             }
             finishPresentation()

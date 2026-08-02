@@ -240,7 +240,10 @@ final class EffectivePermissionTests: XCTestCase {
             .cloudParticipantStatuses(in: fixture.group)
 
         XCTAssertEqual(statuses[fixture.member.objectID], .shareUnavailable)
-        XCTAssertEqual(CloudParticipantStatus.shareUnavailable.badgeText, "共享未同步")
+        XCTAssertEqual(
+            CloudParticipantStatus.shareUnavailable.badgeText,
+            LedgerStringKey.participantBadgeShareUnavailable.string()
+        )
     }
 
     func testAMemberWithoutAParticipantIDIsReportedAsUnmapped() throws {
@@ -253,7 +256,10 @@ final class EffectivePermissionTests: XCTestCase {
             .cloudParticipantStatuses(in: fixture.group)
 
         XCTAssertEqual(statuses[fixture.member.objectID], .unmapped)
-        XCTAssertEqual(CloudParticipantStatus.unmapped.badgeText, "未對應")
+        XCTAssertEqual(
+            CloudParticipantStatus.unmapped.badgeText,
+            LedgerStringKey.participantBadgeUnmapped.string()
+        )
     }
 
     /// A participant that left or was removed from the share must not silently look
@@ -270,26 +276,29 @@ final class EffectivePermissionTests: XCTestCase {
             .cloudParticipantStatuses(in: fixture.group)
 
         XCTAssertEqual(statuses[fixture.member.objectID], .participantMissing)
-        XCTAssertEqual(CloudParticipantStatus.participantMissing.badgeText, "參與者已不存在")
+        XCTAssertEqual(
+            CloudParticipantStatus.participantMissing.badgeText,
+            LedgerStringKey.participantBadgeParticipantMissing.string()
+        )
     }
 
     func testMappedBadgesDistinguishOwnerWriteAndReadOnly() {
         XCTAssertEqual(
             CloudParticipantStatus.mapped(canWrite: true, isShareOwner: true, isAccepted: true).badgeText,
-            "共享擁有者"
+            LedgerStringKey.participantBadgeShareOwner.string()
         )
         XCTAssertEqual(
             CloudParticipantStatus.mapped(canWrite: true, isShareOwner: false, isAccepted: true).badgeText,
-            "可編輯"
+            LedgerStringKey.participantBadgeWritable.string()
         )
         XCTAssertEqual(
             CloudParticipantStatus.mapped(canWrite: false, isShareOwner: false, isAccepted: true).badgeText,
-            "唯讀"
+            LedgerStringKey.participantBadgeReadOnly.string()
         )
         // An unaccepted invitation outranks the permission: there is nobody there yet.
         XCTAssertEqual(
             CloudParticipantStatus.mapped(canWrite: true, isShareOwner: false, isAccepted: false).badgeText,
-            "邀請未接受"
+            LedgerStringKey.participantBadgeNotAccepted.string()
         )
         XCTAssertTrue(
             CloudParticipantStatus.mapped(canWrite: false, isShareOwner: false, isAccepted: true).isMapped
