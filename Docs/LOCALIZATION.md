@@ -62,7 +62,7 @@
 - **`-initialize-cloudkit-schema` 的主控台輸出。** 那是開發者維護模式的 `print`，不是使用者看得到的文字。
 - **使用者自己輸入或建立的名稱。** 群組、帳本、帳戶、分類、成員名稱與備註都原樣保存。建立時寫入的預設值（`主要帳本`、`我`、內建分類）是例外：它們查一次 catalog 之後就變成使用者的資料。
 
-遷移過程中 `LedgerSectionHeader`、`LedgerEmptyState` 與 `LedgerNavRow` 暫時同時接受 `LedgerStringKey` 與 `String`；全部遷移完成後要移除 `String` 入口，讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
+`LedgerSectionHeader`、`LedgerEmptyState` 與 `LedgerNavRow` 的 `String` 入口已經移除：這些元件只收 `LedgerStringKey`，「顯示文字」與「先有一個鍵」在型別上是同一件事。說明文字需要帶參數時，走 `LedgerEmptyState`／`LedgerNavRow` 收 `Text` 的那個初始化，內容仍必須來自 `LedgerStringKey.string(arguments:)`。
 
 內建分類（`DefaultCategoryCatalog`）的名稱在建立群組時查一次 catalog 後就寫進 Core Data，之後是使用者自己的資料：改名、合併、封存都照常，切換語言不會回頭改寫。MVP 要求的「用穩定識別碼讓名稱跟著語言走」需要在 `LedgerCategory` 加一個識別欄位與一次 migration，仍留在 P1。
 

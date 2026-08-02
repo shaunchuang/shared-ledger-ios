@@ -80,36 +80,17 @@ struct LedgerAvatar: View {
 }
 
 struct LedgerSectionHeader: View {
-    private let title: Text
-    private let actionTitle: String?
-    private let action: (() -> Void)?
+    private let title: LedgerStringKey
 
-    init(title: LedgerStringKey, actionTitle: String? = nil, action: (() -> Void)? = nil) {
-        self.init(title: Text(title), actionTitle: actionTitle, action: action)
-    }
-
-    /// 還沒進 catalog 的畫面暫時仍傳字串。遷移完成後這個入口要移除，
-    /// 讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
-    init(title: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
-        self.init(title: Text(verbatim: title), actionTitle: actionTitle, action: action)
-    }
-
-    private init(title: Text, actionTitle: String?, action: (() -> Void)?) {
+    init(title: LedgerStringKey) {
         self.title = title
-        self.actionTitle = actionTitle
-        self.action = action
     }
 
     var body: some View {
         HStack {
-            title
+            Text(title)
                 .font(.title3.weight(.bold))
             Spacer()
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(LedgerTheme.primary)
-            }
         }
     }
 }
@@ -151,23 +132,6 @@ struct LedgerEmptyState: View {
             title: Text(title),
             message: message,
             actionTitle: actionTitle.map { Text($0) },
-            action: action
-        )
-    }
-
-    /// 還沒進 catalog 的畫面暫時仍傳字串。遷移完成後這個入口要移除。
-    init(
-        systemImage: String,
-        title: String,
-        message: String,
-        actionTitle: String? = nil,
-        action: (() -> Void)? = nil
-    ) {
-        self.init(
-            systemImage: systemImage,
-            title: Text(verbatim: title),
-            message: Text(verbatim: message),
-            actionTitle: actionTitle.map { Text(verbatim: $0) },
             action: action
         )
     }
@@ -268,21 +232,6 @@ struct LedgerNavRow: View {
         tint: Color = LedgerTheme.primary
     ) {
         self.init(title: Text(title), detail: Text(verbatim: detail), icon: icon, tint: tint)
-    }
-
-    /// 還沒進 catalog 的畫面暫時仍傳字串。遷移完成後這個入口要移除。
-    init(
-        title: String,
-        detail: String,
-        icon: String,
-        tint: Color = LedgerTheme.primary
-    ) {
-        self.init(
-            title: Text(verbatim: title),
-            detail: Text(verbatim: detail),
-            icon: icon,
-            tint: tint
-        )
     }
 
     private init(title: Text, detail: Text, icon: String, tint: Color) {
