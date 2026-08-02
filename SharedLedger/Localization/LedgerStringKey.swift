@@ -63,23 +63,6 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case accountTypeCreditCard = "accountType.creditCard"
     case accountTypeOther = "accountType.other"
 
-    // MARK: - 跨畫面共用
-    case commonActionAdd = "common.action.add"
-    case commonActionCancel = "common.action.cancel"
-    case commonActionDone = "common.action.done"
-    case commonActionEdit = "common.action.edit"
-    case commonActionOK = "common.action.ok"
-    case commonActionSave = "common.action.save"
-    case commonErrorRenameFailed = "common.error.renameFailed"
-    case commonErrorRetryLater = "common.error.retryLater"
-    case commonPlaceholderNoDate = "common.placeholder.noDate"
-    case commonPlaceholderUnnamedAccount = "common.placeholder.unnamedAccount"
-    case commonPlaceholderUnnamedBook = "common.placeholder.unnamedBook"
-    case commonPlaceholderUnnamedCategory = "common.placeholder.unnamedCategory"
-    case commonPlaceholderUnnamedContact = "common.placeholder.unnamedContact"
-    case commonPlaceholderUnnamedGroup = "common.placeholder.unnamedGroup"
-    case commonPlaceholderUnnamedMember = "common.placeholder.unnamedMember"
-
     // MARK: - 帳本
     case bookActionAdd = "book.action.add"
     case bookActionArchive = "book.action.archive"
@@ -176,8 +159,33 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case categoryRowEnabledBooks = "category.row.enabledBooks"
     case categoryTitle = "category.title"
 
+    // MARK: - 跨畫面共用
+    case commonActionAdd = "common.action.add"
+    case commonActionCancel = "common.action.cancel"
+    case commonActionDone = "common.action.done"
+    case commonActionEdit = "common.action.edit"
+    case commonActionOK = "common.action.ok"
+    case commonActionSave = "common.action.save"
+    case commonErrorRenameFailed = "common.error.renameFailed"
+    case commonErrorRetryLater = "common.error.retryLater"
+    case commonPlaceholderNoDate = "common.placeholder.noDate"
+    case commonPlaceholderUnnamedAccount = "common.placeholder.unnamedAccount"
+    case commonPlaceholderUnnamedBook = "common.placeholder.unnamedBook"
+    case commonPlaceholderUnnamedCategory = "common.placeholder.unnamedCategory"
+    case commonPlaceholderUnnamedContact = "common.placeholder.unnamedContact"
+    case commonPlaceholderUnnamedGroup = "common.placeholder.unnamedGroup"
+    case commonPlaceholderUnnamedMember = "common.placeholder.unnamedMember"
+
     // MARK: - 貨幣
     case currencyDisplayNameFormat = "currency.displayName.format"
+
+    // MARK: - 建立時寫入的預設值
+    case defaultActorMigration = "default.actor.migration"
+    case defaultBookName = "default.book.name"
+    case defaultMemberCurrentUser = "default.member.currentUser"
+    case defaultMemberGroupMember = "default.member.groupMember"
+    case defaultMemberOwner = "default.member.owner"
+    case defaultMemberSharedMember = "default.member.sharedMember"
 
     // MARK: - 內建分類
     case defaultCategoryEducation = "defaultCategory.education"
@@ -213,6 +221,12 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case defaultCategoryTransportPublic = "defaultCategory.transport.public"
     case defaultCategoryTransportTaxi = "defaultCategory.transport.taxi"
     case defaultCategoryTransportVehicle = "defaultCategory.transport.vehicle"
+
+    // MARK: - 交易種類
+    case entryKindBalanceAdjustment = "entryKind.balanceAdjustment"
+    case entryKindExpense = "entryKind.expense"
+    case entryKindIncome = "entryKind.income"
+    case entryKindTransfer = "entryKind.transfer"
 
     // MARK: - 資料層訊息
     case errorAccountArchived = "error.account.archived"
@@ -301,41 +315,29 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case errorShareNotSignedIn = "error.share.notSignedIn"
     case errorShareUnavailable = "error.share.unavailable"
 
-    // MARK: - CloudKit 參與者對應
-    case participantBadgeNotAccepted = "participant.badge.notAccepted"
-    case participantBadgeParticipantMissing = "participant.badge.participantMissing"
-    case participantBadgeReadOnly = "participant.badge.readOnly"
-    case participantBadgeShareOwner = "participant.badge.shareOwner"
-    case participantBadgeShareUnavailable = "participant.badge.shareUnavailable"
-    case participantBadgeUnmapped = "participant.badge.unmapped"
-    case participantBadgeWritable = "participant.badge.writable"
-    case participantExplanationNotAccepted = "participant.explanation.notAccepted"
-    case participantExplanationParticipantMissing = "participant.explanation.participantMissing"
-    case participantExplanationReadOnly = "participant.explanation.readOnly"
-    case participantExplanationShareOwner = "participant.explanation.shareOwner"
-    case participantExplanationShareUnavailable = "participant.explanation.shareUnavailable"
-    case participantExplanationUnmapped = "participant.explanation.unmapped"
-    case participantExplanationWritable = "participant.explanation.writable"
-
-    // MARK: - 建立時寫入的預設值
-    case defaultActorMigration = "default.actor.migration"
-    case defaultBookName = "default.book.name"
-    case defaultMemberCurrentUser = "default.member.currentUser"
-    case defaultMemberGroupMember = "default.member.groupMember"
-    case defaultMemberOwner = "default.member.owner"
-    case defaultMemberSharedMember = "default.member.sharedMember"
-
-    // MARK: - 交易種類
-    case entryKindBalanceAdjustment = "entryKind.balanceAdjustment"
-    case entryKindExpense = "entryKind.expense"
-    case entryKindIncome = "entryKind.income"
-    case entryKindTransfer = "entryKind.transfer"
-
-    // MARK: - 匯出資料
-
-
     // MARK: - 匯出資料
     case exportActionShare = "export.action.share"
+    case exportColumnAccount = "export.column.account"
+    case exportColumnAmount = "export.column.amount"
+    case exportColumnBook = "export.column.book"
+    case exportColumnCategory = "export.column.category"
+    case exportColumnCurrency = "export.column.currency"
+    case exportColumnCurrentBalance = "export.column.currentBalance"
+    case exportColumnDate = "export.column.date"
+    case exportColumnDestinationAccount = "export.column.destinationAccount"
+    case exportColumnEntryID = "export.column.entryID"
+    case exportColumnKind = "export.column.kind"
+    case exportColumnLastReconciledAt = "export.column.lastReconciledAt"
+    case exportColumnNote = "export.column.note"
+    case exportColumnOpeningBalance = "export.column.openingBalance"
+    case exportColumnPayer = "export.column.payer"
+    case exportColumnPayments = "export.column.payments"
+    case exportColumnRecipient = "export.column.recipient"
+    case exportColumnRecordedAt = "export.column.recordedAt"
+    case exportColumnSourceAccount = "export.column.sourceAccount"
+    case exportColumnSplitMode = "export.column.splitMode"
+    case exportColumnSplits = "export.column.splits"
+    case exportColumnStatus = "export.column.status"
     case exportContentFooter = "export.content.footer"
     case exportContentIncludesAccounts = "export.content.includesAccounts"
     case exportContentIncludesSettlements = "export.content.includesSettlements"
@@ -348,11 +350,20 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case exportErrorTitle = "export.error.title"
     case exportFieldBookScope = "export.field.bookScope"
     case exportFieldGroup = "export.field.group"
+    case exportFileAccounts = "export.file.accounts"
+    case exportFileGroupFallback = "export.file.groupFallback"
+    case exportFileSettlements = "export.file.settlements"
+    case exportFileTransactions = "export.file.transactions"
     case exportScopeFooter = "export.scope.footer"
     case exportSectionContent = "export.section.content"
     case exportSectionDate = "export.section.date"
     case exportSectionGroup = "export.section.group"
     case exportSectionScope = "export.section.scope"
+    case exportStatusActive = "export.status.active"
+    case exportStatusArchived = "export.status.archived"
+    case exportStatusInUse = "export.status.inUse"
+    case exportStatusReversed = "export.status.reversed"
+    case exportStatusVoided = "export.status.voided"
     case exportSummaryBooks = "export.summary.books"
     case exportSummaryBooksCount = "export.summary.books.count"
     case exportSummaryBooksNone = "export.summary.books.none"
@@ -419,12 +430,6 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case groupSummaryTitle = "group.summary.title"
     case groupTitle = "group.title"
 
-    // MARK: - 成員角色
-    case memberRoleAdministrator = "memberRole.administrator"
-    case memberRoleMember = "memberRole.member"
-    case memberRoleOwner = "memberRole.owner"
-    case memberRoleViewer = "memberRole.viewer"
-
     // MARK: - 成員
     case memberActionRemove = "member.action.remove"
     case memberActionResend = "member.action.resend"
@@ -457,6 +462,12 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case memberIdentityTitle = "member.identity.title"
     case memberMenuAccessibilityLabel = "member.menu.accessibilityLabel"
     case memberParticipantAccessibilityLabel = "member.participant.accessibilityLabel"
+
+    // MARK: - 成員角色
+    case memberRoleAdministrator = "memberRole.administrator"
+    case memberRoleMember = "memberRole.member"
+    case memberRoleOwner = "memberRole.owner"
+    case memberRoleViewer = "memberRole.viewer"
 
     // MARK: - 通知
     case notificationAuthorizationAuthorizedDetail = "notification.authorization.authorized.detail"
@@ -503,13 +514,21 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case notificationSettingsOpenSystemSettings = "notification.settings.openSystemSettings"
     case notificationTitle = "notification.title"
 
-    // MARK: - 分攤方式
-    case splitModeEqual = "splitMode.equal"
-    case splitModeFixedAmount = "splitMode.fixedAmount"
-    case splitModePercentage = "splitMode.percentage"
-
-    // MARK: - 刪除資料
-
+    // MARK: - CloudKit 參與者對應
+    case participantBadgeNotAccepted = "participant.badge.notAccepted"
+    case participantBadgeParticipantMissing = "participant.badge.participantMissing"
+    case participantBadgeReadOnly = "participant.badge.readOnly"
+    case participantBadgeShareOwner = "participant.badge.shareOwner"
+    case participantBadgeShareUnavailable = "participant.badge.shareUnavailable"
+    case participantBadgeUnmapped = "participant.badge.unmapped"
+    case participantBadgeWritable = "participant.badge.writable"
+    case participantExplanationNotAccepted = "participant.explanation.notAccepted"
+    case participantExplanationParticipantMissing = "participant.explanation.participantMissing"
+    case participantExplanationReadOnly = "participant.explanation.readOnly"
+    case participantExplanationShareOwner = "participant.explanation.shareOwner"
+    case participantExplanationShareUnavailable = "participant.explanation.shareUnavailable"
+    case participantExplanationUnmapped = "participant.explanation.unmapped"
+    case participantExplanationWritable = "participant.explanation.writable"
 
     // MARK: - 刪除資料
     case privacyActionDelete = "privacy.action.delete"
@@ -586,6 +605,23 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case reportScopeCurrentBook = "reportScope.currentBook"
     case reportScopeSelectedBookIDs = "reportScope.selectedBookIDs"
 
+    // MARK: - 設定
+    case settingsProfileSubtitle = "settings.profile.subtitle"
+    case settingsRowAppearanceDetail = "settings.row.appearance.detail"
+    case settingsRowAppearanceTitle = "settings.row.appearance.title"
+    case settingsRowDeleteDetail = "settings.row.delete.detail"
+    case settingsRowDeleteTitle = "settings.row.delete.title"
+    case settingsRowExportDetail = "settings.row.export.detail"
+    case settingsRowExportTitle = "settings.row.export.title"
+    case settingsRowGroupManagementDetail = "settings.row.groupManagement.detail"
+    case settingsRowGroupManagementTitle = "settings.row.groupManagement.title"
+    case settingsSectionData = "settings.section.data"
+    case settingsSectionPreferences = "settings.section.preferences"
+    case settingsSectionSharedLedger = "settings.section.sharedLedger"
+    case settingsSectionSync = "settings.section.sync"
+    case settingsTitle = "settings.title"
+    case settingsVersion = "settings.version"
+
     // MARK: - 結算
     case settlementActionReverse = "settlement.action.reverse"
     case settlementBalanceBalanced = "settlement.balance.balanced"
@@ -623,22 +659,10 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case settlementTransferHintTappable = "settlement.transfer.hint.tappable"
     case settlementTransferRoute = "settlement.transfer.route"
 
-    // MARK: - 設定
-    case settingsProfileSubtitle = "settings.profile.subtitle"
-    case settingsRowAppearanceDetail = "settings.row.appearance.detail"
-    case settingsRowAppearanceTitle = "settings.row.appearance.title"
-    case settingsRowDeleteDetail = "settings.row.delete.detail"
-    case settingsRowDeleteTitle = "settings.row.delete.title"
-    case settingsRowExportDetail = "settings.row.export.detail"
-    case settingsRowExportTitle = "settings.row.export.title"
-    case settingsRowGroupManagementDetail = "settings.row.groupManagement.detail"
-    case settingsRowGroupManagementTitle = "settings.row.groupManagement.title"
-    case settingsSectionData = "settings.section.data"
-    case settingsSectionPreferences = "settings.section.preferences"
-    case settingsSectionSharedLedger = "settings.section.sharedLedger"
-    case settingsSectionSync = "settings.section.sync"
-    case settingsTitle = "settings.title"
-    case settingsVersion = "settings.version"
+    // MARK: - 分攤方式
+    case splitModeEqual = "splitMode.equal"
+    case splitModeFixedAmount = "splitMode.fixedAmount"
+    case splitModePercentage = "splitMode.percentage"
 
     // MARK: - iCloud 同步
     case syncErrorNetwork = "sync.error.network"
@@ -668,6 +692,13 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case syncViewLocalDataTitle = "sync.view.localData.title"
     case syncViewRecheck = "sync.view.recheck"
     case syncViewRecheckFooter = "sync.view.recheck.footer"
+
+    // MARK: - 分頁
+    case tabCategories = "tab.categories"
+    case tabOverview = "tab.overview"
+    case tabSettings = "tab.settings"
+    case tabSettlement = "tab.settlement"
+    case tabTransactions = "tab.transactions"
 
     // MARK: - 交易
     case transactionActionAdd = "transaction.action.add"
@@ -756,9 +787,9 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case transactionFormFieldSourceAccount = "transaction.form.field.sourceAccount"
     case transactionFormFieldSplitMode = "transaction.form.field.splitMode"
     case transactionFormNotePlaceholder = "transaction.form.note.placeholder"
+    case transactionFormPayersFooter = "transaction.form.payers.footer"
     case transactionFormPaymentAmountAccessibilityLabel = "transaction.form.payment.amount.accessibilityLabel"
     case transactionFormPaymentToggleAccessibilityHint = "transaction.form.payment.toggle.accessibilityHint"
-    case transactionFormPayersFooter = "transaction.form.payers.footer"
     case transactionFormPickerUnselected = "transaction.form.picker.unselected"
     case transactionFormSectionAccountAndCategory = "transaction.form.section.accountAndCategory"
     case transactionFormSectionNote = "transaction.form.section.note"
@@ -788,11 +819,4 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case transactionSearchPrompt = "transaction.search.prompt"
     case transactionTitle = "transaction.title"
     case transactionTotalsNet = "transaction.totals.net"
-
-    // MARK: - 分頁
-    case tabCategories = "tab.categories"
-    case tabOverview = "tab.overview"
-    case tabSettings = "tab.settings"
-    case tabSettlement = "tab.settlement"
-    case tabTransactions = "tab.transactions"
 }
