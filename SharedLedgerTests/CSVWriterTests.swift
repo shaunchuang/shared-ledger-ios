@@ -14,6 +14,17 @@ final class CSVWriterTests: XCTestCase {
         XCTAssertEqual(CSVWriter.escaped("回車\r"), "\"回車\r\"")
     }
 
+    func testWindowsLineEndingsInsideAFieldAreQuoted() {
+        // Swift 把 CRLF 當成單一 grapheme cluster，用字串比對找不到裡面的 CR 或 LF。
+        // 漏掉引號會讓這個欄位把一列拆成兩列，整份檔案的欄位就全部錯位。
+        let field = "第一行\r\n第二行"
+        XCTAssertEqual(CSVWriter.escaped(field), "\"第一行\r\n第二行\"")
+
+        let document = CSVWriter.document(header: ["備註"], rows: [[.text(field)]])
+        let body = String(document.dropFirst(CSVWriter.byteOrderMark.count))
+        XCTAssertEqual(body, "備註\r\n\"第一行\r\n第二行\"\r\n")
+    }
+
     func testLeadingAndTrailingSpacesAreQuoted() {
         // 未加引號的前後空白會被試算表吃掉，匯出的名稱就和 App 裡不一致。
         XCTAssertEqual(CSVWriter.escaped(" 現金"), "\" 現金\"")

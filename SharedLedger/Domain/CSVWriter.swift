@@ -46,8 +46,10 @@ enum CSVWriter {
     static func escaped(_ field: String) -> String {
         let needsQuoting = field.contains(",")
             || field.contains("\"")
-            || field.contains("\n")
-            || field.contains("\r")
+            // 換行必須看 unicode scalar，不能用 `contains("\r")`：Swift 把 CRLF 當成
+            // 單一 grapheme cluster，以字串比對找不到藏在裡面的 CR，帶著 Windows
+            // 換行的備註就會漏掉引號、把一列拆成兩列。
+            || field.unicodeScalars.contains { $0 == "\n" || $0 == "\r" }
             || field.hasPrefix(" ")
             || field.hasSuffix(" ")
         guard needsQuoting else { return field }

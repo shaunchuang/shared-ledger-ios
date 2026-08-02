@@ -82,10 +82,26 @@ final class GroupDeletionTests: XCTestCase {
         XCTAssertEqual(try fixture.count(of: "LedgerGroup"), 1)
     }
 
-    func testAGroupWithoutAResolvedIdentityMayNotDelete() throws {
+    func testAPrivateGroupWithoutAnIdentityMappingStillResolvesItsOwner() throws {
         let fixture = try makeFixture()
         CurrentMemberIdentityRepository(persistence: fixture.persistence)
             .clearCurrentMember(in: fixture.group)
+        try fixture.persistence.container.viewContext.save()
+
+        // 私有群組屬於這個 Apple Account，唯一的已接受 owner 就是目前使用者。
+        // 少了本機對應不該把擁有者鎖在自己的群組外面。
+        XCTAssertNil(
+            GroupRepository(persistence: fixture.persistence)
+                .deletionRestriction(for: fixture.group)
+        )
+    }
+
+    func testAGroupWithNoAcceptedOwnerMayNotDelete() throws {
+        let fixture = try makeFixture()
+        CurrentMemberIdentityRepository(persistence: fixture.persistence)
+            .clearCurrentMember(in: fixture.group)
+        // 沒有已接受的 owner，就沒有可以推導的目前使用者，owner 的後備路徑也失效。
+        fixture.owner.invitationStatus = InvitationStatus.pending.rawValue
         try fixture.persistence.container.viewContext.save()
 
         XCTAssertEqual(

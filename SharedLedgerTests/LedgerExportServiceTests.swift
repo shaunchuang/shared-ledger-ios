@@ -226,28 +226,24 @@ final class LedgerExportServiceTests: XCTestCase {
     }
 
     /// 以 CRLF 斷行，但引號內的 CRLF 屬於欄位本身。
+    ///
+    /// Swift 的 `Character` 是 extended grapheme cluster，CRLF 是其中一個 cluster，
+    /// 所以逐字元走訪永遠不會單獨遇到 `"\r"`——要直接比對 `"\r\n"`。
     private func splitRecords(_ body: String) -> [String] {
         var records: [String] = []
         var current = ""
         var insideQuotes = false
-        var iterator = body.startIndex
 
-        while iterator < body.endIndex {
-            let character = body[iterator]
+        for character in body {
             if character == "\"" {
                 insideQuotes.toggle()
                 current.append(character)
-            } else if !insideQuotes,
-                      character == "\r",
-                      body.index(after: iterator) < body.endIndex,
-                      body[body.index(after: iterator)] == "\n" {
+            } else if character == "\r\n", !insideQuotes {
                 records.append(current)
                 current = ""
-                iterator = body.index(after: iterator)
             } else {
                 current.append(character)
             }
-            iterator = body.index(after: iterator)
         }
         if !current.isEmpty { records.append(current) }
         return records
