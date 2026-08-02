@@ -246,27 +246,71 @@ struct LedgerPrimaryButtonStyle: ButtonStyle {
 }
 
 struct LedgerNavRow: View {
-    let title: String
-    let detail: String
-    let icon: String
-    var tint: Color = LedgerTheme.primary
+    private let title: Text
+    private let detail: Text
+    private let icon: String
+    private let tint: Color
+
+    init(
+        title: LedgerStringKey,
+        detail: LedgerStringKey,
+        icon: String,
+        tint: Color = LedgerTheme.primary
+    ) {
+        self.init(title: Text(title), detail: Text(detail), icon: icon, tint: tint)
+    }
+
+    /// 說明文字是群組名稱、帳本名稱這類資料時用這一個；標題一律走鍵。
+    init(
+        title: LedgerStringKey,
+        detail: String,
+        icon: String,
+        tint: Color = LedgerTheme.primary
+    ) {
+        self.init(title: Text(title), detail: Text(verbatim: detail), icon: icon, tint: tint)
+    }
+
+    /// 還沒進 catalog 的畫面暫時仍傳字串。遷移完成後這個入口要移除。
+    init(
+        title: String,
+        detail: String,
+        icon: String,
+        tint: Color = LedgerTheme.primary
+    ) {
+        self.init(
+            title: Text(verbatim: title),
+            detail: Text(verbatim: detail),
+            icon: icon,
+            tint: tint
+        )
+    }
+
+    private init(title: Text, detail: Text, icon: String, tint: Color) {
+        self.title = title
+        self.detail = detail
+        self.icon = icon
+        self.tint = tint
+    }
 
     var body: some View {
         HStack(spacing: 14) {
             LedgerIconBadge(systemImage: icon, tint: tint)
-            Text(title)
+            title
                 .font(.subheadline.weight(.medium))
             Spacer()
-            Text(detail)
+            detail
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        // 標題與說明是同一列的一句話，分開唸只會讓人多滑一次。
+        .accessibilityElement(children: .combine)
     }
 }
 
