@@ -175,7 +175,7 @@ extension LedgerSyncState {
         case .undetermined:
             return "正在確認 iCloud 帳號狀態。這段期間仍可正常記帳，資料會保存在本機。"
         case .offline:
-            return "目前沒有網路連線。仍可正常記帳，恢復連線後會自動同步，不需要重新輸入。"
+            return "目前沒有網路連線。帳務完整保存在本機，可以繼續記帳；恢復連線後會自動同步，不需要重新輸入。"
         case .syncing:
             return "正在與 iCloud 同步。這段期間仍可正常記帳。"
         case .upToDate:
@@ -197,15 +197,19 @@ extension LedgerSyncState {
         }
     }
 
-    /// 本機資料是否完整。任何狀態下都是完整的，這個屬性存在是為了讓畫面永遠
-    /// 講得出這句話，而不是只在想到的時候才講。
-    var keepsLocalDataIntact: Bool { true }
+    /// 使用者可能擔心資料已經遺失的狀態。這些狀態的說明必須明講帳務仍在本機，
+    /// 否則畫面等於預設使用者知道 CloudKit 的離線行為。
+    var needsLocalDataReassurance: Bool {
+        switch self {
+        case .signedOut, .restricted, .undetermined, .offline, .failed: return true
+        case .syncing, .upToDate: return false
+        }
+    }
 
+    /// 用 `FormatStyle` 而不是 `DateFormatter`：這段文字是在 render 期間取得的，
+    /// 每次都配置一個 formatter 是不必要的成本，而 `DateFormatter` 也不是
+    /// thread-safe。
     private static func timestampText(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = .current
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        date.formatted(date: .abbreviated, time: .shortened)
     }
 }

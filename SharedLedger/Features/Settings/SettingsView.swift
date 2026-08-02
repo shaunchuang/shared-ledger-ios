@@ -1,7 +1,10 @@
 import SwiftUI
 
 struct SettingsView: View {
-    /// 監看跟著設定頁存活，畫面離開時停止；同步狀態只在使用者查看時才需要更新。
+    /// 監看跟著設定頁的生命週期存活，observer 在 deinit 一併移除。
+    ///
+    /// 沒有對應的 stop：`NWPathMonitor` 一旦 `cancel()` 就不能重新啟動，為了離開畫面
+    /// 省下的那點成本而每次都重建一個，反而更容易出錯。`start()` 本身可以重複呼叫。
     @StateObject private var syncMonitor = SyncStatusMonitor(
         container: PersistenceController.shared.container
     )

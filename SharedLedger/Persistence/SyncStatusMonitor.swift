@@ -52,7 +52,14 @@ final class SyncStatusMonitor: ObservableObject {
         pathMonitor?.cancel()
     }
 
+    /// 可以重複呼叫。SwiftUI 的 `onAppear` 會在切換分頁或返回時再次觸發，沒有這個
+    /// 保護就會每次都多掛一組 observer，並對已經在跑的 `NWPathMonitor` 再 start 一次。
     func start() {
+        guard observers.isEmpty else {
+            // 已經在監看了，只補一次帳號狀態：離開畫面期間使用者可能登入或登出了。
+            refresh()
+            return
+        }
         observeAccountChanges()
         observeCloudKitEvents()
         observeNetworkPath()

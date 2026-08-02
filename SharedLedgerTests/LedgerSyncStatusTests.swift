@@ -148,17 +148,30 @@ final class LedgerSyncStatusTests: XCTestCase {
         XCTAssertEqual(tracker.state, .failed("無法連線到 iCloud"))
     }
 
-    func testEveryStateExplainsThatLocalDataIsIntact() {
-        let states: [LedgerSyncState] = [
-            .signedOut, .restricted, .undetermined, .offline, .syncing, .upToDate, .failed("原因")
-        ]
-        for state in states {
-            XCTAssertFalse(state.title.isEmpty)
-            let detail = state.detail(lastSuccessfulSync: nil)
-            XCTAssertFalse(detail.isEmpty, "\(state) 少了說明文字")
-            XCTAssertTrue(state.keepsLocalDataIntact)
+    func testEveryStateHasATitleAndAnExplanation() {
+        for state in Self.allStates {
+            XCTAssertFalse(state.title.isEmpty, "\(state) 少了標題")
+            XCTAssertFalse(
+                state.detail(lastSuccessfulSync: nil).isEmpty,
+                "\(state) 少了說明文字"
+            )
         }
     }
+
+    func testWorryingStatesSayThatLocalDataIsStillThere() {
+        // 未登入、離線或同步失敗時，使用者最先擔心的是記到一半的帳有沒有不見。
+        // 這些狀態的說明必須自己講清楚，不能預設使用者懂 CloudKit 的離線行為。
+        for state in Self.allStates where state.needsLocalDataReassurance {
+            XCTAssertTrue(
+                state.detail(lastSuccessfulSync: nil).contains("本機"),
+                "\(state) 沒有說明帳務仍保存在本機"
+            )
+        }
+    }
+
+    private static let allStates: [LedgerSyncState] = [
+        .signedOut, .restricted, .undetermined, .offline, .syncing, .upToDate, .failed("原因")
+    ]
 
     func testOnlyRecoverableStatesOfferARecheck() {
         // 未登入與受限要去系統設定處理，同步中與已同步沒有什麼好重試的；
