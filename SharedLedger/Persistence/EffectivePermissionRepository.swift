@@ -90,15 +90,15 @@ enum PermissionError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case let .insufficientRole(role):
-            return "目前的群組角色是「\(role.displayName)」，沒有執行這項操作的權限。"
+            return LedgerStringKey.errorPermissionRole.string(arguments: [role.displayName])
         case .cloudReadOnly:
-            return "你在這個 iCloud 共享中的權限是唯讀，無法新增或修改共享資料。"
+            return LedgerStringKey.errorPermissionReadOnlyShare.string()
         case .cloudPermissionUnknown:
-            return "尚未取得你在這個 iCloud 共享中的權限，暫時無法寫入。請連上網路等待共享同步完成後再試。"
+            return LedgerStringKey.errorPermissionAwaitingShare.string()
         case .cloudParticipantMismatch:
-            return "這個 App 成員對應到另一位 iCloud 共享參與者，為避免誤用他人身分寫入，已停止這項操作。"
+            return LedgerStringKey.errorPermissionMismatchedParticipant.string()
         case .missingCurrentMember:
-            return "尚未確認你在這個群組中的成員身分，無法執行這項操作。"
+            return LedgerStringKey.errorPermissionMissingCurrentMember.string()
         }
     }
 }

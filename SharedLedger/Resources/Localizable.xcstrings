@@ -2654,6 +2654,57 @@
         }
       }
     },
+    "default.book.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Main book"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主要帳本"
+          }
+        }
+      }
+    },
+    "default.member.groupMember": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A group member"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群組成員"
+          }
+        }
+      }
+    },
+    "default.member.owner": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Me"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我"
+          }
+        }
+      }
+    },
     "defaultCategory.education": {
       "extractionState": "manual",
       "localizations": {
@@ -3279,6 +3330,431 @@
           "stringUnit": {
             "state": "translated",
             "value": "轉帳"
+          }
+        }
+      }
+    },
+    "error.allocation.duplicatePayer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The same payer cannot be added twice."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一位付款人不能重複加入。"
+          }
+        }
+      }
+    },
+    "error.allocation.duplicateSplitMember": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The same member cannot appear twice in a split."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一位成員不能重複分攤。"
+          }
+        }
+      }
+    },
+    "error.allocation.fixedAmountNegative": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A fixed split amount cannot be negative."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指定分攤金額不可小於 0。"
+          }
+        }
+      }
+    },
+    "error.allocation.fixedAmountTotal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The fixed split amounts must add up to the transaction amount."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指定分攤金額合計必須等於交易金額。"
+          }
+        }
+      }
+    },
+    "error.allocation.invalidInput": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The transaction amount and the members in the split must both be valid."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易金額與分攤成員必須有效。"
+          }
+        }
+      }
+    },
+    "error.allocation.paymentAmount": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each payer's amount must be greater than 0 and fit %@'s smallest unit."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每位付款人的金額必須大於 0，並符合 %@ 的最小貨幣單位。"
+          }
+        }
+      }
+    },
+    "error.allocation.paymentTotal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The payments must add up to the transaction amount."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "付款金額合計必須等於交易金額。"
+          }
+        }
+      }
+    },
+    "error.allocation.percentagePositive": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every member's share must be greater than 0%%."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每位成員的分攤比例必須大於 0%%。"
+          }
+        }
+      }
+    },
+    "error.allocation.percentageTotal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The shares must add up to 100%%."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分攤比例合計必須等於 100%%。"
+          }
+        }
+      }
+    },
+    "error.currency.minorUnit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The amount does not fit %@'s smallest unit."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "金額不符合 %@ 的最小貨幣單位。"
+          }
+        }
+      }
+    },
+    "error.permission.awaitingShare": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your permission in this iCloud share is not known yet, so writing is on hold. Connect to the network, let the share finish syncing and try again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未取得你在這個 iCloud 共享中的權限，暫時無法寫入。請連上網路等待共享同步完成後再試。"
+          }
+        }
+      }
+    },
+    "error.permission.mismatchedParticipant": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This member is mapped to a different iCloud share participant, so the action was stopped rather than writing as someone else."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個 App 成員對應到另一位 iCloud 共享參與者，為避免誤用他人身分寫入，已停止這項操作。"
+          }
+        }
+      }
+    },
+    "error.permission.missingCurrentMember": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your membership in this group has not been confirmed yet, so this action is unavailable."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未確認你在這個群組中的成員身分，無法執行這項操作。"
+          }
+        }
+      }
+    },
+    "error.permission.readOnlyShare": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your access to this iCloud share is read-only, so shared data cannot be added or changed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在這個 iCloud 共享中的權限是唯讀，無法新增或修改共享資料。"
+          }
+        }
+      }
+    },
+    "error.permission.role": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your role in this group is “%@”, which cannot perform this action."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前的群組角色是「%@」，沒有執行這項操作的權限。"
+          }
+        }
+      }
+    },
+    "error.settlement.balanceMismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The member balances do not add up; check the transactions first."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成員淨額無法平衡，請先檢查交易資料。"
+          }
+        }
+      }
+    },
+    "error.settlement.invalidEntry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A transaction has an invalid payment or split amount, so the settlement cannot be calculated."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易的付款或分攤金額無效，無法計算結算。"
+          }
+        }
+      }
+    },
+    "error.settlement.invalidTransfer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The settlement's payer, recipient and amount must all be valid."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結算付款人、收款人與金額必須有效。"
+          }
+        }
+      }
+    },
+    "error.settlement.minorUnit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The settlement amount does not fit %@'s smallest unit."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結算金額不符合 %@ 的最小貨幣單位。"
+          }
+        }
+      }
+    },
+    "error.settlement.unbalancedEntry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A transaction's payments and splits do not match, so the settlement cannot be calculated."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易的付款與分攤總額不一致，無法計算結算。"
+          }
+        }
+      }
+    },
+    "error.share.accountRestricted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Apple Account's iCloud features are restricted, so a sharing invitation cannot be created right now."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個 Apple 帳號的 iCloud 功能受到限制，暫時無法建立共享邀請。"
+          }
+        }
+      }
+    },
+    "error.share.mismatchedParticipant": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app member and the iCloud share participant do not match, so the sharing settings were not updated."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前 App 成員與 iCloud 共享參與者身分不一致，已停止更新共享設定。"
+          }
+        }
+      }
+    },
+    "error.share.missingShare": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CloudKit did not return a share; try again later."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CloudKit 未回傳共享邀請，請稍後再試。"
+          }
+        }
+      }
+    },
+    "error.share.notSignedIn": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device is not signed in to iCloud. Sign in to your Apple Account in Settings before inviting anyone."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此裝置尚未登入 iCloud，請先在「設定」登入 Apple 帳號後再邀請成員。"
+          }
+        }
+      }
+    },
+    "error.share.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud is unreachable right now; check your network and iCloud status and try again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前無法連線到 iCloud，請確認網路與 iCloud 狀態後再試。"
           }
         }
       }
@@ -6162,6 +6638,244 @@
           "stringUnit": {
             "state": "translated",
             "value": "通知"
+          }
+        }
+      }
+    },
+    "participant.badge.notAccepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitation not accepted"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀請未接受"
+          }
+        }
+      }
+    },
+    "participant.badge.participantMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Participant gone"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參與者已不存在"
+          }
+        }
+      }
+    },
+    "participant.badge.readOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read-only"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "唯讀"
+          }
+        }
+      }
+    },
+    "participant.badge.shareOwner": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share owner"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享擁有者"
+          }
+        }
+      }
+    },
+    "participant.badge.shareUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share not synced"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享未同步"
+          }
+        }
+      }
+    },
+    "participant.badge.unmapped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not mapped"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未對應"
+          }
+        }
+      }
+    },
+    "participant.badge.writable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can edit"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可編輯"
+          }
+        }
+      }
+    },
+    "participant.explanation.notAccepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The mapping exists, but they have not accepted the iCloud sharing invitation yet."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已建立對應，但對方尚未接受 iCloud 共享邀請。"
+          }
+        }
+      }
+    },
+    "participant.explanation.participantMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The iCloud share participant this member was mapped to is no longer in the share; they were removed or left."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這位成員原本對應的 iCloud 共享參與者已不在共享名單中，可能已被移除或自行退出。"
+          }
+        }
+      }
+    },
+    "participant.explanation.readOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapped to a read-only iCloud share participant, so their write access in the app is read-only too."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "對應到唯讀的 iCloud 共享參與者，在 App 中的寫入權限會一併降為唯讀。"
+          }
+        }
+      }
+    },
+    "participant.explanation.shareOwner": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapped to the iCloud share owner, who has full write access."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "對應到 iCloud 共享的擁有者，具備完整寫入權限。"
+          }
+        }
+      }
+    },
+    "participant.explanation.shareUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This group's iCloud share data has not arrived yet; connect to the network and let it sync."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未取得這個群組的 iCloud 共享資料，請連上網路等待同步完成。"
+          }
+        }
+      }
+    },
+    "participant.explanation.unmapped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This member is not mapped to an iCloud share participant yet. The mapping is created once they accept the invitation and confirm who they are."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這位成員還沒有對應到 iCloud 共享參與者。對方接受邀請並確認身分後才會建立對應。"
+          }
+        }
+      }
+    },
+    "participant.explanation.writable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapped to an iCloud share participant with read and write access."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "對應到可讀寫的 iCloud 共享參與者。"
           }
         }
       }

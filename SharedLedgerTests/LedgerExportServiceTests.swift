@@ -13,7 +13,7 @@ final class LedgerExportServiceTests: XCTestCase {
 
         XCTAssertEqual(rows.count, 1)
         let row = try XCTUnwrap(rows.first)
-        XCTAssertEqual(row["帳本"], "主要帳本")
+        XCTAssertEqual(row["帳本"], BookDraft.defaultName)
         XCTAssertEqual(row["類型"], "支出")
         XCTAssertEqual(row["分類"], "餐飲")
         XCTAssertEqual(row["金額"], "120")
@@ -84,17 +84,17 @@ final class LedgerExportServiceTests: XCTestCase {
 
         let currentOnly = fixture.export()
         XCTAssertEqual(currentOnly.transactionCount, 1)
-        XCTAssertEqual(currentOnly.includedBookNames, ["主要帳本"])
+        XCTAssertEqual(currentOnly.includedBookNames, [BookDraft.defaultName])
 
         var allBooks = LedgerExportRequest()
         allBooks.scope = .allActiveBooks
         let everything = fixture.export(allBooks)
 
         XCTAssertEqual(everything.transactionCount, 2)
-        XCTAssertEqual(Set(everything.includedBookNames), ["主要帳本", "旅遊帳本"])
+        XCTAssertEqual(Set(everything.includedBookNames), [BookDraft.defaultName, "旅遊帳本"])
 
         let rows = try transactionRows(everything)
-        XCTAssertEqual(Set(rows.compactMap { $0["帳本"] }), ["主要帳本", "旅遊帳本"])
+        XCTAssertEqual(Set(rows.compactMap { $0["帳本"] }), [BookDraft.defaultName, "旅遊帳本"])
     }
 
     func testDateRangeIncludesBothBoundaryDays() throws {

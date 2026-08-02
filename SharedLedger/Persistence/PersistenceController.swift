@@ -297,7 +297,7 @@ final class PersistenceController {
     
     @MainActor
     func prepareShare(for group: LedgerGroup) async throws -> (CKShare, CKContainer) {
-        let shareTitle = group.name ?? "Shared Ledger 群組"
+        let shareTitle = group.name ?? LedgerStringKey.groupShareDefaultTitle.string()
         let objectID = group.objectID
         let cloudContainer = CKContainer(identifier: Self.cloudKitContainerIdentifier)
 
@@ -503,15 +503,15 @@ final class PersistenceController {
         var errorDescription: String? {
             switch self {
             case .missingShare:
-                return "CloudKit 未回傳共享邀請，請稍後再試。"
+                return LedgerStringKey.errorShareMissingShare.string()
             case .noICloudAccount:
-                return "此裝置尚未登入 iCloud，請先在「設定」登入 Apple 帳號後再邀請成員。"
+                return LedgerStringKey.errorShareNotSignedIn.string()
             case .restrictedAccount:
-                return "這個 Apple 帳號的 iCloud 功能受到限制，暫時無法建立共享邀請。"
+                return LedgerStringKey.errorShareAccountRestricted.string()
             case .iCloudUnavailable:
-                return "目前無法連線到 iCloud，請確認網路與 iCloud 狀態後再試。"
+                return LedgerStringKey.errorShareUnavailable.string()
             case .participantIdentityMismatch:
-                return "目前 App 成員與 iCloud 共享參與者身分不一致，已停止更新共享設定。"
+                return LedgerStringKey.errorShareMismatchedParticipant.string()
             }
         }
     }

@@ -9,7 +9,8 @@ struct InviteeContact: Identifiable, Equatable, Sendable {
 
 struct GroupDraft: Equatable, Sendable {
     var name = ""
-    var ownerDisplayName = "我"
+    /// 同樣是建立時寫進 Core Data 的顯示名稱，之後由使用者自己維護。
+    var ownerDisplayName = LedgerStringKey.defaultMemberOwner.string()
     var currencyCode = LedgerCurrency.defaultCode
     var invitees: [InviteeContact] = []
     /// 建立群組時是否一併套用內建分類目錄。
