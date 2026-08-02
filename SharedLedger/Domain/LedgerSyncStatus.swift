@@ -50,23 +50,30 @@ struct LedgerSyncInputs: Equatable, Sendable {
 /// 和其他同步文案放在一起，是因為它們要一起讀才看得出語氣是否一致；
 /// `CKError.localizedDescription` 多半是給開發者看的英文技術訊息。
 enum LedgerSyncErrorMessage {
-    static func text(for error: Error) -> String {
+    static func text(for error: Error, locale: Locale? = nil) -> String {
         guard let ckError = error as? CKError else {
             return error.localizedDescription
         }
-        switch ckError.code {
-        case .networkUnavailable, .networkFailure:
-            return "無法連線到 iCloud，請確認網路後再試。"
-        case .notAuthenticated:
-            return "iCloud 尚未完成登入，請到「設定 → Apple 帳號」確認登入狀態。"
-        case .quotaExceeded:
-            return "iCloud 儲存空間不足，請釋出空間後再同步。"
-        case .zoneBusy, .serviceUnavailable, .requestRateLimited:
-            return "iCloud 服務忙碌中，稍後會自動重試。"
-        case .permissionFailure:
-            return "沒有這筆共享資料的寫入權限，請確認分享設定。"
-        default:
+        guard let key = key(for: ckError.code) else {
             return ckError.localizedDescription
+        }
+        return key.string(locale: locale)
+    }
+
+    private static func key(for code: CKError.Code) -> LedgerStringKey? {
+        switch code {
+        case .networkUnavailable, .networkFailure:
+            return .syncErrorNetwork
+        case .notAuthenticated:
+            return .syncErrorNotAuthenticated
+        case .quotaExceeded:
+            return .syncErrorQuotaExceeded
+        case .zoneBusy, .serviceUnavailable, .requestRateLimited:
+            return .syncErrorServiceBusy
+        case .permissionFailure:
+            return .syncErrorPermission
+        default:
+            return nil
         }
     }
 }
@@ -152,39 +159,47 @@ enum LedgerSyncStateReducer {
 }
 
 extension LedgerSyncState {
-    var title: String {
+    var titleKey: LedgerStringKey {
         switch self {
-        case .signedOut: return "未登入 iCloud"
-        case .restricted: return "iCloud 受到限制"
-        case .undetermined: return "正在確認 iCloud"
-        case .offline: return "離線"
-        case .syncing: return "同步中"
-        case .upToDate: return "已同步"
-        case .failed: return "同步失敗"
+        case .signedOut: return .syncStateSignedOutTitle
+        case .restricted: return .syncStateRestrictedTitle
+        case .undetermined: return .syncStateUndeterminedTitle
+        case .offline: return .syncStateOfflineTitle
+        case .syncing: return .syncStateSyncingTitle
+        case .upToDate: return .syncStateUpToDateTitle
+        case .failed: return .syncStateFailedTitle
         }
     }
 
+    var title: String { titleKey.string() }
+
     /// 每個狀態都要說清楚「資料還在不在」與「接下來該做什麼」。同步狀態最怕的是
     /// 讓使用者以為記到一半的帳消失了。
-    func detail(lastSuccessfulSync: Date?) -> String {
+    func detail(lastSuccessfulSync: Date?, locale: Locale? = nil) -> String {
         switch self {
         case .signedOut:
-            return "這台裝置尚未登入 iCloud，帳務只會保存在本機，也不會與其他成員共享。到「設定 → Apple 帳號」登入並開啟 iCloud 雲碟後就會開始同步。"
+            return LedgerStringKey.syncStateSignedOutDetail.string(locale: locale)
         case .restricted:
-            return "這個 Apple 帳號的 iCloud 被家長控制或裝置管理停用。帳務仍可正常記錄在本機，但無法同步或共享。"
+            return LedgerStringKey.syncStateRestrictedDetail.string(locale: locale)
         case .undetermined:
-            return "正在確認 iCloud 帳號狀態。這段期間仍可正常記帳，資料會保存在本機。"
+            return LedgerStringKey.syncStateUndeterminedDetail.string(locale: locale)
         case .offline:
-            return "目前沒有網路連線。帳務完整保存在本機，可以繼續記帳；恢復連線後會自動同步，不需要重新輸入。"
+            return LedgerStringKey.syncStateOfflineDetail.string(locale: locale)
         case .syncing:
-            return "正在與 iCloud 同步。這段期間仍可正常記帳。"
+            return LedgerStringKey.syncStateSyncingDetail.string(locale: locale)
         case .upToDate:
             guard let lastSuccessfulSync else {
-                return "已連上 iCloud。新的變更會自動同步。"
+                return LedgerStringKey.syncStateUpToDateDetail.string(locale: locale)
             }
-            return "最後同步時間：\(Self.timestampText(lastSuccessfulSync))。"
+            return LedgerStringKey.syncStateUpToDateDetailLastSync.string(
+                arguments: [LedgerFormatters.timestamp(lastSuccessfulSync, locale: locale)],
+                locale: locale
+            )
         case .failed(let reason):
-            return "最近一次同步沒有完成，資料仍完整保存在本機。iCloud 會自動重試，你也可以手動重新檢查。\n\n原因：\(reason)"
+            return LedgerStringKey.syncStateFailedDetail.string(
+                arguments: [reason],
+                locale: locale
+            )
         }
     }
 
@@ -204,12 +219,5 @@ extension LedgerSyncState {
         case .signedOut, .restricted, .undetermined, .offline, .failed: return true
         case .syncing, .upToDate: return false
         }
-    }
-
-    /// 用 `FormatStyle` 而不是 `DateFormatter`：這段文字是在 render 期間取得的，
-    /// 每次都配置一個 formatter 是不必要的成本，而 `DateFormatter` 也不是
-    /// thread-safe。
-    private static func timestampText(_ date: Date) -> String {
-        date.formatted(date: .abbreviated, time: .shortened)
     }
 }

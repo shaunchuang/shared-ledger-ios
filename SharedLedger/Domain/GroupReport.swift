@@ -8,13 +8,15 @@ enum ReportBookScope: String, CaseIterable, Identifiable, Sendable {
 
     var id: Self { self }
 
-    var displayName: String {
+    var displayNameKey: LedgerStringKey {
         switch self {
-        case .allActiveBooks: return "全部帳本"
-        case .currentBook: return "目前帳本"
-        case .selectedBookIDs: return "自選帳本"
+        case .allActiveBooks: return .reportScopeAllActiveBooks
+        case .currentBook: return .reportScopeCurrentBook
+        case .selectedBookIDs: return .reportScopeSelectedBookIDs
         }
     }
+
+    var displayName: String { displayNameKey.string() }
 }
 
 struct GroupReportCategorySummary: Identifiable, Equatable, Sendable {
@@ -47,9 +49,8 @@ enum ReportShare {
         return amount / total
     }
 
-    static func formatted(_ share: Decimal) -> String {
-        let percentage = NSDecimalNumber(decimal: share * 100).doubleValue
-        return String(format: "%.1f%%", percentage)
+    static func formatted(_ share: Decimal, locale: Locale? = nil) -> String {
+        LedgerFormatters.percent(share, locale: locale)
     }
 }
 

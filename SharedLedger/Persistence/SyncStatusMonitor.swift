@@ -106,7 +106,7 @@ final class SyncStatusMonitor: ObservableObject {
             let identifier = event.identifier
             let endDate = event.endDate
             let succeeded = event.succeeded
-            let message = event.error.map(LedgerSyncErrorMessage.text(for:))
+            let message = event.error.map { LedgerSyncErrorMessage.text(for: $0) }
             Task { @MainActor [weak self] in
                 self?.tracker.apply(
                     identifier: identifier,

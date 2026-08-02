@@ -3,6 +3,10 @@ import XCTest
 @testable import SharedLedger
 
 final class LedgerSyncStatusTests: XCTestCase {
+    private static let zhHant = Locale(identifier: "zh-Hant")
+    private static let english = Locale(identifier: "en")
+    private static let supportedLocales = [zhHant, english]
+
     func testAvailableAccountWithNothingInFlightIsUpToDate() {
         let state = LedgerSyncStateReducer.state(
             from: LedgerSyncInputs(accountStatus: .available)
@@ -148,24 +152,37 @@ final class LedgerSyncStatusTests: XCTestCase {
         XCTAssertEqual(tracker.state, .failed("無法連線到 iCloud"))
     }
 
-    func testEveryStateHasATitleAndAnExplanation() {
+    func testEveryStateHasATitleAndAnExplanationInEveryLanguage() {
         for state in Self.allStates {
-            XCTAssertFalse(state.title.isEmpty, "\(state) 少了標題")
-            XCTAssertFalse(
-                state.detail(lastSuccessfulSync: nil).isEmpty,
-                "\(state) 少了說明文字"
-            )
+            for locale in Self.supportedLocales {
+                let title = state.titleKey.string(locale: locale)
+                let detail = state.detail(lastSuccessfulSync: nil, locale: locale)
+                let context = "\(state) / \(locale.identifier)"
+
+                XCTAssertFalse(title.isEmpty, "\(context) 少了標題")
+                XCTAssertFalse(detail.isEmpty, "\(context) 少了說明文字")
+                // 沒翻到的鍵會原封不動掉出鍵名，看起來也「有文字」。
+                XCTAssertNotEqual(title, state.titleKey.rawValue, context)
+                XCTAssertFalse(detail.contains("sync.state."), context)
+            }
         }
     }
 
     func testWorryingStatesSayThatLocalDataIsStillThere() {
         // 未登入、離線或同步失敗時，使用者最先擔心的是記到一半的帳有沒有不見。
-        // 這些狀態的說明必須自己講清楚，不能預設使用者懂 CloudKit 的離線行為。
+        // 這些狀態的說明必須自己講清楚，不能預設使用者懂 CloudKit 的離線行為，
+        // 而且兩種語言都要講——這句話最容易在翻譯時被省略成單純的錯誤描述。
+        let reassurance = [
+            Self.zhHant: "本機",
+            Self.english: "this device"
+        ]
         for state in Self.allStates where state.needsLocalDataReassurance {
-            XCTAssertTrue(
-                state.detail(lastSuccessfulSync: nil).contains("本機"),
-                "\(state) 沒有說明帳務仍保存在本機"
-            )
+            for (locale, token) in reassurance {
+                XCTAssertTrue(
+                    state.detail(lastSuccessfulSync: nil, locale: locale).contains(token),
+                    "\(state) / \(locale.identifier) 沒有說明帳務仍保存在本機"
+                )
+            }
         }
     }
 
@@ -187,23 +204,43 @@ final class LedgerSyncStatusTests: XCTestCase {
 
     func testUpToDateDetailNamesTheLastSyncTime() {
         let syncedAt = Date(timeIntervalSince1970: 1_700_000_000)
-        let detail = LedgerSyncState.upToDate.detail(lastSuccessfulSync: syncedAt)
+        let detail = LedgerSyncState.upToDate.detail(
+            lastSuccessfulSync: syncedAt,
+            locale: Self.zhHant
+        )
         XCTAssertTrue(detail.contains("最後同步時間"))
 
-        let withoutTimestamp = LedgerSyncState.upToDate.detail(lastSuccessfulSync: nil)
+        let withoutTimestamp = LedgerSyncState.upToDate.detail(
+            lastSuccessfulSync: nil,
+            locale: Self.zhHant
+        )
         XCTAssertFalse(withoutTimestamp.contains("最後同步時間"))
+
+        // 時間戳本身也要跟著語言走，不能固定用裝置地區的寫法。
+        XCTAssertNotEqual(
+            LedgerFormatters.timestamp(syncedAt, locale: Self.zhHant),
+            LedgerFormatters.timestamp(syncedAt, locale: Locale(identifier: "en_US"))
+        )
     }
 
     func testCloudKitErrorsAreTranslatedIntoActionableText() {
-        XCTAssertTrue(
-            LedgerSyncErrorMessage.text(for: CKError(.quotaExceeded)).contains("儲存空間")
-        )
-        XCTAssertTrue(
-            LedgerSyncErrorMessage.text(for: CKError(.networkUnavailable)).contains("網路")
-        )
-        XCTAssertTrue(
-            LedgerSyncErrorMessage.text(for: CKError(.notAuthenticated)).contains("登入")
-        )
+        let expectations: [CKError.Code: (zh: String, en: String)] = [
+            .quotaExceeded: ("儲存空間", "storage"),
+            .networkUnavailable: ("網路", "network"),
+            .notAuthenticated: ("登入", "signed in")
+        ]
+        for (code, tokens) in expectations {
+            XCTAssertTrue(
+                LedgerSyncErrorMessage.text(for: CKError(code), locale: Self.zhHant)
+                    .contains(tokens.zh),
+                "\(code) zh-Hant"
+            )
+            XCTAssertTrue(
+                LedgerSyncErrorMessage.text(for: CKError(code), locale: Self.english)
+                    .contains(tokens.en),
+                "\(code) en"
+            )
+        }
 
         // 不認得的錯誤仍要有文字，不能讓畫面上出現空白的失敗原因。
         struct OtherError: LocalizedError {

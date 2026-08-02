@@ -39,7 +39,7 @@ struct SyncStatusView: View {
                         Text(monitor.state.title)
                             .font(.headline)
                         if case .syncing = monitor.state {
-                            Text("進行中")
+                            Text(.syncViewInProgress)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -64,21 +64,21 @@ struct SyncStatusView: View {
                     Button {
                         monitor.refresh()
                     } label: {
-                        Label("重新檢查", systemImage: "arrow.clockwise")
+                        Label(.syncViewRecheck, systemImage: "arrow.clockwise")
                     }
                 } footer: {
-                    Text("iCloud 會自行安排同步時機，App 無法強制立即上傳或下載。這個動作只會重新確認目前狀態。")
+                    Text(.syncViewRecheckFooter)
                 }
             }
 
             Section {
-                Label("本機資料完整保存", systemImage: "internaldrive")
+                Label(.syncViewLocalDataTitle, systemImage: "internaldrive")
                     .font(.subheadline)
             } footer: {
-                Text("不論同步狀態如何，已經記錄的帳務都保存在這台裝置上，可以繼續新增與編輯；恢復連線後會自動補送。")
+                Text(.syncViewLocalDataFooter)
             }
         }
-        .navigationTitle("iCloud 同步")
+        .navigationTitle(Text(.syncTitle))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -93,7 +93,7 @@ struct SyncStatusRow: View {
                 systemImage: monitor.state.systemImage,
                 tint: monitor.state.tint
             )
-            Text("iCloud 同步")
+            Text(.syncTitle)
                 .font(.subheadline.weight(.medium))
             Spacer()
             Text(monitor.state.title)
@@ -108,7 +108,9 @@ struct SyncStatusRow: View {
         .contentShape(Rectangle())
         .foregroundStyle(.primary)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("iCloud 同步，\(monitor.state.title)")
+        .accessibilityLabel(
+            LedgerStringKey.syncRowAccessibilityLabel.string(arguments: [monitor.state.title])
+        )
     }
 }
 

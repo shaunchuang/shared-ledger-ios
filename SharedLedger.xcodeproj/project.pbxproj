@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0DE00000000000000000080 /* LedgerStringKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000081 /* LedgerStringKey.swift */; };
+		C0DE00000000000000000082 /* LedgerLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000083 /* LedgerLocalization.swift */; };
+		C0DE00000000000000000084 /* LedgerStringKey+SwiftUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000085 /* LedgerStringKey+SwiftUI.swift */; };
+		C0DE00000000000000000086 /* LedgerFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000087 /* LedgerFormatters.swift */; };
+		C0DE0000000000000000008C /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000008D /* LocalizationTests.swift */; };
+		C0DE00000000000000000088 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000089 /* Localizable.xcstrings */; };
+		C0DE0000000000000000008A /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000008B /* InfoPlist.xcstrings */; };
 		A11C0A001122334455667788 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A11C0A011122334455667788 /* Assets.xcassets */; };
 		082CCAC3D0CA8FB0C8B5C323 /* LedgerTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907F9A7F5296FEC46239CC6F /* LedgerTheme.swift */; };
 		0E812BB89B2B79F01F9B75F4 /* GroupDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE02B5318E1A4FEC2A36631B /* GroupDetailView.swift */; };
@@ -99,6 +106,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C0DE00000000000000000081 /* LedgerStringKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerStringKey.swift"; sourceTree = "<group>"; };
+		C0DE00000000000000000083 /* LedgerLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerLocalization.swift"; sourceTree = "<group>"; };
+		C0DE00000000000000000085 /* LedgerStringKey+SwiftUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerStringKey+SwiftUI.swift"; sourceTree = "<group>"; };
+		C0DE00000000000000000087 /* LedgerFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerFormatters.swift"; sourceTree = "<group>"; };
+		C0DE0000000000000000008D /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalizationTests.swift"; sourceTree = "<group>"; };
+		C0DE00000000000000000089 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		C0DE0000000000000000008B /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		A11C0A011122334455667788 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0FDB065A3AA8838068BC2F84 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		17603CF7F718E4B15A463C90 /* EntryKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryKind.swift; sourceTree = "<group>"; };
@@ -191,6 +205,17 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		C0DE0000000000000000008E /* Localization */ = {
+			isa = PBXGroup;
+			children = (
+				C0DE00000000000000000081 /* LedgerStringKey.swift */,
+				C0DE00000000000000000083 /* LedgerLocalization.swift */,
+				C0DE00000000000000000085 /* LedgerStringKey+SwiftUI.swift */,
+				C0DE00000000000000000087 /* LedgerFormatters.swift */,
+			);
+			path = Localization;
+			sourceTree = "<group>";
+		};
 		08F98D4249EBB6434B4A4747 /* SharedLedger */ = {
 			isa = PBXGroup;
 			children = (
@@ -199,6 +224,7 @@
 				ADC010453091E7C3D423689F /* DesignSystem */,
 				4E2AAC912D128933C96BBF6E /* Domain */,
 				704AC8973918F1E6936E2277 /* Features */,
+				C0DE0000000000000000008E /* Localization */,
 				45C5D57ACA3A08343620B37B /* Persistence */,
 				404D1FB27C72DB5FBFA9F7FC /* Resources */,
 			);
@@ -222,6 +248,8 @@
 			isa = PBXGroup;
 			children = (
 				A11C0A011122334455667788 /* Assets.xcassets */,
+				C0DE00000000000000000089 /* Localizable.xcstrings */,
+				C0DE0000000000000000008B /* InfoPlist.xcstrings */,
 				0C8680F79E80AE7578F13C00 /* SharedLedger.xcdatamodeld */,
 			);
 			path = Resources;
@@ -370,6 +398,7 @@
 		C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE0000000000000000008D /* LocalizationTests.swift */,
 				C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */,
 				C0DE00000000000000000075 /* LedgerNotificationTests.swift */,
 				C0DE00000000000000000059 /* CSVWriterTests.swift */,
@@ -465,11 +494,12 @@
 				};
 			};
 			buildConfigurationList = 742ED8E52127B335B62DF9EC /* Build configuration list for PBXProject "SharedLedger" */;
-			developmentRegion = en;
+			developmentRegion = "zh-Hant";
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				Base,
 				en,
+				"zh-Hant",
 			);
 			mainGroup = 7185875C8BA55197FA6037FF;
 			minimizedProjectReferenceProxies = 1;
@@ -490,6 +520,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A11C0A001122334455667788 /* Assets.xcassets in Resources */,
+				C0DE00000000000000000088 /* Localizable.xcstrings in Resources */,
+				C0DE0000000000000000008A /* InfoPlist.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -501,6 +533,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */,
+				C0DE0000000000000000008C /* LocalizationTests.swift in Sources */,
 				C0DE00000000000000000074 /* LedgerNotificationTests.swift in Sources */,
 				C0DE00000000000000000058 /* CSVWriterTests.swift in Sources */,
 				C0DE0000000000000000005A /* LedgerExportServiceTests.swift in Sources */,
@@ -522,6 +555,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				C0DE00000000000000000060 /* LedgerSyncStatus.swift in Sources */,
+				C0DE00000000000000000080 /* LedgerStringKey.swift in Sources */,
+				C0DE00000000000000000082 /* LedgerLocalization.swift in Sources */,
+				C0DE00000000000000000084 /* LedgerStringKey+SwiftUI.swift in Sources */,
+				C0DE00000000000000000086 /* LedgerFormatters.swift in Sources */,
 				C0DE00000000000000000062 /* SyncStatusMonitor.swift in Sources */,
 				C0DE00000000000000000064 /* SyncStatusView.swift in Sources */,
 				C0DE00000000000000000068 /* LedgerNotification.swift in Sources */,

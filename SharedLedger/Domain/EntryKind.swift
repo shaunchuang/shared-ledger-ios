@@ -8,12 +8,14 @@ enum EntryKind: String, CaseIterable, Codable, Sendable {
 
     static let userCreatableCases: [EntryKind] = [.expense, .income, .transfer]
 
-    var displayName: String {
+    var displayNameKey: LedgerStringKey {
         switch self {
-        case .income: return "收入"
-        case .expense: return "支出"
-        case .transfer: return "轉帳"
-        case .balanceAdjustment: return "餘額調整"
+        case .income: return .entryKindIncome
+        case .expense: return .entryKindExpense
+        case .transfer: return .entryKindTransfer
+        case .balanceAdjustment: return .entryKindBalanceAdjustment
         }
     }
+
+    var displayName: String { displayNameKey.string() }
 }

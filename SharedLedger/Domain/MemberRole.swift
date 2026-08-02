@@ -18,14 +18,16 @@ enum MemberRole: String, CaseIterable, Codable, Sendable {
         self == .owner || self == .administrator
     }
 
-    var displayName: String {
+    var displayNameKey: LedgerStringKey {
         switch self {
-        case .owner: "群組擁有者"
-        case .administrator: "管理員"
-        case .member: "成員"
-        case .viewer: "唯讀成員"
+        case .owner: .memberRoleOwner
+        case .administrator: .memberRoleAdministrator
+        case .member: .memberRoleMember
+        case .viewer: .memberRoleViewer
         }
     }
+
+    var displayName: String { displayNameKey.string() }
 }
 
 enum InvitationStatus: String, CaseIterable, Codable, Sendable {
