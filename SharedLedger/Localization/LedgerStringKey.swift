@@ -215,6 +215,36 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case entryKindIncome = "entryKind.income"
     case entryKindTransfer = "entryKind.transfer"
 
+    // MARK: - 匯出資料
+
+
+    // MARK: - 匯出資料
+    case exportActionShare = "export.action.share"
+    case exportContentFooter = "export.content.footer"
+    case exportContentIncludesAccounts = "export.content.includesAccounts"
+    case exportContentIncludesSettlements = "export.content.includesSettlements"
+    case exportContentIncludesVoided = "export.content.includesVoided"
+    case exportDateEnd = "export.date.end"
+    case exportDateFooter = "export.date.footer"
+    case exportDateStart = "export.date.start"
+    case exportDateToggle = "export.date.toggle"
+    case exportEmpty = "export.empty"
+    case exportErrorTitle = "export.error.title"
+    case exportFieldBookScope = "export.field.bookScope"
+    case exportFieldGroup = "export.field.group"
+    case exportScopeFooter = "export.scope.footer"
+    case exportSectionContent = "export.section.content"
+    case exportSectionDate = "export.section.date"
+    case exportSectionGroup = "export.section.group"
+    case exportSectionScope = "export.section.scope"
+    case exportSummaryBooks = "export.summary.books"
+    case exportSummaryBooksCount = "export.summary.books.count"
+    case exportSummaryBooksNone = "export.summary.books.none"
+    case exportSummaryFiles = "export.summary.files"
+    case exportSummaryFilesCount = "export.summary.files.count"
+    case exportSummaryFooter = "export.summary.footer"
+    case exportSummaryTransactions = "export.summary.transactions"
+
     // MARK: - 群組
     case groupActionCreate = "group.action.create"
     case groupCardMemberCount = "group.card.memberCount"
@@ -361,6 +391,29 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case splitModeEqual = "splitMode.equal"
     case splitModeFixedAmount = "splitMode.fixedAmount"
     case splitModePercentage = "splitMode.percentage"
+
+    // MARK: - 刪除資料
+
+
+    // MARK: - 刪除資料
+    case privacyActionDelete = "privacy.action.delete"
+    case privacyActionDeleteConfirm = "privacy.action.deleteConfirm"
+    case privacyConfirmMessageCounts = "privacy.confirm.message.counts"
+    case privacyConfirmMessageIrreversible = "privacy.confirm.message.irreversible"
+    case privacyConfirmMessageOthers = "privacy.confirm.message.others"
+    case privacyConfirmTitle = "privacy.confirm.title"
+    case privacyConfirmTitleFallback = "privacy.confirm.title.fallback"
+    case privacyEmpty = "privacy.empty"
+    case privacyErrorTitle = "privacy.error.title"
+    case privacyFooterAffectsOthers = "privacy.footer.affectsOthers"
+    case privacyFooterLeaveInstead = "privacy.footer.leaveInstead"
+    case privacyFooterOwnGroup = "privacy.footer.ownGroup"
+    case privacyIntro = "privacy.intro"
+    case privacyRestrictionFallback = "privacy.restriction.fallback"
+    case privacyRowBooks = "privacy.row.books"
+    case privacyRowEntries = "privacy.row.entries"
+    case privacyRowMembers = "privacy.row.members"
+    case privacyTitle = "privacy.title"
 
     // MARK: - 報表範圍
     case reportScopeAllActiveBooks = "reportScope.allActiveBooks"

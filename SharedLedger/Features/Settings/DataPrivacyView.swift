@@ -39,14 +39,14 @@ struct DataPrivacyView: View {
     var body: some View {
         Form {
             Section {
-                Text("刪除會移除資料本身，不只是隱藏。刪除前建議先到「匯出資料」保留一份 CSV。")
+                Text(.privacyIntro)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
             if rows.isEmpty {
                 Section {
-                    Text("目前沒有任何群組資料。")
+                    Text(.privacyEmpty)
                         .foregroundStyle(.secondary)
                 }
             } else {
@@ -55,7 +55,7 @@ struct DataPrivacyView: View {
                 }
             }
         }
-        .navigationTitle("刪除資料")
+        .navigationTitle(Text(.settingsRowDeleteTitle))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: reloadRows)
         .onChange(of: groups.count) { _, _ in reloadRows() }
@@ -73,64 +73,96 @@ struct DataPrivacyView: View {
             reloadRows()
         }
         .confirmationDialog(
-            deletionTitle,
+            Text(verbatim: deletionTitle),
             isPresented: deletionConfirmationBinding,
             titleVisibility: .visible
         ) {
-            Button("刪除群組與所有帳務", role: .destructive, action: deletePendingGroup)
-            Button("取消", role: .cancel) { rowPendingDeletion = nil }
+            Button(role: .destructive, action: deletePendingGroup) {
+                Text(.privacyActionDeleteConfirm)
+            }
+            Button(role: .cancel) { rowPendingDeletion = nil } label: {
+                Text(.commonActionCancel)
+            }
         } message: {
-            Text(deletionMessage)
+            Text(verbatim: deletionMessage)
         }
-        .alert("無法刪除", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.privacyErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
     private func section(for row: GroupDeletionRow) -> some View {
         Section {
-            LabeledContent("帳本", value: "\(row.bookCount)")
-            LabeledContent("交易", value: "\(row.entryCount)")
-            LabeledContent("成員", value: "\(row.activeMemberCount)")
+            LabeledContent {
+                Text(verbatim: row.bookCount.formatted())
+            } label: {
+                Text(.privacyRowBooks)
+            }
+            LabeledContent {
+                Text(verbatim: row.entryCount.formatted())
+            } label: {
+                Text(.privacyRowEntries)
+            }
+            LabeledContent {
+                Text(verbatim: row.activeMemberCount.formatted())
+            } label: {
+                Text(.privacyRowMembers)
+            }
 
             if let restriction = row.restriction {
-                Text(restriction.errorDescription ?? "這個群組無法在這台裝置刪除。")
+                // 限制說明來自資料層的 `GroupError`，那一層還沒遷移。
+                Text(verbatim: restriction.errorDescription
+                    ?? LedgerStringKey.privacyRestrictionFallback.string())
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                Button("刪除這個群組", role: .destructive) {
+                Button(role: .destructive) {
                     rowPendingDeletion = row
+                } label: {
+                    Text(.privacyActionDelete)
                 }
             }
         } header: {
-            Text(row.name)
+            Text(verbatim: row.name)
         } footer: {
-            Text(footerText(for: row))
+            Text(footerKey(for: row))
         }
     }
 
-    private func footerText(for row: GroupDeletionRow) -> String {
-        guard row.canDelete else {
-            return "退出群組的入口在「群組管理」→ 選擇這個群組 → 成員管理。退出後你的歷史帳務仍會保留在群組裡，供其他成員對帳。"
-        }
-        if row.affectsOtherMembers {
-            return "這個群組已經有其他成員。資料存放在你的 iCloud，刪除會讓所有已加入的成員同時失去這個群組的全部帳務，且無法復原。"
-        }
-        return "刪除會移除這個群組的所有帳本、帳戶、分類、交易、結算與稽核紀錄，且無法復原。"
+    private func footerKey(for row: GroupDeletionRow) -> LedgerStringKey {
+        guard row.canDelete else { return .privacyFooterLeaveInstead }
+        return row.affectsOtherMembers ? .privacyFooterAffectsOthers : .privacyFooterOwnGroup
     }
 
     private var deletionTitle: String {
-        guard let rowPendingDeletion else { return "確定要刪除？" }
-        return "確定要刪除「\(rowPendingDeletion.name)」？"
+        guard let rowPendingDeletion else {
+            return LedgerStringKey.privacyConfirmTitleFallback.string()
+        }
+        return LedgerStringKey.privacyConfirmTitle.string(arguments: [rowPendingDeletion.name])
     }
 
+    /// 三段各自是完整的句子：筆數、其他成員、無法復原。用哪幾段取決於這個群組還有
+    /// 沒有別人，串接的順序在兩種語言剛好一致，但每一段都必須自己就是一句話。
     private var deletionMessage: String {
         guard let row = rowPendingDeletion else { return "" }
-        let counts = "將刪除 \(row.entryCount) 筆交易與相關的帳本、帳戶、分類與結算紀錄。"
-        guard row.affectsOtherMembers else { return counts + "此操作無法復原。" }
-        return counts + "其他 \(row.activeMemberCount - 1) 位成員也會同時失去這個群組的資料。此操作無法復原。"
+        var parts = [
+            LedgerStringKey.privacyConfirmMessageCounts.string(
+                arguments: [Int64(row.entryCount)]
+            )
+        ]
+        if row.affectsOtherMembers {
+            parts.append(
+                LedgerStringKey.privacyConfirmMessageOthers.string(
+                    arguments: [Int64(row.activeMemberCount - 1)]
+                )
+            )
+        }
+        parts.append(LedgerStringKey.privacyConfirmMessageIrreversible.string())
+        return parts.joined(separator: " ")
     }
 
     private var deletionConfirmationBinding: Binding<Bool> {
@@ -156,7 +188,7 @@ struct DataPrivacyView: View {
             return GroupDeletionRow(
                 id: group.objectID,
                 group: group,
-                name: group.name ?? "未命名群組",
+                name: group.name ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string(),
                 bookCount: bookRepository.books(in: group, includeArchived: true).count,
                 entryCount: (group.entries as? Set<LedgerEntry> ?? []).count,
                 activeMemberCount: members.filter { $0.archivedAt == nil }.count,
