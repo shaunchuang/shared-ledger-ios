@@ -225,8 +225,12 @@ struct LedgerPrimaryButtonStyle: ButtonStyle {
         let configuration: ButtonStyleConfiguration
 
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        @ScaledMetric(relativeTo: .headline) private var minHeight: CGFloat = LedgerTheme.controlMinHeight
+        @ScaledMetric(relativeTo: .headline) private var scaledMinHeight: CGFloat = LedgerTheme.controlMinHeight
         @ScaledMetric(relativeTo: .headline) private var horizontalPadding: CGFloat = 22
+
+        /// 小字級時 `@ScaledMetric` 會回傳小於 1 的倍率。按鈕高度是觸控目標，
+        /// 縮下去會低於 HIG 的 44pt 下限，所以只准往上長。
+        private var minHeight: CGFloat { max(scaledMinHeight, LedgerTheme.controlMinHeight) }
 
         var body: some View {
             configuration.label
