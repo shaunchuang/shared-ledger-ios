@@ -107,9 +107,11 @@ struct DataExportView: View {
 
     @ViewBuilder
     private var groupSection: some View {
-        if groups.count > 1 {
+        // 先解出目前群組再建 binding，選取狀態就永遠有一個真實的 objectID 可用，
+        // 不需要為了填滿 binding 生一個不指向任何東西的哨兵值。
+        if groups.count > 1, let selectedGroup {
             Section("群組") {
-                Picker("群組", selection: groupSelection) {
+                Picker("群組", selection: groupSelection(fallingBackTo: selectedGroup)) {
                     ForEach(Array(groups), id: \.objectID) { group in
                         Text(group.name ?? "未命名群組").tag(group.objectID)
                     }
@@ -218,9 +220,9 @@ struct DataExportView: View {
         return "\(summary.includedBookNames.count) 本帳本"
     }
 
-    private var groupSelection: Binding<NSManagedObjectID> {
+    private func groupSelection(fallingBackTo group: LedgerGroup) -> Binding<NSManagedObjectID> {
         Binding(
-            get: { selectedGroup?.objectID ?? NSManagedObjectID() },
+            get: { selectedGroup?.objectID ?? group.objectID },
             set: { selectedGroupID = $0 }
         )
     }

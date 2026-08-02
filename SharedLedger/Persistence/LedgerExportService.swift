@@ -43,10 +43,25 @@ struct LedgerExportSummary: Sendable {
 struct LedgerExportService {
     private let persistence: PersistenceController
     private let calendar: Calendar
+    /// 建立一次就重複使用。日期欄位是逐列產生的，每一列都新建一個 `DateFormatter`
+    /// 會把它的初始化成本乘上交易筆數，而匯出正是一次要跑完整份帳本的操作。
+    private let dayFormatter: DateFormatter
+    private let timestampFormatter: DateFormatter
 
     init(persistence: PersistenceController = .shared, calendar: Calendar = .current) {
         self.persistence = persistence
         self.calendar = calendar
+        // 固定 POSIX locale 與 ISO 格式，匯出檔的意義才不會隨開檔者的地區設定改變。
+        dayFormatter = Self.formatter(format: "yyyy-MM-dd", timeZone: calendar.timeZone)
+        timestampFormatter = Self.formatter(format: "yyyy-MM-dd HH:mm", timeZone: calendar.timeZone)
+    }
+
+    private static func formatter(format: String, timeZone: TimeZone) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = format
+        return formatter
     }
 
     func export(
@@ -240,21 +255,12 @@ struct LedgerExportService {
         NSDecimalNumber(decimal: value).stringValue
     }
 
-    /// 日期使用 ISO 8601，避免匯出檔的意義隨開檔者的地區設定改變。
     private func isoDay(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        dayFormatter.string(from: date)
     }
 
     private func isoTimestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        return formatter.string(from: date)
+        timestampFormatter.string(from: date)
     }
 
     /// 檔名要能在檔案 App 裡一眼分辨來源與時間，同時避開路徑分隔字元。
