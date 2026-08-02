@@ -1,6 +1,14 @@
 import SwiftUI
 
 struct SettingsView: View {
+    /// 監看跟著設定頁的生命週期存活，observer 在 deinit 一併移除。
+    ///
+    /// 沒有對應的 stop：`NWPathMonitor` 一旦 `cancel()` 就不能重新啟動，為了離開畫面
+    /// 省下的那點成本而每次都重建一個，反而更容易出錯。`start()` 本身可以重複呼叫。
+    @StateObject private var syncMonitor = SyncStatusMonitor(
+        container: PersistenceController.shared.container
+    )
+
     var body: some View {
         ZStack {
             LedgerBackground()
@@ -8,6 +16,7 @@ struct SettingsView: View {
                 VStack(spacing: 18) {
                     profileCard
                     groupManagementCard
+                    syncCard
                     dataCard
                     settingsCard(title: "偏好設定", rows: [
                         SettingRow(title: "通知", detail: "結算與邀請", icon: "bell.fill", tint: LedgerTheme.amber),
@@ -23,6 +32,21 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+        .onAppear { syncMonitor.start() }
+    }
+
+    private var syncCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LedgerSectionHeader(title: "同步")
+            LedgerCard(padding: 0) {
+                NavigationLink {
+                    SyncStatusView(monitor: syncMonitor)
+                } label: {
+                    SyncStatusRow(monitor: syncMonitor)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private var dataCard: some View {

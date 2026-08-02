@@ -13,7 +13,9 @@ final class PersistenceController {
     private static var isRunningTests: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
-    private static let cloudKitContainerIdentifier = "iCloud.com.shaunchuang.SharedLedger"
+    /// 這個 App 的 CloudKit 容器。同步狀態監看也要問同一個容器的帳號狀態，
+    /// 所以識別碼在這裡只保留一份。
+    static let cloudKitContainerIdentifier = "iCloud.com.shaunchuang.SharedLedger"
 
     typealias ShareFetcher = (
         [NSManagedObjectID]

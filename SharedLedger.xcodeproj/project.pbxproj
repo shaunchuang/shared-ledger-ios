@@ -75,6 +75,10 @@
 		C0DE00000000000000000058 /* CSVWriterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000059 /* CSVWriterTests.swift */; };
 		C0DE0000000000000000005A /* LedgerExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000005B /* LedgerExportServiceTests.swift */; };
 		C0DE0000000000000000005C /* GroupDeletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000005D /* GroupDeletionTests.swift */; };
+		C0DE00000000000000000060 /* LedgerSyncStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000061 /* LedgerSyncStatus.swift */; };
+		C0DE00000000000000000062 /* SyncStatusMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000063 /* SyncStatusMonitor.swift */; };
+		C0DE00000000000000000064 /* SyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000065 /* SyncStatusView.swift */; };
+		C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -166,6 +170,10 @@
 		C0DE00000000000000000059 /* CSVWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVWriterTests.swift; sourceTree = "<group>"; };
 		C0DE0000000000000000005B /* LedgerExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerExportServiceTests.swift; sourceTree = "<group>"; };
 		C0DE0000000000000000005D /* GroupDeletionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupDeletionTests.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000061 /* LedgerSyncStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerSyncStatus.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000063 /* SyncStatusMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusMonitor.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000065 /* SyncStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusView.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerSyncStatusTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -208,6 +216,7 @@
 		45C5D57ACA3A08343620B37B /* Persistence */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000063 /* SyncStatusMonitor.swift */,
 				C0DE00000000000000000053 /* LedgerExportService.swift */,
 				C0DE00000000000000000026 /* GroupReportService.swift */,
 				C0DE00000000000000000018 /* TransactionSearchService.swift */,
@@ -237,6 +246,7 @@
 		4E2AAC912D128933C96BBF6E /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000061 /* LedgerSyncStatus.swift */,
 				C0DE00000000000000000051 /* CSVWriter.swift */,
 				C0DE00000000000000000020 /* LedgerCurrency.swift */,
 				C0DE00000000000000000022 /* SettlementCalculator.swift */,
@@ -282,6 +292,7 @@
 		74D83BEED003441E30601CD1 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000065 /* SyncStatusView.swift */,
 				C0DE00000000000000000055 /* DataExportView.swift */,
 				C0DE00000000000000000057 /* DataPrivacyView.swift */,
 				FA1073B55AF5A68C617E56D9 /* SettingsView.swift */,
@@ -339,6 +350,7 @@
 		C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */,
 				C0DE00000000000000000059 /* CSVWriterTests.swift */,
 				C0DE0000000000000000005B /* LedgerExportServiceTests.swift */,
 				C0DE0000000000000000005D /* GroupDeletionTests.swift */,
@@ -467,6 +479,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */,
 				C0DE00000000000000000058 /* CSVWriterTests.swift in Sources */,
 				C0DE0000000000000000005A /* LedgerExportServiceTests.swift in Sources */,
 				C0DE0000000000000000005C /* GroupDeletionTests.swift in Sources */,
@@ -486,6 +499,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000060 /* LedgerSyncStatus.swift in Sources */,
+				C0DE00000000000000000062 /* SyncStatusMonitor.swift in Sources */,
+				C0DE00000000000000000064 /* SyncStatusView.swift in Sources */,
 				C0DE00000000000000000050 /* CSVWriter.swift in Sources */,
 				C0DE00000000000000000052 /* LedgerExportService.swift in Sources */,
 				C0DE00000000000000000054 /* DataExportView.swift in Sources */,
