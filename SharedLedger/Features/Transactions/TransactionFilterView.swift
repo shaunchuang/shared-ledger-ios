@@ -330,6 +330,8 @@ struct TransactionFilterView: View {
             query.startDate = interval.start
             // 區間的上界是下個月 1 日 00:00，往回一天才是使用者認知的「這個月最後一天」。
             query.endDate = calendar.date(byAdding: .day, value: -1, to: interval.end)
+        } label: {
+            Text(title)
         }
         .buttonStyle(.borderless)
     }
