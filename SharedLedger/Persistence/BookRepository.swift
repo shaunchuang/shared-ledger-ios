@@ -27,6 +27,35 @@ struct BookRepository {
             }
     }
 
+    /// 解析一個統計或搜尋範圍實際涵蓋哪些帳本。
+    ///
+    /// 總覽與交易搜尋都要回答「這些數字包含哪些帳本」，範圍規則只能有一份，否則
+    /// 同一個「目前帳本」在兩個畫面可能收斂出不同的帳本集合。已封存帳本一律不納入，
+    /// 傳入的 `currentBook` 屬於別的群組時視為沒有選擇，而不是靜靜地跨群組取用。
+    func books(
+        in group: LedgerGroup,
+        scope: ReportBookScope,
+        currentBook: LedgerBook?,
+        selectedBookIDs: Set<UUID>
+    ) -> [LedgerBook] {
+        let activeBooks = books(in: group)
+        switch scope {
+        case .allActiveBooks:
+            return activeBooks
+        case .currentBook:
+            guard let currentBook,
+                  currentBook.group == group,
+                  currentBook.archivedAt == nil
+            else { return [] }
+            return [currentBook]
+        case .selectedBookIDs:
+            return activeBooks.filter { book in
+                guard let id = book.id else { return false }
+                return selectedBookIDs.contains(id)
+            }
+        }
+    }
+
     func defaultBook(in group: LedgerGroup) -> LedgerBook? {
         let activeBooks = books(in: group)
         return activeBooks.first(where: \.isDefault) ?? activeBooks.first

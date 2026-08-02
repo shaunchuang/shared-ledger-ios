@@ -26,6 +26,10 @@
 		C0DE0000000000000000000D /* EffectivePermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000000E /* EffectivePermissionTests.swift */; };
 		C0DE00000000000000000011 /* GroupOwnershipTransferTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000012 /* GroupOwnershipTransferTests.swift */; };
 		C0DE00000000000000000013 /* CloudKitSchemaReadinessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000014 /* CloudKitSchemaReadinessTests.swift */; };
+		C0DE00000000000000000015 /* TransactionQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000016 /* TransactionQuery.swift */; };
+		C0DE00000000000000000017 /* TransactionSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000018 /* TransactionSearchService.swift */; };
+		C0DE00000000000000000019 /* TransactionFilterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000001A /* TransactionFilterView.swift */; };
+		C0DE0000000000000000001B /* TransactionSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000001C /* TransactionSearchServiceTests.swift */; };
 		3FD7B477EA974043CC7FE384 /* TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AC72E8EDCB58760C5C8FFB /* TransactionsView.swift */; };
 		470E635931EBCEA9E01495A0 /* GroupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C08A6952271AAF2C12550BD /* GroupsView.swift */; };
 		62957ADC31008DFE4BD2D1B6 /* CloudSharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61221ACA806160210D38B952 /* CloudSharingView.swift */; };
@@ -109,6 +113,10 @@
 		C0DE0000000000000000000E /* EffectivePermissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectivePermissionTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000012 /* GroupOwnershipTransferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupOwnershipTransferTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000014 /* CloudKitSchemaReadinessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSchemaReadinessTests.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000016 /* TransactionQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionQuery.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000018 /* TransactionSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionSearchService.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000001A /* TransactionFilterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionFilterView.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000001C /* TransactionSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionSearchServiceTests.swift; sourceTree = "<group>"; };
 		EE02B5318E1A4FEC2A36631B /* GroupDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupDetailView.swift; sourceTree = "<group>"; };
 		F3BB3F67040A0FBBA2B53BED /* ContactPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactPicker.swift; sourceTree = "<group>"; };
 		F88B235208B24B8948B97717 /* MemberRole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRole.swift; sourceTree = "<group>"; };
@@ -187,6 +195,7 @@
 			isa = PBXGroup;
 			children = (
 				C0DE00000000000000000026 /* GroupReportService.swift */,
+				C0DE00000000000000000018 /* TransactionSearchService.swift */,
 				C0DE00000000000000000028 /* SettlementRepository.swift */,
 				C0DE0000000000000000002A /* CurrentMemberIdentityRepository.swift */,
 				783D94A8B191EA3C68BDCC8E /* AccountRepository.swift */,
@@ -226,6 +235,7 @@
 				33A5DB733C043707DC1BE2CA /* GroupDraft.swift */,
 				F88B235208B24B8948B97717 /* MemberRole.swift */,
 				B9B51DD7078AB1050B15B6EB /* TransactionDraft.swift */,
+				C0DE00000000000000000016 /* TransactionQuery.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -275,6 +285,7 @@
 			children = (
 				D4E6F6CD76DCD3D541266091 /* EntryKind+Presentation.swift */,
 				F7E0587D01B5AC7D2297C150 /* NewTransactionView.swift */,
+				C0DE0000000000000000001A /* TransactionFilterView.swift */,
 				39AC72E8EDCB58760C5C8FFB /* TransactionsView.swift */,
 			);
 			path = Transactions;
@@ -317,6 +328,7 @@
 				C0DE0000000000000000000E /* EffectivePermissionTests.swift */,
 				C0DE00000000000000000012 /* GroupOwnershipTransferTests.swift */,
 				C0DE00000000000000000014 /* CloudKitSchemaReadinessTests.swift */,
+				C0DE0000000000000000001C /* TransactionSearchServiceTests.swift */,
 				D239A715784171742AA525A4 /* CategoryNodeTests.swift */,
 			);
 			path = SharedLedgerTests;
@@ -441,6 +453,7 @@
 				C0DE0000000000000000000D /* EffectivePermissionTests.swift in Sources */,
 				C0DE00000000000000000011 /* GroupOwnershipTransferTests.swift in Sources */,
 				C0DE00000000000000000013 /* CloudKitSchemaReadinessTests.swift in Sources */,
+				C0DE0000000000000000001B /* TransactionSearchServiceTests.swift in Sources */,
 				3D1B72B644EE1F403B6DCEE9 /* CategoryNodeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -489,6 +502,9 @@
 				A818AB515CCAE044AC82A948 /* LedgerComponents.swift in Sources */,
 				082CCAC3D0CA8FB0C8B5C323 /* LedgerTheme.swift in Sources */,
 				16B071D2AEA3E8F59565A973 /* MemberRole.swift in Sources */,
+				C0DE00000000000000000015 /* TransactionQuery.swift in Sources */,
+				C0DE00000000000000000017 /* TransactionSearchService.swift in Sources */,
+				C0DE00000000000000000019 /* TransactionFilterView.swift in Sources */,
 				4109D620E2FDD335ACF2B722 /* NewTransactionView.swift in Sources */,
 				1F827428A28207AAA69ABDE3 /* PersistenceController.swift in Sources */,
 				B11E4A1E173F12AA07CACCA2 /* RootTabView.swift in Sources */,

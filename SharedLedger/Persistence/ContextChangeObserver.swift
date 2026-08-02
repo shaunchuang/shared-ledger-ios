@@ -23,6 +23,11 @@ enum ContextChangeObserver {
         /// balance, its manual adjustments, and the entries that move money in or
         /// out of it.
         case accountBalances
+        /// Everything a transaction search reads. Beyond the entries themselves it
+        /// matches keywords against the names of the category, accounts and members
+        /// each entry points at, so renaming any of those changes which entries a
+        /// query returns.
+        case transactionSearch
 
         /// Only the object's type is inspected, never its properties, so invalidated
         /// objects are safe to test here.
@@ -34,6 +39,9 @@ enum ContextChangeObserver {
                 return object is AuditEvent
             case .accountBalances:
                 return object is LedgerAccount || object is AccountAdjustment || object is LedgerEntry
+            case .transactionSearch:
+                return object is LedgerEntry || object is LedgerCategory
+                    || object is LedgerAccount || object is Member
             }
         }
     }
