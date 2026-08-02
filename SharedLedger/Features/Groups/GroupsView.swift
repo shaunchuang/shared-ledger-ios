@@ -7,14 +7,19 @@ struct GroupsView: View {
         animation: .default
     ) private var groups: FetchedResults<LedgerGroup>
 
+    @Environment(\.managedObjectContext) private var context
+
     @State private var isCreatingGroup = false
     @State private var sharePayload: CloudSharePayload?
     @State private var sharingError: String?
     @State private var isPreparingShare = false
+    /// Groups this device has been removed from. Deciding that per group runs a fetch
+    /// against the private `LocalMemberIdentity` store, so it is resolved when the
+    /// groups or their members change instead of on every `body` pass.
+    @State private var removedGroupIDs: Set<NSManagedObjectID> = []
 
     private var visibleGroups: [LedgerGroup] {
-        let identities = CurrentMemberIdentityRepository()
-        return groups.filter { !identities.hasInactiveIdentity(in: $0) }
+        groups.filter { !removedGroupIDs.contains($0.objectID) }
     }
 
     var body: some View {
@@ -41,6 +46,16 @@ struct GroupsView: View {
             }
         }
         .navigationTitle("群組")
+        .onAppear(perform: reloadRemovedGroups)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
+            reloadRemovedGroups()
+        }
         .toolbar {
             Button {
                 isCreatingGroup = true
@@ -108,6 +123,15 @@ struct GroupsView: View {
             LedgerIconBadge(systemImage: "person.3.fill")
         }
         .padding(.bottom, 2)
+    }
+
+    private func reloadRemovedGroups() {
+        let identities = CurrentMemberIdentityRepository()
+        removedGroupIDs = Set(
+            groups
+                .filter { identities.hasInactiveIdentity(in: $0) }
+                .map(\.objectID)
+        )
     }
 
     private var sharingErrorBinding: Binding<Bool> {

@@ -2,6 +2,10 @@ import CoreData
 import Foundation
 
 /// 依月份分組後的一段搜尋結果。
+///
+/// 與 `GroupReportSnapshot` 不同，這裡保留 `LedgerEntry` 本身而不是純值快照：
+/// 每一列都要能推進交易詳情並跟著編輯即時更新，換成值型別等於在詳情頁再用 ID
+/// 查一次同一筆資料，還會讓列表失去 `@ObservedObject` 的即時性。
 struct TransactionSearchSection: Identifiable {
     /// 該月份的第一天 00:00，同時當作穩定的分組識別。
     let id: Date

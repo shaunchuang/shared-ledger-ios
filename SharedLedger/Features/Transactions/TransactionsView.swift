@@ -42,6 +42,31 @@ struct TransactionsView: View {
     }
 }
 
+/// Whether this device may add or change transactions in a group, and how to explain
+/// it when it may not.
+///
+/// Resolving it walks the current member identity and, for a shared group, makes a
+/// synchronous `fetchShares` call into the CloudKit mirroring metadata. The screens
+/// below therefore cache it in `@State` and refresh it when the data behind it
+/// changes, instead of recomputing it on every `body` pass.
+private struct TransactionWriteAccess {
+    /// Writes are refused until the first resolution, and nothing is explained yet:
+    /// a notice for a state nobody has checked would flash the wrong message on the
+    /// frame before `onAppear` runs.
+    static let unresolved = TransactionWriteAccess(restriction: .missingCurrentMember, isResolved: false)
+
+    let restriction: PermissionError?
+    let isResolved: Bool
+
+    init(restriction: PermissionError?, isResolved: Bool = true) {
+        self.restriction = restriction
+        self.isResolved = isResolved
+    }
+
+    var canWrite: Bool { isResolved && restriction == nil }
+    var noticeMessage: String? { isResolved ? restriction?.errorDescription : nil }
+}
+
 private struct BookTransactionsView: View {
     /// 交易類型的快速切換。搜尋面板不再重複提供類型選擇，讓 `query.kinds` 只有
     /// 這一個入口，畫面上就不會出現兩個彼此矛盾的類型狀態。
@@ -73,8 +98,8 @@ private struct BookTransactionsView: View {
 
     @Environment(\.managedObjectContext) private var context
 
-    /// 候選交易用 `@FetchRequest` 取得，讓新增、編輯與作廢在 SwiftUI 這一層就會
-    /// 觸發重算，搜尋服務只負責篩選與分組。
+    /// 候選交易以群組為範圍取一次，帳本範圍與其他條件都交給搜尋服務收斂。範圍可以
+    /// 在單一帳本與跨帳本之間切換，逐帳本的 fetch 會在每次切換時重建整個請求。
     @FetchRequest private var entries: FetchedResults<LedgerEntry>
 
     @AppStorage private var selectedBookID: String
@@ -84,6 +109,7 @@ private struct BookTransactionsView: View {
     @State private var result = TransactionSearchResult.empty
     @State private var isPresentingNewEntry = false
     @State private var isPresentingFilters = false
+    @State private var writeAccess = TransactionWriteAccess.unresolved
 
     init(
         group: LedgerGroup,
@@ -114,11 +140,12 @@ private struct BookTransactionsView: View {
             ?? activeBooks.first
     }
 
-    /// Why adding a transaction is unavailable, or `nil` when it is allowed. The
-    /// repositories throw the same value, so the entry point and the save path can
-    /// never disagree.
-    private var writeRestriction: PermissionError? {
-        EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    /// The repositories refuse the write with the same `PermissionError` this
+    /// resolves, so the entry point and the save path can never disagree.
+    private func reloadWriteAccess() {
+        writeAccess = TransactionWriteAccess(
+            restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
+        )
     }
 
     private var currencyCode: String {
@@ -132,12 +159,6 @@ private struct BookTransactionsView: View {
         )
     }
 
-    /// 只有帳本範圍能讓「沒有可搜尋的帳本」與「帳本裡沒有交易」區分開來：自選範圍
-    /// 一本都沒選時，空結果是使用者的選擇造成的，不該催他去新增交易。
-    private var hasSearchableBooks: Bool {
-        !result.includedBookIDs.isEmpty
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -147,8 +168,8 @@ private struct BookTransactionsView: View {
                     currencyCode: currencyCode,
                     isFiltered: !query.isEmpty,
                     showsBookName: scope != .currentBook,
-                    hasSearchableBooks: hasSearchableBooks,
-                    writeRestriction: writeRestriction
+                    hasSearchableBooks: !result.includedBookIDs.isEmpty,
+                    writeAccess: writeAccess
                 ) {
                     isPresentingNewEntry = true
                 }
@@ -186,7 +207,7 @@ private struct BookTransactionsView: View {
                         : "篩選交易"
                 )
             }
-            if selectedBook != nil, writeRestriction == nil {
+            if selectedBook != nil, writeAccess.canWrite {
                 ToolbarItem {
                     Button {
                         isPresentingNewEntry = true
@@ -224,32 +245,37 @@ private struct BookTransactionsView: View {
         }
         .onAppear {
             normalizeSelectedBook()
-            reload()
+            reloadWriteAccess()
+            reloadResult()
         }
         .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
-            reload()
+            reloadResult()
         }
-        .onChange(of: query) { _, _ in reload() }
-        .onChange(of: scope) { _, _ in reload() }
-        .onChange(of: selectedCustomBookIDs) { _, _ in reload() }
-        .onChange(of: selectedBookID) { _, _ in reload() }
-        .onChange(of: entries.count) { _, _ in reload() }
+        .onChange(of: query) { _, _ in reloadResult() }
+        .onChange(of: scope) { _, _ in reloadResult() }
+        .onChange(of: selectedCustomBookIDs) { _, _ in reloadResult() }
+        .onChange(of: selectedBookID) { _, _ in reloadResult() }
         .onReceive(
             NotificationCenter.default.publisher(
                 for: .NSManagedObjectContextObjectsDidChange,
                 object: context
             )
-        ) { _ in
-            // 作廢狀態存在稽核事件裡，編輯也不會改變交易筆數，兩者都不會讓
-            // `entries.count` 變動，所以還是要跟著 context 的變更重算。
-            reload()
+        ) { notification in
+            if ContextChangeObserver.touches(notification, .groupPermissions) {
+                reloadWriteAccess()
+            }
+            // 作廢狀態來自稽核事件，而編輯既不改變交易筆數也不改變 fetch 結果的
+            // 成員，兩者都不會讓 `entries` 自己重新發佈，所以要跟著變更重算。
+            if ContextChangeObserver.touches(notification, .auditLog, .transactionSearch) {
+                reloadResult()
+            }
         }
     }
 
-    /// 結果是快取的，不是 computed property：每次計算都要掃過群組的稽核事件來判斷
-    /// 作廢狀態，做成 computed property 等於每次 render 都重跑一次完整搜尋。
-    private func reload() {
+    /// 結果是快取的，不是 computed property：每次計算都要再查一次群組的作廢稽核
+    /// 事件，做成 computed property 等於每次 render 都重跑一次完整搜尋。
+    private func reloadResult() {
         result = TransactionSearchService().results(
             candidates: Array(entries),
             in: group,
@@ -322,7 +348,7 @@ private struct BookTransactionsView: View {
     }
 
     /// 每個搜尋結果都必須說得出自己的範圍與筆數，使用者才知道現在看到的是全部
-    /// 交易還是被條件收斂過的一部分。
+    /// 交易，還是被條件收斂過的一部分。
     private var scopeSummary: some View {
         HStack(spacing: 8) {
             Label(scopeLabel, systemImage: "book.closed.fill")
@@ -389,6 +415,8 @@ private struct BookTransactionsView: View {
     }
 }
 
+/// 依月份分組的搜尋結果。純呈現：結果由呼叫端快取並在資料變更時重算，這裡不再
+/// 自行查詢，才不會讓每次 render 都重跑一次搜尋。
 private struct TransactionResultListView: View {
     let result: TransactionSearchResult
     let currencyCode: String
@@ -397,18 +425,18 @@ private struct TransactionResultListView: View {
     let isFiltered: Bool
     let showsBookName: Bool
     let hasSearchableBooks: Bool
-    let writeRestriction: PermissionError?
+    let writeAccess: TransactionWriteAccess
     let onAddFirst: () -> Void
 
     private var addAction: (() -> Void)? {
-        guard writeRestriction == nil, !isFiltered else { return nil }
+        guard writeAccess.canWrite, !isFiltered else { return nil }
         return onAddFirst
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
-                if let message = writeRestriction?.errorDescription {
+                if let message = writeAccess.noticeMessage {
                     LedgerNotice(message: message)
                 }
 
@@ -507,7 +535,7 @@ private struct TransactionResultListView: View {
             LedgerEmptyState(
                 systemImage: "receipt",
                 title: "沒有有效交易",
-                message: writeRestriction == nil
+                message: writeAccess.canWrite
                     ? "新增共同收支後，就能在這裡查看、編輯與核對交易。"
                     : "目前還沒有可檢視的交易。",
                 actionTitle: addAction == nil ? nil : "新增交易",
@@ -519,7 +547,7 @@ private struct TransactionResultListView: View {
 
 private struct EntryRow: View {
     @ObservedObject var entry: LedgerEntry
-    /// 跨帳本搜尋時每一筆都要標示來源帳本，單一帳本範圍下重複顯示只是雜訊。
+    /// 跨帳本搜尋時每一筆都要標示來源帳本；單一帳本範圍下重複顯示只是雜訊。
     var showsBookName = false
     var isVoided = false
 
@@ -554,7 +582,7 @@ private struct EntryRow: View {
     }
 
     private var amountText: String {
-        formattedAmount(
+        LedgerCurrency.formatSigned(
             (entry.amount as Decimal?) ?? 0,
             kind: kind,
             currencyCode: LedgerCurrency.normalizedCode(entry.group?.currencyCode)
@@ -611,15 +639,19 @@ private struct EntryRow: View {
 private struct TransactionDetailView: View {
     @ObservedObject var entry: LedgerEntry
 
+    @Environment(\.managedObjectContext) private var context
+
     @State private var isEditing = false
     @State private var showVoidConfirmation = false
     @State private var errorMessage: String?
+    /// Both of these reach outside the entry to resolve — `isVoided` fetches the
+    /// group's void audits, and the write access makes a synchronous `fetchShares`
+    /// call — and `body` reads each of them several times per pass. They are resolved
+    /// once per change instead of once per read.
+    @State private var isVoided = false
+    @State private var writeAccess = TransactionWriteAccess.unresolved
 
     private var repository: EntryRepository { EntryRepository() }
-
-    private var isVoided: Bool {
-        repository.isVoided(entry)
-    }
 
     private var kind: EntryKind {
         EntryKind(rawValue: entry.kind ?? "") ?? .expense
@@ -642,10 +674,16 @@ private struct TransactionDetailView: View {
             .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
     }
 
-    /// Why editing or voiding this entry is unavailable, or `nil` when allowed.
-    private var writeRestriction: PermissionError? {
-        guard let group = entry.group else { return .missingCurrentMember }
-        return EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    private func reloadStatus() {
+        guard let group = entry.group else {
+            isVoided = false
+            writeAccess = .unresolved
+            return
+        }
+        isVoided = repository.isVoided(entry)
+        writeAccess = TransactionWriteAccess(
+            restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
+        )
     }
 
     private var originalSnapshot: TransactionAuditPayload.Snapshot? {
@@ -674,7 +712,11 @@ private struct TransactionDetailView: View {
                 detailRow("類型", value: kind.displayName)
                 detailRow(
                     "金額",
-                    value: formattedAmount(detailAmount, kind: kind, currencyCode: currencyCode)
+                    value: LedgerCurrency.formatSigned(
+                        detailAmount,
+                        kind: kind,
+                        currencyCode: currencyCode
+                    )
                 )
                 if let date = entry.date {
                     detailRow("日期", value: date.formatted(date: .long, time: .omitted))
@@ -731,13 +773,13 @@ private struct TransactionDetailView: View {
             }
 
             if !isVoided {
-                if let message = writeRestriction?.errorDescription {
+                if let message = writeAccess.noticeMessage {
                     Section {
                         Label(message, systemImage: "lock")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                } else {
+                } else if writeAccess.canWrite {
                     Section {
                         Button("作廢交易", role: .destructive) {
                             showVoidConfirmation = true
@@ -750,8 +792,20 @@ private struct TransactionDetailView: View {
         }
         .navigationTitle("交易詳情")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: reloadStatus)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard ContextChangeObserver.touches(notification, .auditLog, .groupPermissions) else {
+                return
+            }
+            reloadStatus()
+        }
         .toolbar {
-            if !isVoided, entry.book?.archivedAt == nil, writeRestriction == nil {
+            if !isVoided, entry.book?.archivedAt == nil, writeAccess.canWrite {
                 Button("編輯") {
                     isEditing = true
                 }
@@ -817,31 +871,10 @@ private struct TransactionDetailView: View {
     private func voidEntry() {
         do {
             try repository.voidEntry(entry)
+            reloadStatus()
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-}
-
-private func formattedAmount(_ amount: Decimal, kind: EntryKind, currencyCode: String) -> String {
-    let absoluteAmount = amount < 0 ? -amount : amount
-    switch kind {
-    case .income:
-        return LedgerCurrency.format(
-            absoluteAmount,
-            currencyCode: currencyCode,
-            showPositiveSign: true
-        )
-    case .expense:
-        return LedgerCurrency.format(-absoluteAmount, currencyCode: currencyCode)
-    case .transfer:
-        return LedgerCurrency.format(absoluteAmount, currencyCode: currencyCode)
-    case .balanceAdjustment:
-        return LedgerCurrency.format(
-            amount,
-            currencyCode: currencyCode,
-            showPositiveSign: true
-        )
     }
 }
 
