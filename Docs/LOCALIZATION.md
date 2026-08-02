@@ -54,11 +54,13 @@
 
 跨畫面重複出現的文字集中在 `common.*`：取消、儲存、完成、編輯、好、「請稍後再試。」，以及群組／帳本／帳戶／分類／成員的「未命名」佔位字。遷移其他畫面時直接用這些鍵，不要各自再加一份。
 
-畫面已全部遷移完成。剩下的只有資料層自己產生的訊息：
+畫面與資料層的錯誤訊息都已遷移完成。剩下的只有 `LedgerExportService` 的 CSV 欄位標題。
 
-| 範圍 | 主要檔案 |
-| --- | --- |
-| 資料層錯誤訊息 | `GroupRepository`、`CategoryRepository`、`BookRepository`、`EntryRepository`、`AccountRepository`、`SettlementRepository`、`EffectivePermissionRepository`、`PersistenceController`、`LedgerExportService`、`GroupReportService`、`LedgerNotificationCoordinator`、`AllocationCalculator`、`SettlementCalculator`、`CloudParticipantStatus` |
+## 什麼不進 catalog
+
+- **寫進 Core Data 的稽核摘要（`AuditEvent.summary`）。** 這些是寫下當時就固定的紀錄，而且會同步給其他成員；在顯示時翻譯做不到（原文已經沒了），在寫入時翻譯則會把作者的語言存進共享資料。通知不受影響：它從稽核事件的「動作 + 對象」重新組句，走 `notification.body.*` 的鍵。這一條要改，得先把 summary 換成結構化欄位，那是另一件事。
+- **`-initialize-cloudkit-schema` 的主控台輸出。** 那是開發者維護模式的 `print`，不是使用者看得到的文字。
+- **使用者自己輸入或建立的名稱。** 群組、帳本、帳戶、分類、成員名稱與備註都原樣保存。建立時寫入的預設值（`主要帳本`、`我`、內建分類）是例外：它們查一次 catalog 之後就變成使用者的資料。
 
 遷移過程中 `LedgerSectionHeader`、`LedgerEmptyState` 與 `LedgerNavRow` 暫時同時接受 `LedgerStringKey` 與 `String`；全部遷移完成後要移除 `String` 入口，讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
 

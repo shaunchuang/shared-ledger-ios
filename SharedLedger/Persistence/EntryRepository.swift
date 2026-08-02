@@ -585,7 +585,7 @@ struct EntryRepository {
         CurrentMemberIdentityRepository(persistence: persistence)
             .currentMember(in: group)?
             .displayName
-            ?? "目前使用者"
+            ?? LedgerStringKey.defaultMemberCurrentUser.string()
     }
 
     private func decimalString(_ value: Decimal?) -> String {
@@ -624,26 +624,27 @@ struct EntryRepository {
         var errorDescription: String? {
             switch self {
             case .invalidDraft:
-                return "請確認金額、帳戶與分攤成員都已填寫。"
+                return LedgerStringKey.errorEntryInvalidDraft.string()
             case .invalidCurrencyAmount(let code):
-                let digits = LedgerCurrency.fractionDigits(for: code)
-                return "\(code) 金額最多只能有 \(digits) 位小數。"
+                return LedgerStringKey.errorCurrencyFractionDigits.string(
+                    arguments: [code, Int64(LedgerCurrency.fractionDigits(for: code))]
+                )
             case .missingGroup:
-                return "找不到這個帳本所屬的群組。"
+                return LedgerStringKey.errorEntryMissingGroup.string()
             case .missingEntryID:
-                return "這筆交易缺少識別資訊，無法修改。"
+                return LedgerStringKey.errorEntryMissingIdentifier.string()
             case .archivedBook:
-                return "已封存的帳本不能新增或修改交易。"
+                return LedgerStringKey.errorEntryArchivedBook.string()
             case .archivedAccount:
-                return "已封存的帳戶不能用於交易。"
+                return LedgerStringKey.errorEntryArchivedAccount.string()
             case .archivedCategory:
-                return "已封存的分類不能用於交易。"
+                return LedgerStringKey.errorEntryArchivedCategory.string()
             case .archivedMember:
-                return "已封存的成員不能加入付款或分攤。"
+                return LedgerStringKey.errorEntryArchivedMember.string()
             case .crossScopeReference:
-                return "交易帳戶與分類必須屬於目前群組，且分類需已在目前帳本啟用。"
+                return LedgerStringKey.errorEntryOutOfScope.string()
             case .voidedEntry:
-                return "已作廢的交易不能再修改。"
+                return LedgerStringKey.errorEntryVoided.string()
             }
         }
     }

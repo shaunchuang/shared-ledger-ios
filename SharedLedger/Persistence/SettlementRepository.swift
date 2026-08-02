@@ -314,7 +314,7 @@ struct SettlementRepository {
         audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
             .currentMember(in: group)?
             .displayName
-            ?? "目前使用者"
+            ?? LedgerStringKey.defaultMemberCurrentUser.string()
         audit.createdAt = date
         audit.summary = payload.encodedString() ?? "結算紀錄"
         audit.group = group
@@ -340,17 +340,17 @@ struct SettlementRepository {
         var errorDescription: String? {
             switch self {
             case .missingGroup:
-                return "找不到這筆結算所屬的帳本或群組。"
+                return LedgerStringKey.errorSettlementRecordMissingBook.string()
             case .archivedBook:
-                return "已封存的帳本不能新增結算。"
+                return LedgerStringKey.errorSettlementRecordArchivedBook.string()
             case .crossGroupMember:
-                return "結算付款人與收款人必須屬於目前群組，且不能是同一人。"
+                return LedgerStringKey.errorSettlementRecordMembers.string()
             case .invalidAmount(let code):
-                return "結算金額必須大於 0，並符合 \(code) 的最小貨幣單位。"
+                return LedgerStringKey.errorSettlementRecordAmount.string(arguments: [code])
             case .exceedsOutstandingBalance:
-                return "結算金額超過目前應付或應收餘額。"
+                return LedgerStringKey.errorSettlementRecordExceedsBalance.string()
             case .alreadyReversed:
-                return "這筆結算已撤銷，不能重複撤銷。"
+                return LedgerStringKey.errorSettlementRecordAlreadyReversed.string()
             }
         }
     }

@@ -270,7 +270,7 @@ struct BookRepository {
                     context.assign(audit, to: store)
                     audit.id = UUID()
                     audit.action = "book.migrated"
-                    audit.actorDisplayName = "資料遷移"
+                    audit.actorDisplayName = LedgerStringKey.defaultActorMigration.string()
                     audit.createdAt = now
                     audit.summary = "為既有群組建立預設帳本「\(BookDraft.defaultName)」"
                     audit.group = group
@@ -375,7 +375,7 @@ struct BookRepository {
         audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
             .currentMember(in: group)?
             .displayName
-            ?? "目前使用者"
+            ?? LedgerStringKey.defaultMemberCurrentUser.string()
         audit.createdAt = Date()
         audit.summary = summary
         audit.group = group
@@ -402,17 +402,17 @@ struct BookRepository {
         var errorDescription: String? {
             switch self {
             case .invalidDraft:
-                return "請輸入帳本名稱。"
+                return LedgerStringKey.errorBookMissingName.string()
             case .missingGroup:
-                return "找不到這個帳本所屬的群組。"
+                return LedgerStringKey.errorBookMissingGroup.string()
             case .cannotArchiveOnlyBook:
-                return "群組至少需要保留一個使用中的帳本。"
+                return LedgerStringKey.errorBookLastActiveBook.string()
             case .archivedBook:
-                return "已封存的帳本不能再修改。"
+                return LedgerStringKey.errorBookArchived.string()
             case .invalidOrder:
-                return "帳本排序資料不完整，請重新整理後再試。"
+                return LedgerStringKey.errorBookIncompleteOrder.string()
             case .crossGroupCategorySource:
-                return "只能沿用同一群組內帳本的分類設定。"
+                return LedgerStringKey.errorBookCrossGroupCopy.string()
             }
         }
     }

@@ -164,7 +164,9 @@ struct AccountRepository {
         adjustment.amount = difference as NSDecimalNumber
         adjustment.createdAt = now
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        adjustment.note = trimmedNote.isEmpty ? "帳戶餘額調整" : trimmedNote
+        adjustment.note = trimmedNote.isEmpty
+            ? LedgerStringKey.accountEntryAdjustmentTitle.string()
+            : trimmedNote
         adjustment.account = account
 
         let actorName = currentActorName(in: group)
@@ -262,7 +264,8 @@ struct AccountRepository {
                     adjustment.id = identifier
                     adjustment.amount = entry.amount
                     adjustment.createdAt = entry.date ?? entry.createdAt
-                    adjustment.note = entry.note ?? "帳戶餘額調整"
+                    adjustment.note = entry.note
+                        ?? LedgerStringKey.accountEntryAdjustmentTitle.string()
                     adjustment.account = account
                     existingIDs.insert(identifier)
                 }
@@ -294,7 +297,7 @@ struct AccountRepository {
         CurrentMemberIdentityRepository(persistence: persistence)
             .currentMember(in: group)?
             .displayName
-            ?? "目前使用者"
+            ?? LedgerStringKey.defaultMemberCurrentUser.string()
     }
 
     enum AccountError: LocalizedError {
@@ -306,14 +309,15 @@ struct AccountRepository {
         var errorDescription: String? {
             switch self {
             case .invalidDraft:
-                return "請輸入帳戶名稱與有效的期初餘額。"
+                return LedgerStringKey.errorAccountInvalidDraft.string()
             case .invalidCurrencyAmount(let code):
-                let digits = LedgerCurrency.fractionDigits(for: code)
-                return "\(code) 金額最多只能有 \(digits) 位小數。"
+                return LedgerStringKey.errorCurrencyFractionDigits.string(
+                    arguments: [code, Int64(LedgerCurrency.fractionDigits(for: code))]
+                )
             case .missingGroup:
-                return "找不到這個帳戶所屬的群組。"
+                return LedgerStringKey.errorAccountMissingGroup.string()
             case .archivedAccount:
-                return "已封存的帳戶不能再調整餘額或對帳。"
+                return LedgerStringKey.errorAccountArchived.string()
             }
         }
     }

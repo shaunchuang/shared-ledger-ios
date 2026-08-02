@@ -96,7 +96,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "group.renamed",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "將群組「\(previousName)」重新命名為「\(trimmedName)」",
             in: group,
             at: now
@@ -122,7 +122,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.invitation.resent",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "重新邀請成員「\(member.displayName ?? "未命名成員")」",
             in: group,
             at: now
@@ -144,7 +144,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.invitation.revoked",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "撤回成員「\(member.displayName ?? "未命名成員")」的 App 邀請狀態",
             in: group,
             at: now
@@ -168,7 +168,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.removed",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "將成員「\(member.displayName ?? "未命名成員")」移出群組；歷史帳務關聯保留",
             in: group,
             at: now
@@ -197,7 +197,7 @@ struct GroupRepository {
         }
 
         let now = Date()
-        let previousOwnerName = actor.displayName ?? "目前使用者"
+        let previousOwnerName = actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string()
         member.role = MemberRole.owner.rawValue
         actor.role = MemberRole.administrator.rawValue
         // Without an explicit mapping, `CurrentMemberIdentityRepository` resolves the
@@ -285,7 +285,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.left",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "成員「\(actor.displayName ?? "未命名成員")」退出群組；歷史帳務關聯保留",
             in: group,
             at: now
@@ -636,8 +636,8 @@ struct GroupRepository {
     private func insertIdentityAudit(for member: Member, in group: LedgerGroup, at date: Date) {
         insertAudit(
             action: "member.identity.confirmed",
-            actorDisplayName: member.displayName ?? "共享成員",
-            summary: "確認群組成員身分「\(member.displayName ?? "共享成員")」並對應 iCloud 共享參與者",
+            actorDisplayName: member.displayName ?? LedgerStringKey.defaultMemberSharedMember.string(),
+            summary: "確認群組成員身分「\(member.displayName ?? LedgerStringKey.defaultMemberSharedMember.string())」並對應 iCloud 共享參與者",
             in: group,
             at: date
         )
@@ -689,51 +689,51 @@ struct GroupRepository {
         var errorDescription: String? {
             switch self {
             case .invalidDraft:
-                return "請輸入群組名稱與你的顯示名稱。"
+                return LedgerStringKey.errorGroupInvalidDraft.string()
             case .invalidDisplayName:
-                return "請輸入你的顯示名稱。"
+                return LedgerStringKey.errorGroupInvalidOwnerName.string()
             case .invalidGroupName:
-                return "請輸入有效的群組名稱。"
+                return LedgerStringKey.errorGroupInvalidName.string()
             case .identityOnlyForSharedGroup:
-                return "只有接受共享邀請的群組需要確認成員身分。"
+                return LedgerStringKey.errorGroupIdentityOnlyForSharedGroup.string()
             case .invalidIdentityCandidate:
-                return "這個待邀請成員無法作為目前使用者。"
+                return LedgerStringKey.errorGroupPendingMemberAsCurrentUser.string()
             case .removedMemberCannotRejoin:
-                return "你已離開或被移出這個群組。需要由管理者重新邀請後才能再次加入。"
+                return LedgerStringKey.errorGroupInactiveIdentity.string()
             case .missingCurrentMember:
-                return "無法確認你在這個群組中的成員身分。"
+                return LedgerStringKey.errorGroupMissingCurrentMember.string()
             case .crossGroupMember:
-                return "不能管理其他群組的成員。"
+                return LedgerStringKey.errorGroupCrossGroupMember.string()
             case .invitationNotPending:
-                return "只有待邀請、已撤回或已離開的成員可以重新邀請。"
+                return LedgerStringKey.errorGroupResendRequiresInactive.string()
             case .inactiveMember:
-                return "這位成員目前不是有效成員。"
+                return LedgerStringKey.errorGroupActiveMemberOnly.string()
             case .invalidMemberOperation:
-                return "無法對這位成員執行此操作。"
+                return LedgerStringKey.errorGroupUnsupportedMemberAction.string()
             case .useLeaveGroupForCurrentMember:
-                return "目前使用者請使用「退出群組」。"
+                return LedgerStringKey.errorGroupLeaveInstead.string()
             case .ownerMustTransferBeforeLeaving:
-                return "群組擁有者不能直接退出或被移除，必須先完成擁有權移轉。"
+                return LedgerStringKey.errorGroupOwnerCannotLeave.string()
             case .onlyOwnerCanTransferOwnership:
-                return "只有目前的群組擁有者可以移轉擁有權。"
+                return LedgerStringKey.errorGroupOnlyOwnerCanTransfer.string()
             case .ownershipTransferRequiresCloudParticipantMapping:
-                return "這位成員還沒有與 iCloud 共享參與者建立可驗證的對應，因此不能接手群組擁有權。"
+                return LedgerStringKey.errorGroupTransferRequiresMappedParticipant.string()
             case .ownershipTransferRequiresWritableParticipant:
-                return "這位成員在 iCloud 共享中的權限是唯讀，請先在共享設定改為可編輯，再移轉群組擁有權。"
+                return LedgerStringKey.errorGroupTransferRequiresWritableParticipant.string()
             case .missingCloudParticipant:
-                return "找不到目前 Apple Account 在這個 iCloud 共享中的參與者身分，請確認共享已完成同步後再試。"
+                return LedgerStringKey.errorGroupMissingParticipant.string()
             case .cloudParticipantNotAccepted:
-                return "目前 iCloud 共享邀請尚未完成接受，暫時不能確認 App 成員身分。"
+                return LedgerStringKey.errorGroupShareNotAccepted.string()
             case .cloudParticipantAlreadyLinked:
-                return "這個 iCloud 共享參與者已經對應到另一位 App 成員。"
+                return LedgerStringKey.errorGroupAlreadyMappedParticipant.string()
             case .cloudParticipantMismatch:
-                return "這位 App 成員已對應到不同的 iCloud 共享參與者，無法直接改綁。"
+                return LedgerStringKey.errorGroupAlreadyMappedMember.string()
             case .onlyOwnerCanDeleteGroup:
-                return "只有群組擁有者可以刪除整個群組。"
+                return LedgerStringKey.errorGroupOnlyOwnerCanDelete.string()
             case .deleteRequiresOwnedGroup:
-                return "這是別人分享給你的群組，資料存在對方的 iCloud，刪不掉也刪不乾淨。請改用「退出群組」。"
+                return LedgerStringKey.errorGroupDeleteRequiresOwnedGroup.string()
             case .cloudParticipantRoleMismatch:
-                return "App 群組擁有者必須對應到 iCloud 共享的擁有者。"
+                return LedgerStringKey.errorGroupOwnerMustHoldShare.string()
             }
         }
     }

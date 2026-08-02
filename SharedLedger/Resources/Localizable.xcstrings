@@ -2007,6 +2007,145 @@
         }
       }
     },
+    "category.impact.books": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld book"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld books"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 本帳本使用"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "category.impact.children": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld subcategory"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld subcategories"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 個子分類"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "category.impact.entries": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld past transaction"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld past transactions"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 筆歷史交易"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "category.impact.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No book or transaction uses this category right now."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前沒有帳本或交易使用這個分類。"
+          }
+        }
+      }
+    },
+    "category.impact.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affects %@."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影響 %@。"
+          }
+        }
+      }
+    },
     "category.menu.accessibilityLabel": {
       "extractionState": "manual",
       "localizations": {
@@ -2654,6 +2793,23 @@
         }
       }
     },
+    "default.actor.migration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data migration"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "資料遷移"
+          }
+        }
+      }
+    },
     "default.book.name": {
       "extractionState": "manual",
       "localizations": {
@@ -2667,6 +2823,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "主要帳本"
+          }
+        }
+      }
+    },
+    "default.member.currentUser": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current user"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前使用者"
           }
         }
       }
@@ -2701,6 +2874,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "我"
+          }
+        }
+      }
+    },
+    "default.member.sharedMember": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared member"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享成員"
           }
         }
       }
@@ -3334,6 +3524,57 @@
         }
       }
     },
+    "error.account.archived": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An archived account cannot be adjusted or reconciled."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的帳戶不能再調整餘額或對帳。"
+          }
+        }
+      }
+    },
+    "error.account.invalidDraft": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter an account name and a valid opening balance."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請輸入帳戶名稱與有效的期初餘額。"
+          }
+        }
+      }
+    },
+    "error.account.missingGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This account's group could not be found."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到這個帳戶所屬的群組。"
+          }
+        }
+      }
+    },
     "error.allocation.duplicatePayer": {
       "extractionState": "manual",
       "localizations": {
@@ -3487,6 +3728,329 @@
         }
       }
     },
+    "error.book.archived": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An archived book cannot be changed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的帳本不能再修改。"
+          }
+        }
+      }
+    },
+    "error.book.crossGroupCopy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Category setups can only be copied from a book in the same group."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只能沿用同一群組內帳本的分類設定。"
+          }
+        }
+      }
+    },
+    "error.book.incompleteOrder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The book order data is incomplete; refresh and try again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "帳本排序資料不完整，請重新整理後再試。"
+          }
+        }
+      }
+    },
+    "error.book.lastActiveBook": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A group must keep at least one active book."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群組至少需要保留一個使用中的帳本。"
+          }
+        }
+      }
+    },
+    "error.book.missingGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book's group could not be found."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到這個帳本所屬的群組。"
+          }
+        }
+      }
+    },
+    "error.book.missingName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a book name."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請輸入帳本名稱。"
+          }
+        }
+      }
+    },
+    "error.category.activeChildren": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archive every subcategory before archiving this one."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請先封存所有子分類，再封存這個分類。"
+          }
+        }
+      }
+    },
+    "error.category.archived": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An archived category cannot be re-enabled or changed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的分類不能重新啟用或修改。"
+          }
+        }
+      }
+    },
+    "error.category.archivedBook": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The available categories of an archived book cannot be changed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的帳本不能修改可用分類。"
+          }
+        }
+      }
+    },
+    "error.category.archivedParent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A subcategory cannot be added under an archived category."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的分類不能新增子分類。"
+          }
+        }
+      }
+    },
+    "error.category.crossGroupBook": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A category can only be enabled in books of the same group."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分類只能啟用於同一群組的帳本。"
+          }
+        }
+      }
+    },
+    "error.category.crossGroupCategory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The category and the book must belong to the same group."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分類與帳本必須屬於同一個群組。"
+          }
+        }
+      }
+    },
+    "error.category.crossGroupParent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A subcategory and its parent must belong to the same group."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "子分類與父分類必須屬於同一個群組。"
+          }
+        }
+      }
+    },
+    "error.category.incompleteOrder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The category order data is incomplete; refresh and try again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分類排序資料不完整，請重新整理後再試。"
+          }
+        }
+      }
+    },
+    "error.category.inconsistentMigration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The existing categories' group and book data do not agree, so they cannot be migrated automatically."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既有分類的群組與帳本資料不一致，無法自動遷移。"
+          }
+        }
+      }
+    },
+    "error.category.invalidMergeTarget": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a target category that is not inside this one."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請選擇另一個不在這個分類底下的分類作為合併目標。"
+          }
+        }
+      }
+    },
+    "error.category.missingGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The group of this category or book could not be found."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到分類或帳本所屬的群組。"
+          }
+        }
+      }
+    },
+    "error.category.missingName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a category name."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請輸入分類名稱。"
+          }
+        }
+      }
+    },
+    "error.currency.fractionDigits": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ amounts can have at most %2$lld decimal places."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 金額最多只能有 %2$lld 位小數。"
+          }
+        }
+      }
+    },
     "error.currency.minorUnit": {
       "extractionState": "manual",
       "localizations": {
@@ -3500,6 +4064,550 @@
           "stringUnit": {
             "state": "translated",
             "value": "金額不符合 %@ 的最小貨幣單位。"
+          }
+        }
+      }
+    },
+    "error.entry.archivedAccount": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An archived account cannot be used in a transaction."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的帳戶不能用於交易。"
+          }
+        }
+      }
+    },
+    "error.entry.archivedBook": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transactions cannot be added to or changed in an archived book."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的帳本不能新增或修改交易。"
+          }
+        }
+      }
+    },
+    "error.entry.archivedCategory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An archived category cannot be used in a transaction."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的分類不能用於交易。"
+          }
+        }
+      }
+    },
+    "error.entry.archivedMember": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An archived member cannot be a payer or part of a split."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的成員不能加入付款或分攤。"
+          }
+        }
+      }
+    },
+    "error.entry.invalidDraft": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check that the amount, the account and the members in the split are all filled in."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請確認金額、帳戶與分攤成員都已填寫。"
+          }
+        }
+      }
+    },
+    "error.entry.missingGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book's group could not be found."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到這個帳本所屬的群組。"
+          }
+        }
+      }
+    },
+    "error.entry.missingIdentifier": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This transaction has no identifier, so it cannot be changed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這筆交易缺少識別資訊，無法修改。"
+          }
+        }
+      }
+    },
+    "error.entry.outOfScope": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The account and category must belong to this group, and the category must be enabled in the current book."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易帳戶與分類必須屬於目前群組，且分類需已在目前帳本啟用。"
+          }
+        }
+      }
+    },
+    "error.entry.voided": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A voided transaction cannot be changed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已作廢的交易不能再修改。"
+          }
+        }
+      }
+    },
+    "error.group.activeMemberOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This member is not active."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這位成員目前不是有效成員。"
+          }
+        }
+      }
+    },
+    "error.group.alreadyMappedMember": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This member is already mapped to a different iCloud share participant and cannot be remapped directly."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這位 App 成員已對應到不同的 iCloud 共享參與者，無法直接改綁。"
+          }
+        }
+      }
+    },
+    "error.group.alreadyMappedParticipant": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This iCloud share participant is already mapped to another member."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個 iCloud 共享參與者已經對應到另一位 App 成員。"
+          }
+        }
+      }
+    },
+    "error.group.crossGroupMember": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Members of another group cannot be managed here."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不能管理其他群組的成員。"
+          }
+        }
+      }
+    },
+    "error.group.deleteRequiresOwnedGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This group was shared with you and its data lives in the other person's iCloud, so it cannot be deleted here. Leave the group instead."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這是別人分享給你的群組，資料存在對方的 iCloud，刪不掉也刪不乾淨。請改用「退出群組」。"
+          }
+        }
+      }
+    },
+    "error.group.identityOnlyForSharedGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only a group you joined through a sharing invitation needs its membership confirmed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有接受共享邀請的群組需要確認成員身分。"
+          }
+        }
+      }
+    },
+    "error.group.inactiveIdentity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You left this group or were removed from it. An administrator has to invite you again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你已離開或被移出這個群組。需要由管理者重新邀請後才能再次加入。"
+          }
+        }
+      }
+    },
+    "error.group.invalidDraft": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a group name and your display name."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請輸入群組名稱與你的顯示名稱。"
+          }
+        }
+      }
+    },
+    "error.group.invalidName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a valid group name."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請輸入有效的群組名稱。"
+          }
+        }
+      }
+    },
+    "error.group.invalidOwnerName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter your display name."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請輸入你的顯示名稱。"
+          }
+        }
+      }
+    },
+    "error.group.leaveInstead": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use “Leave group” for yourself."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前使用者請使用「退出群組」。"
+          }
+        }
+      }
+    },
+    "error.group.missingCurrentMember": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your membership in this group could not be confirmed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法確認你在這個群組中的成員身分。"
+          }
+        }
+      }
+    },
+    "error.group.missingParticipant": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Apple Account was not found among the iCloud share participants; let the share finish syncing and try again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到目前 Apple Account 在這個 iCloud 共享中的參與者身分，請確認共享已完成同步後再試。"
+          }
+        }
+      }
+    },
+    "error.group.onlyOwnerCanDelete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the group owner can delete the whole group."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有群組擁有者可以刪除整個群組。"
+          }
+        }
+      }
+    },
+    "error.group.onlyOwnerCanTransfer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the current owner can transfer ownership."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有目前的群組擁有者可以移轉擁有權。"
+          }
+        }
+      }
+    },
+    "error.group.ownerCannotLeave": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The owner cannot leave or be removed before ownership has been transferred."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群組擁有者不能直接退出或被移除，必須先完成擁有權移轉。"
+          }
+        }
+      }
+    },
+    "error.group.ownerMustHoldShare": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app's group owner has to be the owner of the iCloud share."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App 群組擁有者必須對應到 iCloud 共享的擁有者。"
+          }
+        }
+      }
+    },
+    "error.group.pendingMemberAsCurrentUser": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This invited member cannot be used as the current user."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個待邀請成員無法作為目前使用者。"
+          }
+        }
+      }
+    },
+    "error.group.resendRequiresInactive": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only invited, revoked or departed members can be invited again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有待邀請、已撤回或已離開的成員可以重新邀請。"
+          }
+        }
+      }
+    },
+    "error.group.shareNotAccepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The iCloud sharing invitation has not been accepted yet, so membership cannot be confirmed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前 iCloud 共享邀請尚未完成接受，暫時不能確認 App 成員身分。"
+          }
+        }
+      }
+    },
+    "error.group.transferRequiresMappedParticipant": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This member has no verified iCloud share participant mapping yet and cannot take over ownership."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這位成員還沒有與 iCloud 共享參與者建立可驗證的對應，因此不能接手群組擁有權。"
+          }
+        }
+      }
+    },
+    "error.group.transferRequiresWritableParticipant": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This member's iCloud share access is read-only. Give them edit access in the sharing settings before transferring ownership."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這位成員在 iCloud 共享中的權限是唯讀，請先在共享設定改為可編輯，再移轉群組擁有權。"
+          }
+        }
+      }
+    },
+    "error.group.unsupportedMemberAction": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This action cannot be performed on this member."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法對這位成員執行此操作。"
           }
         }
       }
@@ -3670,6 +4778,108 @@
           "stringUnit": {
             "state": "translated",
             "value": "交易的付款與分攤總額不一致，無法計算結算。"
+          }
+        }
+      }
+    },
+    "error.settlementRecord.alreadyReversed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This settlement has already been undone."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這筆結算已撤銷，不能重複撤銷。"
+          }
+        }
+      }
+    },
+    "error.settlementRecord.amount": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The settlement amount must be greater than 0 and fit %@'s smallest unit."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結算金額必須大於 0，並符合 %@ 的最小貨幣單位。"
+          }
+        }
+      }
+    },
+    "error.settlementRecord.archivedBook": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settlements cannot be added to an archived book."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已封存的帳本不能新增結算。"
+          }
+        }
+      }
+    },
+    "error.settlementRecord.exceedsBalance": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The settlement amount is more than the outstanding balance."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結算金額超過目前應付或應收餘額。"
+          }
+        }
+      }
+    },
+    "error.settlementRecord.members": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The payer and the recipient must both belong to this group and cannot be the same person."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結算付款人與收款人必須屬於目前群組，且不能是同一人。"
+          }
+        }
+      }
+    },
+    "error.settlementRecord.missingBook": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This settlement's book or group could not be found."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到這筆結算所屬的帳本或群組。"
           }
         }
       }
