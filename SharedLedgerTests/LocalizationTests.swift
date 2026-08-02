@@ -80,8 +80,10 @@ final class LocalizationTests: XCTestCase {
             LedgerStringKey.settingsRowExportDetail.rawValue,
             // 「來源 → 目的」只有一個箭頭與兩個參數，兩種語言沒有不同的寫法。
             LedgerStringKey.transactionRowTransferRoute.rawValue,
-            // 同理，「日期 · 帳本」只是兩個值中間放一個分隔點。
-            LedgerStringKey.accountEntrySubtitle.rawValue
+            // 同理，這幾個都只是兩個值中間放一個分隔符號。
+            LedgerStringKey.accountEntrySubtitle.rawValue,
+            LedgerStringKey.reportSourceRowSubtitle.rawValue,
+            LedgerStringKey.settlementTransferRoute.rawValue
         ]
         for key in LedgerStringKey.allCases where !sharedByDesign.contains(key.rawValue) {
             let zh = key.string(locale: Locale(identifier: "zh-Hant"))
@@ -157,8 +159,8 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testSplitModeNamesComeFromTheCatalog() {
-        // 分攤方式同時出現在交易表單與 CSV 匯出；匯出固定用正體中文，畫面跟著使用者
-        // 語言，兩邊都必須查得到。
+        // 分攤方式同時出現在交易表單與 CSV 匯出，兩邊現在都跟著使用者語言，
+        // 所以兩種語言都必須查得到。
         XCTAssertEqual(
             SplitMode.fixedAmount.displayNameKey.string(locale: Locale(identifier: "zh-Hant")),
             "指定金額"

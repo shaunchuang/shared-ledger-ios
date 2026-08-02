@@ -47,7 +47,13 @@ final class GroupReportServiceTests: XCTestCase {
         let snapshot = fixture.snapshot()
 
         XCTAssertEqual(fixture.share(of: "餐飲", in: snapshot), Decimal(string: "0.7"))
-        XCTAssertEqual(fixture.share(of: "未分類", in: snapshot), Decimal(string: "0.3"))
+        XCTAssertEqual(
+            fixture.share(
+                of: LedgerStringKey.transactionFormCategoryNone.string(),
+                in: snapshot
+            ),
+            Decimal(string: "0.3")
+        )
     }
 
     func testSharesAreZeroWhenPeriodHasNoExpense() throws {
