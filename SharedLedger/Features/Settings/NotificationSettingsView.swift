@@ -38,14 +38,14 @@ struct NotificationSettingsView: View {
                         systemImage: coordinator.authorization.systemImage,
                         tint: coordinator.authorization.tint
                     )
-                    Text(coordinator.authorization.title)
+                    Text(coordinator.authorization.titleKey)
                         .font(.headline)
                     Spacer()
                 }
                 .padding(.vertical, 4)
                 .accessibilityElement(children: .combine)
 
-                Text(coordinator.authorization.detail)
+                Text(coordinator.authorization.detailKey)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -53,7 +53,7 @@ struct NotificationSettingsView: View {
                     Button {
                         Task { await coordinator.requestAuthorization() }
                     } label: {
-                        Label("開啟通知", systemImage: "bell.badge")
+                        Label(.notificationSettingsEnable, systemImage: "bell.badge")
                     }
                 } else if coordinator.authorization == .denied {
                     Button {
@@ -62,7 +62,7 @@ struct NotificationSettingsView: View {
                         }
                         openURL(url)
                     } label: {
-                        Label("前往系統設定", systemImage: "gear")
+                        Label(.notificationSettingsOpenSystemSettings, systemImage: "gear")
                     }
                 }
             }
@@ -71,28 +71,28 @@ struct NotificationSettingsView: View {
                 ForEach(LedgerNotificationCategory.allCases) { category in
                     Toggle(isOn: binding(for: category)) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(category.title)
+                            Text(category.titleKey)
                                 .font(.subheadline.weight(.medium))
-                            Text(category.detail)
+                            Text(category.detailKey)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
             } header: {
-                Text("通知種類")
+                Text(.notificationSettingsCategoriesHeader)
             } footer: {
-                Text(categoriesFooter)
+                Text(verbatim: categoriesFooter)
             }
 
             Section {
-                Label("不開通知也能完整使用", systemImage: "checkmark.circle")
+                Label(.notificationSettingsAppUsableTitle, systemImage: "checkmark.circle")
                     .font(.subheadline)
             } footer: {
-                Text("通知只是提醒。記帳、同步、結算與匯出都不需要通知權限，關閉後所有帳務資料與功能都不受影響，成員的異動仍然會完整保留在群組的稽核紀錄裡。")
+                Text(.notificationSettingsAppUsableFooter)
             }
         }
-        .navigationTitle("通知")
+        .navigationTitle(Text(.notificationTitle))
         .navigationBarTitleDisplayMode(.inline)
         .task { await coordinator.refreshAuthorization() }
     }
@@ -101,12 +101,12 @@ struct NotificationSettingsView: View {
     /// 以為要先授權才能設定。
     private var categoriesFooter: String {
         guard coordinator.authorization.allowsDelivery else {
-            return "目前系統不允許這個 App 送出通知，因此上面的設定暫時不會有作用；開啟通知後會依這裡的選擇送出。"
+            return LedgerStringKey.notificationSettingsCategoriesFooterNotAllowed.string()
         }
         guard coordinator.preferences.isAnyCategoryEnabled else {
-            return "所有種類都關閉了，目前不會收到任何通知。"
+            return LedgerStringKey.notificationSettingsCategoriesFooterAllDisabled.string()
         }
-        return "你自己的操作永遠不會通知自己。通知內容只說明發生了什麼事，不會顯示金額或備註。"
+        return LedgerStringKey.notificationSettingsCategoriesFooterNormal.string()
     }
 
     private func binding(for category: LedgerNotificationCategory) -> Binding<Bool> {
@@ -127,10 +127,10 @@ struct NotificationSettingsRow: View {
                 systemImage: coordinator.authorization.systemImage,
                 tint: coordinator.authorization.tint
             )
-            Text("通知")
+            Text(.notificationTitle)
                 .font(.subheadline.weight(.medium))
             Spacer()
-            Text(summary)
+            Text(verbatim: summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Image(systemName: "chevron.right")
@@ -142,7 +142,9 @@ struct NotificationSettingsRow: View {
         .contentShape(Rectangle())
         .foregroundStyle(.primary)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("通知，\(summary)")
+        .accessibilityLabel(
+            LedgerStringKey.notificationRowAccessibilityLabel.string(arguments: [summary])
+        )
     }
 
     private var summary: String {
@@ -151,9 +153,10 @@ struct NotificationSettingsRow: View {
         }
         let enabled = coordinator.preferences.enabledCategories.count
         switch enabled {
-        case 0: return "全部關閉"
-        case LedgerNotificationCategory.allCases.count: return "全部開啟"
-        default: return "已開啟 \(enabled) 項"
+        case 0: return LedgerStringKey.notificationRowSummaryAllOff.string()
+        case LedgerNotificationCategory.allCases.count:
+            return LedgerStringKey.notificationRowSummaryAllOn.string()
+        default: return LedgerStringKey.notificationRowSummaryPartial.string(arguments: [enabled])
         }
     }
 }

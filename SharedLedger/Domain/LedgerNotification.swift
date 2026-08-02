@@ -15,24 +15,25 @@ enum LedgerNotificationCategory: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var titleKey: LedgerStringKey {
         switch self {
-        case .groupInvitation: return "群組邀請與成員異動"
-        case .transactionChange: return "交易修改"
-        case .settlementReminder: return "待結算提醒"
+        case .groupInvitation: return .notificationCategoryGroupInvitationTitle
+        case .transactionChange: return .notificationCategoryTransactionChangeTitle
+        case .settlementReminder: return .notificationCategorySettlementReminderTitle
         }
     }
 
-    var detail: String {
+    var detailKey: LedgerStringKey {
         switch self {
-        case .groupInvitation:
-            return "有人加入、離開或被邀請進入你的群組時通知。"
-        case .transactionChange:
-            return "其他成員新增、修改或作廢交易時通知；你自己的操作不會通知。"
-        case .settlementReminder:
-            return "你在某個帳本還有未結清的應付或應收款項，或其他成員記錄、撤銷結算時提醒。"
+        case .groupInvitation: return .notificationCategoryGroupInvitationDetail
+        case .transactionChange: return .notificationCategoryTransactionChangeDetail
+        case .settlementReminder: return .notificationCategorySettlementReminderDetail
         }
     }
+
+    var title: String { titleKey.string() }
+
+    var detail: String { detailKey.string() }
 
     var systemImage: String {
         switch self {
@@ -104,30 +105,39 @@ struct LedgerAuditEventSummary: Equatable, Sendable, Identifiable {
     /// 刻意不帶金額與交易備註：通知會顯示在鎖定畫面上，而共享帳本的金額是這個 App
     /// 裡最敏感的資料。要看細節就打開 App，那裡本來就有完整的稽核紀錄。
     /// 稽核 `summary` 同樣不直接拿來用——交易與結算的 summary 是 JSON payload。
-    var notificationBody: String? {
+    var notificationBody: String? { localizedNotificationBody(locale: nil) }
+
+    func localizedNotificationBody(locale: Locale?) -> String? {
+        guard let descriptor = bodyDescriptor else { return nil }
+        return descriptor.key.string(arguments: descriptor.arguments, locale: locale)
+    }
+
+    /// 擁有權移轉只提群組，因為「誰把擁有權給了誰」在通知這個長度裡講不清楚，
+    /// 講一半反而容易誤會；其餘動作都是「誰對哪個群組做了什麼」。
+    private var bodyDescriptor: (key: LedgerStringKey, arguments: [CVarArg])? {
         switch action {
         case "transaction.created":
-            return "\(actorDisplayName) 在「\(groupName)」新增了一筆交易。"
+            return (.notificationBodyTransactionCreated, [actorDisplayName, groupName])
         case "transaction.updated":
-            return "\(actorDisplayName) 修改了「\(groupName)」的一筆交易。"
+            return (.notificationBodyTransactionUpdated, [actorDisplayName, groupName])
         case "transaction.voided":
-            return "\(actorDisplayName) 作廢了「\(groupName)」的一筆交易。"
+            return (.notificationBodyTransactionVoided, [actorDisplayName, groupName])
         case "member.invitation.resent":
-            return "\(actorDisplayName) 在「\(groupName)」重新送出了成員邀請。"
+            return (.notificationBodyMemberInvitationResent, [actorDisplayName, groupName])
         case "member.invitation.revoked":
-            return "\(actorDisplayName) 撤回了「\(groupName)」的一則成員邀請。"
+            return (.notificationBodyMemberInvitationRevoked, [actorDisplayName, groupName])
         case "member.identity.confirmed":
-            return "\(actorDisplayName) 已加入群組「\(groupName)」。"
+            return (.notificationBodyMemberIdentityConfirmed, [actorDisplayName, groupName])
         case "member.removed":
-            return "\(actorDisplayName) 調整了「\(groupName)」的成員名單。"
+            return (.notificationBodyMemberRemoved, [actorDisplayName, groupName])
         case "member.left":
-            return "\(actorDisplayName) 已離開群組「\(groupName)」。"
+            return (.notificationBodyMemberLeft, [actorDisplayName, groupName])
         case "group.ownership.transferred":
-            return "「\(groupName)」的擁有者已變更。"
+            return (.notificationBodyGroupOwnershipTransferred, [groupName])
         case "settlement.recorded":
-            return "\(actorDisplayName) 在「\(groupName)」記錄了一筆結算。"
+            return (.notificationBodySettlementRecorded, [actorDisplayName, groupName])
         case "settlement.reversed":
-            return "\(actorDisplayName) 撤銷了「\(groupName)」的一筆結算。"
+            return (.notificationBodySettlementReversed, [actorDisplayName, groupName])
         default:
             return nil
         }
@@ -177,16 +187,21 @@ struct LedgerSettlementReminder: Equatable, Sendable {
         "\(direction.rawValue)#\(outstandingTransferCount)"
     }
 
-    var notificationBody: String {
-        let scope = "「\(groupName)」的「\(bookName)」"
+    var notificationBody: String { localizedNotificationBody(locale: nil) }
+
+    /// 筆數是複數規則的來源，所以整句話交給 catalog 處理，不在這裡把群組、帳本與
+    /// 筆數串起來——英文的單複數會改寫動詞，中文不會，串接就沒有兩邊都對的寫法。
+    func localizedNotificationBody(locale: Locale?) -> String {
+        let key: LedgerStringKey
         switch direction {
-        case .owes:
-            return "你在\(scope)還有 \(outstandingTransferCount) 筆應付款項尚未結清。"
-        case .owed:
-            return "\(scope)還有 \(outstandingTransferCount) 筆款項尚未付給你。"
-        case .both:
-            return "\(scope)還有 \(outstandingTransferCount) 筆款項尚未結清。"
+        case .owes: key = .notificationBodySettlementReminderOwes
+        case .owed: key = .notificationBodySettlementReminderOwed
+        case .both: key = .notificationBodySettlementReminderBoth
         }
+        return key.string(
+            arguments: [groupName, bookName, outstandingTransferCount],
+            locale: locale
+        )
     }
 }
 
@@ -222,32 +237,31 @@ enum LedgerNotificationAuthorization: Equatable, Sendable {
     /// 還可以由 App 出面詢問；`denied` 之後只剩下系統設定能改。
     var canRequest: Bool { self == .notDetermined }
 
-    var title: String {
+    var titleKey: LedgerStringKey {
         switch self {
-        case .notDetermined: return "尚未開啟通知"
-        case .denied: return "系統已關閉通知"
-        case .authorized: return "通知已開啟"
-        case .provisional: return "安靜遞送中"
-        case .unavailable: return "無法確認通知狀態"
+        case .notDetermined: return .notificationAuthorizationNotDeterminedTitle
+        case .denied: return .notificationAuthorizationDeniedTitle
+        case .authorized: return .notificationAuthorizationAuthorizedTitle
+        case .provisional: return .notificationAuthorizationProvisionalTitle
+        case .unavailable: return .notificationAuthorizationUnavailableTitle
         }
     }
 
     /// 每個狀態都要明講「App 仍然完全可用」。通知是輔助功能，不能讓沒授權的使用者
     /// 以為自己少了帳務資料。
-    var detail: String {
+    var detailKey: LedgerStringKey {
         switch self {
-        case .notDetermined:
-            return "還沒詢問過通知權限。不開啟也可以完整使用 App，只是成員的異動要自己進來看。"
-        case .denied:
-            return "這個 App 的通知在系統設定裡是關閉的，因此不會送出任何提醒。記帳、同步與結算都不受影響。"
-        case .authorized:
-            return "可以送出提醒。下方可以逐項決定要收哪些通知。"
-        case .provisional:
-            return "通知會直接進入通知中心，不會發出聲音或橫幅。"
-        case .unavailable:
-            return "目前查不到通知授權狀態，通知會暫時停送。記帳與同步不受影響。"
+        case .notDetermined: return .notificationAuthorizationNotDeterminedDetail
+        case .denied: return .notificationAuthorizationDeniedDetail
+        case .authorized: return .notificationAuthorizationAuthorizedDetail
+        case .provisional: return .notificationAuthorizationProvisionalDetail
+        case .unavailable: return .notificationAuthorizationUnavailableDetail
         }
     }
+
+    var title: String { titleKey.string() }
+
+    var detail: String { detailKey.string() }
 }
 
 /// 每個種類的開關。

@@ -80,13 +80,29 @@ struct LedgerAvatar: View {
 }
 
 struct LedgerSectionHeader: View {
-    let title: String
-    var actionTitle: String?
-    var action: (() -> Void)?
+    private let title: Text
+    private let actionTitle: String?
+    private let action: (() -> Void)?
+
+    init(title: LedgerStringKey, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        self.init(title: Text(title), actionTitle: actionTitle, action: action)
+    }
+
+    /// 還沒進 catalog 的畫面暫時仍傳字串。遷移完成後這個入口要移除，
+    /// 讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
+    init(title: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        self.init(title: Text(verbatim: title), actionTitle: actionTitle, action: action)
+    }
+
+    private init(title: Text, actionTitle: String?, action: (() -> Void)?) {
+        self.title = title
+        self.actionTitle = actionTitle
+        self.action = action
+    }
 
     var body: some View {
         HStack {
-            Text(title)
+            title
                 .font(.title3.weight(.bold))
             Spacer()
             if let actionTitle, let action {

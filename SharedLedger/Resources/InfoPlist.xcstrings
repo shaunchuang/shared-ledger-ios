@@ -1,0 +1,23 @@
+{
+  "sourceLanguage": "zh-Hant",
+  "strings": {
+    "NSContactsUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the contacts you want to invite to a shared ledger group."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇要邀請加入共享記帳群組的聯絡人。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

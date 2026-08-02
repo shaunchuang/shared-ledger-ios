@@ -29,7 +29,11 @@ enum LedgerCurrency {
         guard let name = locale.localizedString(forCurrencyCode: normalized) else {
             return normalized
         }
-        return "\(name)（\(normalized)）"
+        // 括號本身也要在地化：正體中文用全形，英文用半形加空格。
+        return LedgerStringKey.currencyDisplayNameFormat.string(
+            arguments: [name, normalized],
+            locale: locale
+        )
     }
 
     /// App 自行釘住的幣別最小單位。

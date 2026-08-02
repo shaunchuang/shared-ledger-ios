@@ -7,6 +7,10 @@ final class LedgerNotificationPlannerTests: XCTestCase {
     private let bookID = UUID()
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    fileprivate static let zhHant = Locale(identifier: "zh-Hant")
+    fileprivate static let english = Locale(identifier: "en")
+    fileprivate static let supportedLocales = [zhHant, english]
+
     // MARK: - 稽核事件
 
     func testTheFirstPassOnlyTakesABaseline() {
@@ -29,8 +33,14 @@ final class LedgerNotificationPlannerTests: XCTestCase {
         let request = try XCTUnwrap(plan.requests.first)
         XCTAssertEqual(request.id, "audit.\(event.id.uuidString)")
         XCTAssertEqual(request.category, .transactionChange)
-        XCTAssertEqual(request.title, "交易修改")
-        XCTAssertEqual(request.body, "小美 修改了「家庭」的一筆交易。")
+        // 文案本身由 catalog 決定，這裡驗的是 planner 有沒有挑對那一則；
+        // 寫死正體中文的話，測試會在英文介面的模擬器上失敗。
+        XCTAssertEqual(request.title, LedgerNotificationCategory.transactionChange.title)
+        XCTAssertEqual(request.body, event.notificationBody)
+        XCTAssertEqual(
+            event.localizedNotificationBody(locale: Self.zhHant),
+            "小美 修改了「家庭」的一筆交易。"
+        )
         XCTAssertEqual(request.threadIdentifier, "group.\(groupID.uuidString)")
     }
 
@@ -226,13 +236,28 @@ final class LedgerNotificationPlannerTests: XCTestCase {
 
     func testSettlementDirectionChoosesItsWording() {
         XCTAssertEqual(
-            makeReminder(direction: .owed, count: 2).notificationBody,
+            makeReminder(direction: .owed, count: 2)
+                .localizedNotificationBody(locale: Self.zhHant),
             "「家庭」的「日常」還有 2 筆款項尚未付給你。"
         )
         XCTAssertEqual(
-            makeReminder(direction: .both, count: 3).notificationBody,
+            makeReminder(direction: .both, count: 3)
+                .localizedNotificationBody(locale: Self.zhHant),
             "「家庭」的「日常」還有 3 筆款項尚未結清。"
         )
+    }
+
+    func testSettlementRemindersUseEnglishPluralRules() {
+        // 中文沒有單複數變化，所以複數規則有沒有真的接上，只有英文看得出來。
+        // catalog 的 plural variation 若沒編進 `.stringsdict`，這裡會拿到同一句。
+        let one = makeReminder(direction: .owes, count: 1)
+            .localizedNotificationBody(locale: Self.english)
+        let many = makeReminder(direction: .owes, count: 4)
+            .localizedNotificationBody(locale: Self.english)
+
+        XCTAssertTrue(one.contains("1 payment "), one)
+        XCTAssertTrue(many.contains("4 payments "), many)
+        XCTAssertNotEqual(one, many)
     }
 
     // MARK: - 內容
@@ -247,8 +272,18 @@ final class LedgerNotificationPlannerTests: XCTestCase {
         ]
         for action in actions {
             XCTAssertNotNil(LedgerNotificationCategory(auditAction: action), action)
-            let body = try XCTUnwrap(makeEvent(action: action).notificationBody, action)
-            XCTAssertFalse(body.contains { $0.isASCII && $0.isNumber }, action)
+            for locale in Self.supportedLocales {
+                let body = try XCTUnwrap(
+                    makeEvent(action: action).localizedNotificationBody(locale: locale),
+                    "\(action) / \(locale.identifier)"
+                )
+                XCTAssertFalse(
+                    body.contains { $0.isASCII && $0.isNumber },
+                    "\(action) / \(locale.identifier)"
+                )
+                // 沒翻到的鍵會原封不動掉出鍵名，那也是一種「有文字」，要另外擋。
+                XCTAssertFalse(body.contains("notification.body."), body)
+            }
         }
     }
 

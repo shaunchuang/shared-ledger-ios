@@ -22,7 +22,7 @@ struct SettingsView: View {
                     syncCard
                     dataCard
                     preferencesCard
-                    Text("Shared Ledger  ·  版本 0.1.0")
+                    Text(verbatim: LedgerStringKey.settingsVersion.string(arguments: ["0.1.0"]))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .padding(.top, 4)
@@ -31,13 +31,13 @@ struct SettingsView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("設定")
+        .navigationTitle(Text(.settingsTitle))
         .onAppear { syncMonitor.start() }
     }
 
     private var syncCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "同步")
+            LedgerSectionHeader(title: .settingsSectionSync)
             LedgerCard(padding: 0) {
                 NavigationLink {
                     SyncStatusView(monitor: syncMonitor)
@@ -51,7 +51,7 @@ struct SettingsView: View {
 
     private var preferencesCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "偏好設定")
+            LedgerSectionHeader(title: .settingsSectionPreferences)
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
                     NavigationLink {
@@ -64,8 +64,8 @@ struct SettingsView: View {
                     Divider().padding(.leading, 68)
 
                     SettingRow(
-                        title: "外觀",
-                        detail: "跟隨系統",
+                        title: .settingsRowAppearanceTitle,
+                        detail: .settingsRowAppearanceDetail,
                         icon: "circle.lefthalf.filled",
                         tint: .purple
                     )
@@ -76,15 +76,15 @@ struct SettingsView: View {
 
     private var dataCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "資料")
+            LedgerSectionHeader(title: .settingsSectionData)
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
                     NavigationLink {
                         DataExportView()
                     } label: {
                         SettingRow(
-                            title: "匯出資料",
-                            detail: "CSV",
+                            title: .settingsRowExportTitle,
+                            detail: .settingsRowExportDetail,
                             icon: "square.and.arrow.up",
                             tint: .blue
                         )
@@ -97,8 +97,8 @@ struct SettingsView: View {
                         DataPrivacyView()
                     } label: {
                         SettingRow(
-                            title: "刪除資料",
-                            detail: "群組與帳務",
+                            title: .settingsRowDeleteTitle,
+                            detail: .settingsRowDeleteDetail,
                             icon: "trash",
                             tint: LedgerTheme.coral
                         )
@@ -111,14 +111,14 @@ struct SettingsView: View {
 
     private var groupManagementCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "共同記帳")
+            LedgerSectionHeader(title: .settingsSectionSharedLedger)
             LedgerCard(padding: 0) {
                 NavigationLink {
                     GroupsView()
                 } label: {
                     SettingRow(
-                        title: "群組管理",
-                        detail: "成員、帳本與帳戶",
+                        title: .settingsRowGroupManagementTitle,
+                        detail: .settingsRowGroupManagementDetail,
                         icon: "person.3.fill",
                         tint: LedgerTheme.primary
                     )
@@ -133,9 +133,10 @@ struct SettingsView: View {
             HStack(spacing: 15) {
                 LedgerMark(size: 56)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Shared Ledger")
+                    // 產品名稱不翻譯，用 verbatim 明講，免得日後被誤認成漏掉的鍵。
+                    Text(verbatim: "Shared Ledger")
                         .font(.headline)
-                    Text("你的共同記帳空間")
+                    Text(.settingsProfileSubtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -150,8 +151,8 @@ struct SettingsView: View {
 }
 
 private struct SettingRow: View {
-    let title: String
-    let detail: String
+    let title: LedgerStringKey
+    let detail: LedgerStringKey
     let icon: String
     let tint: Color
 
