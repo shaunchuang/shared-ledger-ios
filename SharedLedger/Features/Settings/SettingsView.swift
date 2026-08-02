@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct SettingsView: View {
+    /// 監看跟著設定頁存活，畫面離開時停止；同步狀態只在使用者查看時才需要更新。
+    @StateObject private var syncMonitor = SyncStatusMonitor(
+        container: PersistenceController.shared.container
+    )
+
     var body: some View {
         ZStack {
             LedgerBackground()
@@ -8,6 +13,7 @@ struct SettingsView: View {
                 VStack(spacing: 18) {
                     profileCard
                     groupManagementCard
+                    syncCard
                     dataCard
                     settingsCard(title: "偏好設定", rows: [
                         SettingRow(title: "通知", detail: "結算與邀請", icon: "bell.fill", tint: LedgerTheme.amber),
@@ -23,6 +29,21 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+        .onAppear { syncMonitor.start() }
+    }
+
+    private var syncCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LedgerSectionHeader(title: "同步")
+            LedgerCard(padding: 0) {
+                NavigationLink {
+                    SyncStatusView(monitor: syncMonitor)
+                } label: {
+                    SyncStatusRow(monitor: syncMonitor)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private var dataCard: some View {
