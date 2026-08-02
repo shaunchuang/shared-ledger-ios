@@ -79,6 +79,13 @@
 		C0DE00000000000000000062 /* SyncStatusMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000063 /* SyncStatusMonitor.swift */; };
 		C0DE00000000000000000064 /* SyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000065 /* SyncStatusView.swift */; };
 		C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */; };
+		C0DE00000000000000000068 /* LedgerNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000069 /* LedgerNotification.swift */; };
+		C0DE0000000000000000006A /* LedgerNotificationPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000006B /* LedgerNotificationPlanner.swift */; };
+		C0DE0000000000000000006C /* LedgerNotificationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000006D /* LedgerNotificationStore.swift */; };
+		C0DE0000000000000000006E /* LedgerNotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000006F /* LedgerNotificationScheduler.swift */; };
+		C0DE00000000000000000070 /* LedgerNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000071 /* LedgerNotificationCoordinator.swift */; };
+		C0DE00000000000000000072 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000073 /* NotificationSettingsView.swift */; };
+		C0DE00000000000000000074 /* LedgerNotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000075 /* LedgerNotificationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -174,6 +181,13 @@
 		C0DE00000000000000000063 /* SyncStatusMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusMonitor.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000065 /* SyncStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusView.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerSyncStatusTests.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000069 /* LedgerNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotification.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000006B /* LedgerNotificationPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationPlanner.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000006D /* LedgerNotificationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationStore.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000006F /* LedgerNotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationScheduler.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000071 /* LedgerNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationCoordinator.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000073 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000075 /* LedgerNotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -217,6 +231,9 @@
 			isa = PBXGroup;
 			children = (
 				C0DE00000000000000000063 /* SyncStatusMonitor.swift */,
+				C0DE0000000000000000006D /* LedgerNotificationStore.swift */,
+				C0DE0000000000000000006F /* LedgerNotificationScheduler.swift */,
+				C0DE00000000000000000071 /* LedgerNotificationCoordinator.swift */,
 				C0DE00000000000000000053 /* LedgerExportService.swift */,
 				C0DE00000000000000000026 /* GroupReportService.swift */,
 				C0DE00000000000000000018 /* TransactionSearchService.swift */,
@@ -247,6 +264,8 @@
 			isa = PBXGroup;
 			children = (
 				C0DE00000000000000000061 /* LedgerSyncStatus.swift */,
+				C0DE00000000000000000069 /* LedgerNotification.swift */,
+				C0DE0000000000000000006B /* LedgerNotificationPlanner.swift */,
 				C0DE00000000000000000051 /* CSVWriter.swift */,
 				C0DE00000000000000000020 /* LedgerCurrency.swift */,
 				C0DE00000000000000000022 /* SettlementCalculator.swift */,
@@ -293,6 +312,7 @@
 			isa = PBXGroup;
 			children = (
 				C0DE00000000000000000065 /* SyncStatusView.swift */,
+				C0DE00000000000000000073 /* NotificationSettingsView.swift */,
 				C0DE00000000000000000055 /* DataExportView.swift */,
 				C0DE00000000000000000057 /* DataPrivacyView.swift */,
 				FA1073B55AF5A68C617E56D9 /* SettingsView.swift */,
@@ -351,6 +371,7 @@
 			isa = PBXGroup;
 			children = (
 				C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */,
+				C0DE00000000000000000075 /* LedgerNotificationTests.swift */,
 				C0DE00000000000000000059 /* CSVWriterTests.swift */,
 				C0DE0000000000000000005B /* LedgerExportServiceTests.swift */,
 				C0DE0000000000000000005D /* GroupDeletionTests.swift */,
@@ -480,6 +501,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */,
+				C0DE00000000000000000074 /* LedgerNotificationTests.swift in Sources */,
 				C0DE00000000000000000058 /* CSVWriterTests.swift in Sources */,
 				C0DE0000000000000000005A /* LedgerExportServiceTests.swift in Sources */,
 				C0DE0000000000000000005C /* GroupDeletionTests.swift in Sources */,
@@ -502,6 +524,12 @@
 				C0DE00000000000000000060 /* LedgerSyncStatus.swift in Sources */,
 				C0DE00000000000000000062 /* SyncStatusMonitor.swift in Sources */,
 				C0DE00000000000000000064 /* SyncStatusView.swift in Sources */,
+				C0DE00000000000000000068 /* LedgerNotification.swift in Sources */,
+				C0DE0000000000000000006A /* LedgerNotificationPlanner.swift in Sources */,
+				C0DE0000000000000000006C /* LedgerNotificationStore.swift in Sources */,
+				C0DE0000000000000000006E /* LedgerNotificationScheduler.swift in Sources */,
+				C0DE00000000000000000070 /* LedgerNotificationCoordinator.swift in Sources */,
+				C0DE00000000000000000072 /* NotificationSettingsView.swift in Sources */,
 				C0DE00000000000000000050 /* CSVWriter.swift in Sources */,
 				C0DE00000000000000000052 /* LedgerExportService.swift in Sources */,
 				C0DE00000000000000000054 /* DataExportView.swift in Sources */,

@@ -84,4 +84,5 @@ struct RootTabView: View {
     let persistence = PersistenceController(inMemory: true)
     RootTabView()
         .environment(\.managedObjectContext, persistence.container.viewContext)
+        .environmentObject(LedgerNotificationCoordinator(persistence: persistence))
 }
