@@ -9,6 +9,9 @@ struct SettingsView: View {
         container: PersistenceController.shared.container
     )
 
+    /// 通知協調器由 App 層建立並持有：它在背景監看遠端變更，生命週期不能綁在設定頁上。
+    @EnvironmentObject private var notifications: LedgerNotificationCoordinator
+
     var body: some View {
         ZStack {
             LedgerBackground()
@@ -18,10 +21,7 @@ struct SettingsView: View {
                     groupManagementCard
                     syncCard
                     dataCard
-                    settingsCard(title: "偏好設定", rows: [
-                        SettingRow(title: "通知", detail: "結算與邀請", icon: "bell.fill", tint: LedgerTheme.amber),
-                        SettingRow(title: "外觀", detail: "跟隨系統", icon: "circle.lefthalf.filled", tint: .purple)
-                    ])
+                    preferencesCard
                     Text("Shared Ledger  ·  版本 0.1.0")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -45,6 +45,31 @@ struct SettingsView: View {
                     SyncStatusRow(monitor: syncMonitor)
                 }
                 .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var preferencesCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LedgerSectionHeader(title: "偏好設定")
+            LedgerCard(padding: 0) {
+                VStack(spacing: 0) {
+                    NavigationLink {
+                        NotificationSettingsView(coordinator: notifications)
+                    } label: {
+                        NotificationSettingsRow(coordinator: notifications)
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider().padding(.leading, 68)
+
+                    SettingRow(
+                        title: "外觀",
+                        detail: "跟隨系統",
+                        icon: "circle.lefthalf.filled",
+                        tint: .purple
+                    )
+                }
             }
         }
     }
@@ -122,21 +147,6 @@ struct SettingsView: View {
         }
     }
 
-    private func settingsCard(title: String, rows: [SettingRow]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: title)
-            LedgerCard(padding: 0) {
-                VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                        row
-                        if index < rows.count - 1 {
-                            Divider().padding(.leading, 68)
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 private struct SettingRow: View {
@@ -166,5 +176,8 @@ private struct SettingRow: View {
 }
 
 #Preview {
+    let persistence = PersistenceController(inMemory: true)
     NavigationStack { SettingsView() }
+        .environment(\.managedObjectContext, persistence.container.viewContext)
+        .environmentObject(LedgerNotificationCoordinator(persistence: persistence))
 }
