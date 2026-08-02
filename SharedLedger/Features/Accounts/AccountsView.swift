@@ -66,11 +66,13 @@ struct AccountsView: View {
                     if accounts.isEmpty {
                         LedgerEmptyState(
                             systemImage: "creditcard",
-                            title: "還沒有帳戶",
+                            title: .accountEmptyTitle,
                             message: settingsRestriction == nil
-                                ? "新增現金或銀行帳戶，設定期初餘額後開始記錄收支。"
-                                : "這個群組還沒有帳戶。",
-                            actionTitle: settingsRestriction == nil ? "新增帳戶" : nil,
+                                ? LedgerStringKey.accountEmptyMessageWritable
+                                : LedgerStringKey.accountEmptyMessageReadOnly,
+                            actionTitle: settingsRestriction == nil
+                                ? LedgerStringKey.accountNewTitle
+                                : nil,
                             action: presentNewAccount
                         )
                     } else if !activeAccounts.isEmpty {
@@ -92,7 +94,7 @@ struct AccountsView: View {
 
                     if !archivedAccounts.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            LedgerSectionHeader(title: "已封存帳戶")
+                            LedgerSectionHeader(title: .accountSectionArchived)
                             LedgerCard(padding: 0) {
                                 VStack(spacing: 0) {
                                     ForEach(Array(archivedAccounts.enumerated()), id: \.element.objectID) { index, account in
@@ -115,7 +117,7 @@ struct AccountsView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("帳戶")
+        .navigationTitle(Text(.accountTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if settingsRestriction == nil {
@@ -125,7 +127,7 @@ struct AccountsView: View {
                     Image(systemName: "plus")
                         .fontWeight(.bold)
                 }
-                .accessibilityLabel("新增帳戶")
+                .accessibilityLabel(Text(.accountNewTitle))
             }
         }
         .sheet(isPresented: $isPresentingNewAccount) {
@@ -138,26 +140,35 @@ struct AccountsView: View {
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
-            "封存帳戶？",
+            Text(.accountArchiveConfirmTitle),
             isPresented: archiveConfirmationBinding,
             titleVisibility: .visible,
             presenting: accountPendingArchive
         ) { account in
-            Button("封存「\(account.name ?? "未命名帳戶")」", role: .destructive) {
+            Button(role: .destructive) {
                 archive(account)
+            } label: {
+                Text(verbatim: LedgerStringKey.accountArchiveConfirmAction.string(
+                    arguments: [account.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string()]
+                ))
             }
-            Button("取消", role: .cancel) {}
+            Button(role: .cancel) {} label: {
+                Text(.commonActionCancel)
+            }
         } message: { account in
             if accountRepository.hasHistory(account) {
-                Text("這個帳戶已有交易或餘額調整，封存後仍會保留完整歷史。")
+                Text(.accountArchiveConfirmMessageWithHistory)
             } else {
-                Text("封存後不會再出現在新增交易的帳戶選單中。")
+                Text(.accountArchiveConfirmMessagePlain)
             }
         }
-        .alert("無法更新帳戶", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.accountErrorUpdateTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
         .onAppear {
             guard !hasLoadedBalances else { return }
@@ -245,6 +256,11 @@ private struct AccountRow: View {
         AccountType(rawValue: account.accountType ?? "") ?? .cash
     }
 
+    private var subtitle: String {
+        guard account.archivedAt != nil else { return type.displayName }
+        return LedgerStringKey.accountRowSubtitleArchived.string(arguments: [type.displayName])
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             NavigationLink {
@@ -253,39 +269,46 @@ private struct AccountRow: View {
                 HStack(spacing: 14) {
                     LedgerIconBadge(systemImage: type.systemImage)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(account.name ?? "未命名帳戶")
+                        Text(verbatim: account.name
+                            ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string())
                             .font(.subheadline.weight(.semibold))
-                        Text(account.archivedAt == nil ? type.displayName : "\(type.displayName) · 已封存")
+                        Text(verbatim: subtitle)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 3) {
-                        Text(ledgerAmount(balance, currencyCode: account.group?.currencyCode))
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(balance < 0 ? LedgerTheme.coral : .primary)
-                        Text("目前餘額")
+                        Text(verbatim: ledgerAmount(
+                            balance,
+                            currencyCode: account.group?.currencyCode
+                        ))
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(balance < 0 ? LedgerTheme.coral : .primary)
+                        Text(.accountDetailBalanceCurrent)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // 名稱、類型與餘額是同一列的一句話。
+            .accessibilityElement(children: .combine)
 
             if let onArchive {
                 Menu {
                     Button(role: .destructive, action: onArchive) {
-                        Label("封存帳戶", systemImage: "archivebox")
+                        Label(.accountActionArchive, systemImage: "archivebox")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
                         .frame(width: 32, height: 44)
                 }
-                .accessibilityLabel("帳戶選項")
+                .accessibilityLabel(Text(.accountMenuAccessibilityLabel))
             }
         }
         .padding(.horizontal, 16)
@@ -357,30 +380,37 @@ private struct AccountDetailView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle(account.name ?? "帳戶明細")
+        .navigationTitle(Text(verbatim: account.name
+            ?? LedgerStringKey.accountDetailTitleFallback.string()))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if account.archivedAt == nil,
                transactionRestriction == nil || settingsRestriction == nil {
                 Menu {
                     if transactionRestriction == nil {
-                        Button("調整餘額", systemImage: "slider.horizontal.3") {
+                        Button {
                             isAdjustingBalance = true
+                        } label: {
+                            Label(.accountActionAdjustBalance, systemImage: "slider.horizontal.3")
                         }
-                        Button("完成對帳", systemImage: "checkmark.seal") {
+                        Button {
                             isConfirmingReconciliation = true
+                        } label: {
+                            Label(.accountActionReconcile, systemImage: "checkmark.seal")
                         }
                     }
                     if settingsRestriction == nil {
                         if transactionRestriction == nil { Divider() }
-                        Button("封存帳戶", systemImage: "archivebox", role: .destructive) {
+                        Button(role: .destructive) {
                             isConfirmingArchive = true
+                        } label: {
+                            Label(.accountActionArchive, systemImage: "archivebox")
                         }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .accessibilityLabel("帳戶操作")
+                .accessibilityLabel(Text(.accountDetailMenuAccessibilityLabel))
             }
         }
         .sheet(isPresented: $isAdjustingBalance) {
@@ -393,52 +423,79 @@ private struct AccountDetailView: View {
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
-            "確認完成對帳？",
+            Text(.accountReconcileConfirmTitle),
             isPresented: $isConfirmingReconciliation,
             titleVisibility: .visible
         ) {
-            Button("以目前餘額完成對帳") { reconcile() }
-            Button("取消", role: .cancel) {}
+            Button { reconcile() } label: {
+                Text(.accountReconcileConfirmAction)
+            }
+            Button(role: .cancel) {} label: {
+                Text(.commonActionCancel)
+            }
         } message: {
-            Text("系統會保存目前餘額 \(ledgerAmount(currentBalance, currencyCode: account.group?.currencyCode)) 與對帳時間。")
+            Text(verbatim: LedgerStringKey.accountReconcileConfirmMessage.string(
+                arguments: [ledgerAmount(
+                    currentBalance,
+                    currencyCode: account.group?.currencyCode
+                )]
+            ))
         }
         .confirmationDialog(
-            "封存帳戶？",
+            Text(.accountArchiveConfirmTitle),
             isPresented: $isConfirmingArchive,
             titleVisibility: .visible
         ) {
-            Button("封存帳戶", role: .destructive) { archive() }
-            Button("取消", role: .cancel) {}
+            Button(role: .destructive) { archive() } label: {
+                Text(.accountActionArchive)
+            }
+            Button(role: .cancel) {} label: {
+                Text(.commonActionCancel)
+            }
         } message: {
             Text(historyItems.isEmpty
-                 ? "封存後不會再出現在新增交易的帳戶選單中。"
-                 : "所有歷史交易與餘額調整都會保留，不會被刪除。")
+                 ? LedgerStringKey.accountArchiveConfirmMessagePlain
+                 : LedgerStringKey.accountArchiveConfirmMessageKeepsHistory)
         }
-        .alert("無法更新帳戶", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.accountErrorUpdateTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
     private func balanceCard(_ currentBalance: Decimal) -> some View {
         LedgerCard {
             VStack(alignment: .leading, spacing: 16) {
-                Label("目前餘額", systemImage: "creditcard.fill")
+                Label(.accountDetailBalanceCurrent, systemImage: "creditcard.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text(ledgerAmount(currentBalance, currencyCode: account.group?.currencyCode))
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                    .foregroundStyle(currentBalance < 0 ? LedgerTheme.coral : LedgerTheme.primaryStrong)
-                    .contentTransition(.numericText())
+                Text(verbatim: ledgerAmount(
+                    currentBalance,
+                    currencyCode: account.group?.currencyCode
+                ))
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .foregroundStyle(currentBalance < 0 ? LedgerTheme.coral : LedgerTheme.primaryStrong)
+                .contentTransition(.numericText())
+                .accessibilityLabel(Text(.accountDetailBalanceCurrent))
+                .accessibilityValue(Text(verbatim: ledgerAmount(
+                    currentBalance,
+                    currencyCode: account.group?.currencyCode
+                )))
                 HStack {
-                    Text("期初餘額")
+                    Text(.accountDetailBalanceOpening)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text(ledgerAmount((account.openingBalance as Decimal?) ?? 0, currencyCode: account.group?.currencyCode))
-                        .fontWeight(.semibold)
+                    Text(verbatim: ledgerAmount(
+                        (account.openingBalance as Decimal?) ?? 0,
+                        currencyCode: account.group?.currencyCode
+                    ))
+                    .fontWeight(.semibold)
                 }
                 .font(.subheadline)
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -446,19 +503,23 @@ private struct AccountDetailView: View {
     private var reconciliationCard: some View {
         LedgerCard {
             VStack(alignment: .leading, spacing: 10) {
-                LedgerSectionHeader(title: "最近對帳")
+                LedgerSectionHeader(title: .accountDetailSectionReconciliation)
                 if let date = account.lastReconciledAt,
                    let balance = account.lastReconciledBalance as Decimal? {
                     HStack {
-                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                        Text(verbatim: LedgerFormatters.timestamp(date))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text(ledgerAmount(balance, currencyCode: account.group?.currencyCode))
-                            .fontWeight(.semibold)
+                        Text(verbatim: ledgerAmount(
+                            balance,
+                            currencyCode: account.group?.currencyCode
+                        ))
+                        .fontWeight(.semibold)
                     }
                     .font(.subheadline)
+                    .accessibilityElement(children: .combine)
                 } else {
-                    Text("尚未對帳。確認實際帳戶餘額後，可保存目前餘額與時間作為核對基準。")
+                    Text(.accountDetailReconciliationEmpty)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -468,12 +529,12 @@ private struct AccountDetailView: View {
 
     private var transactionHistory: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "帳戶明細")
+            LedgerSectionHeader(title: .accountDetailSectionHistory)
             if historyItems.isEmpty {
                 LedgerEmptyState(
                     systemImage: "list.bullet.rectangle",
-                    title: "尚無交易",
-                    message: "收入、支出、轉帳與餘額調整會顯示在這裡。"
+                    title: .accountDetailHistoryEmptyTitle,
+                    message: .accountDetailHistoryEmptyMessage
                 )
             } else {
                 LazyVStack(spacing: 12) {
@@ -549,38 +610,49 @@ private struct BalanceAdjustmentView: View {
         Form {
             Section {
                 HStack {
-                    Text(currencyCode)
+                    Text(verbatim: currencyCode)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    TextField("0", text: $targetBalanceText)
+                        .accessibilityHidden(true)
+                    TextField("", text: $targetBalanceText, prompt: Text(verbatim: "0"))
                         .keyboardType(.numbersAndPunctuation)
                         .multilineTextAlignment(.trailing)
+                        .accessibilityLabel(Text(.accountAdjustmentSectionBalance))
                 }
             } header: {
-                Text("實際餘額")
+                Text(.accountAdjustmentSectionBalance)
             } footer: {
-                Text("系統會新增一筆差額調整，不會改寫或刪除既有交易。")
+                Text(.accountAdjustmentSectionBalanceFooter)
             }
 
-            Section("備註") {
-                TextField("例如：依銀行帳單調整", text: $note)
+            Section {
+                TextField("", text: $note, prompt: Text(.accountAdjustmentNotePlaceholder))
+                    .accessibilityLabel(Text(.accountAdjustmentSectionNote))
+            } header: {
+                Text(.accountAdjustmentSectionNote)
             }
         }
-        .navigationTitle("調整餘額")
+        .navigationTitle(Text(.accountAdjustmentTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("儲存", action: save)
-                    .disabled(targetBalance == nil)
+                Button(action: save) {
+                    Text(.commonActionSave)
+                }
+                .disabled(targetBalance == nil)
             }
         }
-        .alert("無法調整餘額", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.accountAdjustmentErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -634,8 +706,15 @@ private struct AccountAdjustmentRow: View {
     }
 
     private var title: String {
-        guard let note = adjustment.note, !note.isEmpty else { return "餘額調整" }
+        guard let note = adjustment.note, !note.isEmpty else {
+            return LedgerStringKey.accountEntryAdjustmentTitle.string()
+        }
         return note
+    }
+
+    private var dateText: String {
+        adjustment.createdAt.map(LedgerFormatters.day)
+            ?? LedgerStringKey.commonPlaceholderNoDate.string()
     }
 
     var body: some View {
@@ -643,18 +722,22 @@ private struct AccountAdjustmentRow: View {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: "slider.horizontal.3", tint: .blue)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
+                    Text(verbatim: title)
                         .font(.subheadline.weight(.semibold))
-                    Text(adjustment.createdAt?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定")
+                    Text(verbatim: dateText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(signedLedgerAmount(amount, currencyCode: adjustment.account?.group?.currencyCode))
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(amount < 0 ? LedgerTheme.coral : LedgerTheme.primary)
+                Text(verbatim: signedLedgerAmount(
+                    amount,
+                    currencyCode: adjustment.account?.group?.currencyCode
+                ))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(amount < 0 ? LedgerTheme.coral : LedgerTheme.primary)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -679,10 +762,15 @@ private struct AccountEntryRow: View {
 
     private var title: String {
         if kind == .transfer {
+            let other = LedgerStringKey.accountEntryTransferOther.string()
             if entry.sourceAccount == account {
-                return "轉至 \(entry.destinationAccount?.name ?? "其他帳戶")"
+                return LedgerStringKey.accountEntryTransferTo.string(
+                    arguments: [entry.destinationAccount?.name ?? other]
+                )
             }
-            return "轉自 \(entry.sourceAccount?.name ?? "其他帳戶")"
+            return LedgerStringKey.accountEntryTransferFrom.string(
+                arguments: [entry.sourceAccount?.name ?? other]
+            )
         }
         if let note = entry.note, !note.isEmpty {
             return note
@@ -691,9 +779,10 @@ private struct AccountEntryRow: View {
     }
 
     private var subtitle: String {
-        let date = entry.date?.formatted(date: .abbreviated, time: .omitted) ?? "日期未設定"
+        let date = entry.date.map(LedgerFormatters.day)
+            ?? LedgerStringKey.commonPlaceholderNoDate.string()
         guard let bookName = entry.book?.name, !bookName.isEmpty else { return date }
-        return "\(date) · \(bookName)"
+        return LedgerStringKey.accountEntrySubtitle.string(arguments: [date, bookName])
     }
 
     var body: some View {
@@ -701,18 +790,22 @@ private struct AccountEntryRow: View {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: kind.systemImage, tint: kind.tint)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
+                    Text(verbatim: title)
                         .font(.subheadline.weight(.semibold))
-                    Text(subtitle)
+                    Text(verbatim: subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(signedLedgerAmount(effect, currencyCode: account.group?.currencyCode))
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(effect < 0 ? LedgerTheme.coral : LedgerTheme.primary)
+                Text(verbatim: signedLedgerAmount(
+                    effect,
+                    currencyCode: account.group?.currencyCode
+                ))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(effect < 0 ? LedgerTheme.coral : LedgerTheme.primary)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 }
 

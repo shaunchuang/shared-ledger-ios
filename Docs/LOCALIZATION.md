@@ -50,7 +50,7 @@
 
 ## 遷移進度
 
-基礎建設與下列範圍已完成：分頁、設定頁、iCloud 同步、通知（含系統通知內容）、交易（列表、詳情、新增與編輯、篩選面板）、群組與帳本（群組列表與詳情、建立群組、身分確認、成員管理、帳本管理與封存歷史、iCloud 共享錯誤），以及 `EntryKind`、`AccountType`、`MemberRole`、`ReportBookScope`、`SplitMode` 這些跨畫面共用的列舉與貨幣顯示名稱。
+基礎建設與下列範圍已完成：分頁、設定頁、iCloud 同步、通知（含系統通知內容）、交易（列表、詳情、新增與編輯、篩選面板）、群組與帳本（群組列表與詳情、建立群組、身分確認、成員管理、帳本管理與封存歷史、iCloud 共享錯誤）、帳戶（列表、明細、餘額調整、對帳與新增），以及 `EntryKind`、`AccountType`、`MemberRole`、`ReportBookScope`、`SplitMode` 這些跨畫面共用的列舉與貨幣顯示名稱。
 
 跨畫面重複出現的文字集中在 `common.*`：取消、儲存、完成、編輯、好、「請稍後再試。」，以及群組／帳本／帳戶／分類／成員的「未命名」佔位字。遷移其他畫面時直接用這些鍵，不要各自再加一份。
 
@@ -59,7 +59,6 @@
 | 範圍 | 主要檔案 |
 | --- | --- |
 | 分類 | `CategoriesView`、`NewCategoryView`、`CategoryNode` |
-| 帳戶 | `AccountsView`、`NewAccountView` |
 | 總覽與結算 | `DashboardView`、`SettlementView` |
 | 設定 | `DataExportView`、`DataPrivacyView` |
 | 資料層錯誤訊息 | `GroupRepository`、`CategoryRepository`、`BookRepository`、`EntryRepository`、`AccountRepository`、`SettlementRepository`、`EffectivePermissionRepository`、`PersistenceController`、`LedgerExportService`、`GroupReportService`、`LedgerNotificationCoordinator`、`AllocationCalculator`、`SettlementCalculator`、`CloudParticipantStatus` |

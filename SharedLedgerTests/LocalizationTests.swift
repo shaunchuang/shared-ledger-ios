@@ -79,7 +79,9 @@ final class LocalizationTests: XCTestCase {
         let sharedByDesign: Set<String> = [
             LedgerStringKey.settingsRowExportDetail.rawValue,
             // 「來源 → 目的」只有一個箭頭與兩個參數，兩種語言沒有不同的寫法。
-            LedgerStringKey.transactionRowTransferRoute.rawValue
+            LedgerStringKey.transactionRowTransferRoute.rawValue,
+            // 同理，「日期 · 帳本」只是兩個值中間放一個分隔點。
+            LedgerStringKey.accountEntrySubtitle.rawValue
         ]
         for key in LedgerStringKey.allCases where !sharedByDesign.contains(key.rawValue) {
             let zh = key.string(locale: Locale(identifier: "zh-Hant"))

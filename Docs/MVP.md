@@ -19,7 +19,7 @@
 
 ## 功能完整度快照
 
-以下狀態依 2026-08-02 的 `develop` 實際程式碼整理（含 PR #38 結算引擎、#39 跨帳本報表、#40 V8 participant 對應、#41 共享權限與唯讀 UI、#45 擁有權移轉、#47～#50 架構拆分與主執行緒效能修正、#51 交易搜尋與複合篩選、#52 CSV 匯出與資料刪除、iCloud 同步狀態呈現、P0-12 通知與提醒最低版本、#55 群組分類目錄補齊、在地化基礎建設，以及交易與群組／帳本畫面的在地化與 VoiceOver 遷移），只代表該日期的 repository 快照；開始實作前必須重新查證。
+以下狀態依 2026-08-02 的 `develop` 實際程式碼整理（含 PR #38 結算引擎、#39 跨帳本報表、#40 V8 participant 對應、#41 共享權限與唯讀 UI、#45 擁有權移轉、#47～#50 架構拆分與主執行緒效能修正、#51 交易搜尋與複合篩選、#52 CSV 匯出與資料刪除、iCloud 同步狀態呈現、P0-12 通知與提醒最低版本、#55 群組分類目錄補齊、在地化基礎建設，以及交易、群組／帳本與帳戶畫面的在地化與 VoiceOver 遷移），只代表該日期的 repository 快照；開始實作前必須重新查證。
 
 MVP 剩下的工作已經不是「再寫幾個功能」。P0 的 1～12 項在程式碼層面大致落地，真正未完成的是三件事：**雙帳號端到端驗收從未執行**（下表多數列的「待驗收」都指向同一份 [iCloud 分享與權限驗收矩陣](ICLOUD_SHARING_VALIDATION.md)）、**同步衝突策略**，以及 **P0-13 的可及性門檻**。
 
@@ -34,9 +34,9 @@ MVP 剩下的工作已經不是「再寫幾個功能」。P0 的 1～12 項在�
 | 總覽與報表 | 已接上真實資料 | 期間收入／支出／收支淨額、群組共用分類占比、各帳本占比、月份切換、全部啟用帳本／目前帳本／自選帳本三種範圍、來源交易下鑽；帳戶餘額與期間收支分開呈現 | 期間比較與趨勢維持 P1；多幣別合併尚未處理；仍需以多帳本代表性資料實機驗收 |
 | 稽核與權限 | 權限已下沉到所有寫入 | 角色欄位、群組與交易稽核事件、交易修改前後快照，以及以 CloudKit participant 權限為上限的 effective 權限，在所有 repository 寫入與對應的 UI 入口一致生效 | 唯讀 UI 與權限降級目前只有編譯期檢查，需依驗收矩陣 C 節實機確認 |
 | 同步與離線 | 狀態呈現已實作，恢復測試待做 | private/shared stores、persistent history、remote change、接受分享、只在可寫入群組執行的背景資料修復，以及未登入／受限／未確定／離線／同步中／已同步／失敗的狀態呈現、可讀的 CloudKit 錯誤說明與重新檢查 | 衝突策略，以及雙帳號與離線恢復的實機測試；CloudKit 自行排程同步，App 端沒有強制觸發的手段 |
-| 多語系與在地化（P1） | 基礎建設完成，畫面遷移進行中 | `Localizable.xcstrings` 與 `InfoPlist.xcstrings`（`zh-Hant` 與 `en`）、`LedgerStringKey` 鍵註冊表與編譯期檢查、可指定語言的查詢層、日期與百分比格式化，以及漏翻、鍵集合不一致、參數位置不符與複數規則的測試；分頁、設定頁、iCloud 同步、通知內容、交易四個畫面（列表、詳情、新增與編輯、篩選）、群組與帳本六個畫面（群組列表、群組詳情、建立群組、身分確認、帳本管理、封存歷史）與 `EntryKind`／`AccountType`／`MemberRole`／`ReportBookScope`／`SplitMode`／貨幣顯示名稱已遷移，跨畫面共用的動作與「未命名」佔位字集中在 `common.*` | 分類、帳戶、總覽、結算與資料層錯誤訊息仍是硬編碼正體中文；VoiceOver 標籤隨各畫面遷移一併補上，詳見 [LOCALIZATION.md](LOCALIZATION.md) |
+| 多語系與在地化（P1） | 基礎建設完成，畫面遷移進行中 | `Localizable.xcstrings` 與 `InfoPlist.xcstrings`（`zh-Hant` 與 `en`）、`LedgerStringKey` 鍵註冊表與編譯期檢查、可指定語言的查詢層、日期與百分比格式化，以及漏翻、鍵集合不一致、參數位置不符與複數規則的測試；分頁、設定頁、iCloud 同步、通知內容、交易四個畫面（列表、詳情、新增與編輯、篩選）、群組與帳本六個畫面（群組列表、群組詳情、建立群組、身分確認、帳本管理、封存歷史）、帳戶四個畫面（列表、明細、餘額調整、新增）與 `EntryKind`／`AccountType`／`MemberRole`／`ReportBookScope`／`SplitMode`／貨幣顯示名稱已遷移，跨畫面共用的動作與「未命名」佔位字集中在 `common.*` | 分類、總覽、結算與資料層錯誤訊息仍是硬編碼正體中文；VoiceOver 標籤隨各畫面遷移一併補上，詳見 [LOCALIZATION.md](LOCALIZATION.md) |
 | 設定與資料可攜 | 匯出、刪除與通知已實作 | 交易／帳戶／結算三份 CSV 匯出，含帳本範圍、日期區間與作廢選項、系統分享，以及群組刪除與共享影響說明；擁有者以外或共享來源的群組會被擋下並導向退出；群組邀請與成員異動、交易修改、待結算三類本機通知可個別關閉，未授權時 App 完整可用 | 刪除只到群組層級，沒有刪除本機個人資料（private store 的 `LocalMemberIdentity` 身分對應）的路徑，P0-11 只完成一半；設定頁的「外觀」是一列沒有接上任何行為的 `SettingRow`，畫得出 chevron 但點不動，要嘛實作要嘛移除；CSV 匯入與 PDF 匯出維持 P1；匯出、刪除與通知仍需實機與雙帳號驗收 |
-| 品質與可及性（P0-13） | 測試涵蓋核心計算，可及性隨在地化逐畫面補 | 15 個測試檔共 221 個測試，涵蓋分攤與尾差、結算、跨帳本報表、交易搜尋、匯出、群組刪除、擁有權移轉、effective 權限、通知規則、同步狀態機與在地化完整性（含複數規則與兩參數字串的位置代換）；交易的建立／編輯／作廢與稽核快照、帳戶餘額與對帳、帳本與分類生命週期都有 repository 層測試；V3→V4 至 V7→V8 有 migration mapping 測試 | 可及性仍是最大的 P0 缺口：accessibility 標註從 42 處增加到 92 處，但新增的集中在交易與群組相關畫面；`SettlementView`、`CreateGroupView`、`NewAccountView`、`NewCategoryView`、`DataExportView`、`DataPrivacyView` 等輸入畫面仍是一處都沒有，程式碼裡也完全沒有 `dynamicTypeSize`、`ScaledMetric` 或 `accessibilityReduceMotion` 的處理。Dynamic Type、VoiceOver、深色模式與減少動態效果都尚未實機驗證；V1→V2、V2→V3 沒有 mapping 測試 |
+| 品質與可及性（P0-13） | 測試涵蓋核心計算，可及性隨在地化逐畫面補 | 15 個測試檔共 221 個測試，涵蓋分攤與尾差、結算、跨帳本報表、交易搜尋、匯出、群組刪除、擁有權移轉、effective 權限、通知規則、同步狀態機與在地化完整性（含複數規則與兩參數字串的位置代換）；交易的建立／編輯／作廢與稽核快照、帳戶餘額與對帳、帳本與分類生命週期都有 repository 層測試；V3→V4 至 V7→V8 有 migration mapping 測試 | 可及性仍是最大的 P0 缺口：accessibility 標註從 42 處增加到 108 處，但新增的集中在已遷移的交易、群組與帳戶畫面；`SettlementView`、`NewCategoryView`、`DataExportView`、`DataPrivacyView` 等畫面仍是一處都沒有，程式碼裡也完全沒有 `dynamicTypeSize`、`ScaledMetric` 或 `accessibilityReduceMotion` 的處理。Dynamic Type、VoiceOver、深色模式與減少動態效果都尚未實機驗證；V1→V2、V2→V3 沒有 mapping 測試 |
 
 ## P0：完整 MVP 必須補齊
 
