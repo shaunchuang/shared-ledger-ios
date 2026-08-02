@@ -154,9 +154,12 @@ final class LedgerNotificationPlannerTests: XCTestCase {
         XCTAssertEqual(plan.requests.count, 1)
         XCTAssertEqual(plan.requests.first?.id, "settlement.\(bookID.uuidString)")
         XCTAssertEqual(plan.requests.first?.category, .settlementReminder)
+        // 比對鍵與參數，不比對文案：內文跟著裝置語言走，寫死中文會在英文模擬器上失敗。
+        // 每種語言的實際措辭由 testSettlementDirectionChoosesItsWording 逐句驗。
         XCTAssertEqual(
             plan.requests.first?.body,
-            "你在「家庭」的「日常」還有 1 筆應付款項尚未結清。"
+            LedgerStringKey.notificationBodySettlementReminderOwes
+                .string(arguments: ["家庭", "日常", Int64(1)])
         )
         XCTAssertEqual(plan.digest.settlementFingerprints[bookID.uuidString], "owes#1")
         XCTAssertEqual(plan.digest.settlementRemindedAt[bookID.uuidString], now)
@@ -470,7 +473,8 @@ final class LedgerNotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(fixture.scheduler.scheduled.first?.category, .transactionChange)
         XCTAssertEqual(
             fixture.scheduler.scheduled.first?.body,
-            "小美 修改了「家庭」的一筆交易。"
+            LedgerStringKey.notificationBodyTransactionUpdated
+                .string(arguments: ["小美", "家庭"])
         )
     }
 

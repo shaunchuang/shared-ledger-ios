@@ -82,6 +82,12 @@ final class LocalizationTests: XCTestCase {
         for key in LedgerStringKey.allCases where !sharedByDesign.contains(key.rawValue) {
             let zh = key.string(locale: Locale(identifier: "zh-Hant"))
             let en = key.string(locale: Locale(identifier: "en"))
+
+            // 複數字串不帶參數查回來的是 `.stringsdict` 的替換符（`%#@value@`），
+            // 兩種語言本來就一模一樣，比它等於什麼都沒比。這些鍵的實際文案由
+            // testPluralRulesApplyInEnglish 與通知內文的測試逐句比對。
+            guard !zh.contains("#@") else { continue }
+
             XCTAssertNotEqual(zh, en, "\(key.rawValue) 兩種語言相同，可能只是把原文複製過去")
         }
     }
@@ -99,6 +105,19 @@ final class LocalizationTests: XCTestCase {
 
         XCTAssertEqual(one, "1 type on")
         XCTAssertEqual(many, "3 types on")
+
+        // 正體中文只有 `other` 一種形式，但仍要確認它真的被代換、而不是掉出替換符。
+        let zhHant = Locale(identifier: "zh-Hant")
+        XCTAssertEqual(
+            LedgerStringKey.notificationRowSummaryPartial
+                .string(arguments: [Int64(1)], locale: zhHant),
+            "已開啟 1 項"
+        )
+        XCTAssertEqual(
+            LedgerStringKey.notificationRowSummaryPartial
+                .string(arguments: [Int64(3)], locale: zhHant),
+            "已開啟 3 項"
+        )
     }
 
     func testArgumentsAreSubstitutedInBothLanguages() {

@@ -48,6 +48,13 @@ struct LedgerExportService {
     private let dayFormatter: DateFormatter
     private let timestampFormatter: DateFormatter
 
+    /// 匯出檔目前固定使用正體中文。
+    ///
+    /// 欄位標題還是這個檔案裡的硬編碼字串，值卻已經走 catalog；讓值跟著裝置語言跑，
+    /// 英文使用者拿到的就是中文標題配英文內容的檔案。標題進 catalog 的那一次，這裡
+    /// 要一起改成跟隨使用者語言，兩邊才會同時變。
+    private static let exportLocale = Locale(identifier: "zh-Hant")
+
     init(persistence: PersistenceController = .shared, calendar: Calendar = .current) {
         self.persistence = persistence
         self.calendar = calendar
@@ -146,7 +153,7 @@ struct LedgerExportService {
             return [
                 .text(entry.book?.name ?? "未命名帳本"),
                 .generated(entry.date.map(isoDay) ?? ""),
-                .generated(kind.displayName),
+                .generated(kind.displayNameKey.string(locale: Self.exportLocale)),
                 .text(entry.category?.name ?? "未分類"),
                 // 匯出的是可再計算的原始數值，不是畫面上的貨幣字串：帶著貨幣符號與
                 // 千分位的欄位在試算表裡是文字，沒辦法直接加總。
@@ -205,7 +212,7 @@ struct LedgerExportService {
             let type = account.accountType.flatMap(AccountType.init(rawValue:)) ?? .other
             return [
                 .text(account.name ?? "未命名帳戶"),
-                .generated(type.displayName),
+                .generated(type.displayNameKey.string(locale: Self.exportLocale)),
                 .generated(decimalString((account.openingBalance as Decimal?) ?? 0)),
                 // 帳戶餘額是整個群組範圍，不隨匯出的帳本範圍或日期區間改變，
                 // 所以這份檔案不套用交易的篩選條件。
