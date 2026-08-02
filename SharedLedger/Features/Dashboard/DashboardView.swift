@@ -763,22 +763,6 @@ private struct ReportSourceEntryView: View {
     }
 }
 
-enum ReportBookScope: String, CaseIterable, Identifiable, Sendable {
-    case allActiveBooks
-    case currentBook
-    case selectedBookIDs
-
-    var id: Self { self }
-
-    var displayName: String {
-        switch self {
-        case .allActiveBooks: return "全部帳本"
-        case .currentBook: return "目前帳本"
-        case .selectedBookIDs: return "自選帳本"
-        }
-    }
-}
-
 struct GroupReportCategorySummary: Identifiable, Equatable, Sendable {
     let id: String
     let categoryID: UUID?
@@ -867,26 +851,12 @@ struct GroupReportService {
         currentBook: LedgerBook?,
         selectedBookIDs: Set<UUID> = []
     ) -> GroupReportSnapshot {
-        let activeBooks = BookRepository(persistence: persistence).books(in: group)
-        let includedBooks: [LedgerBook]
-
-        switch scope {
-        case .allActiveBooks:
-            includedBooks = activeBooks
-        case .currentBook:
-            if let currentBook,
-               currentBook.group == group,
-               currentBook.archivedAt == nil {
-                includedBooks = [currentBook]
-            } else {
-                includedBooks = []
-            }
-        case .selectedBookIDs:
-            includedBooks = activeBooks.filter { book in
-                guard let id = book.id else { return false }
-                return selectedBookIDs.contains(id)
-            }
-        }
+        let includedBooks = BookRepository(persistence: persistence).books(
+            in: group,
+            scope: scope,
+            currentBook: currentBook,
+            selectedBookIDs: selectedBookIDs
+        )
 
         let includedObjectIDs = Set(includedBooks.map(\.objectID))
         let voidedEntryIDs = EntryRepository(persistence: persistence).voidedEntryIDs(in: group)

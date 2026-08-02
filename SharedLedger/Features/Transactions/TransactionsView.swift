@@ -43,6 +43,8 @@ struct TransactionsView: View {
 }
 
 private struct BookTransactionsView: View {
+    /// 交易類型的快速切換。搜尋面板不再重複提供類型選擇，讓 `query.kinds` 只有
+    /// 這一個入口，畫面上就不會出現兩個彼此矛盾的類型狀態。
     private enum Filter: String, CaseIterable, Identifiable {
         case all = "全部"
         case expense = "支出"
@@ -51,13 +53,17 @@ private struct BookTransactionsView: View {
 
         var id: Self { self }
 
-        var kind: EntryKind? {
+        var kinds: Set<EntryKind> {
             switch self {
-            case .all: return nil
-            case .expense: return .expense
-            case .income: return .income
-            case .transfer: return .transfer
+            case .all: return []
+            case .expense: return [.expense]
+            case .income: return [.income]
+            case .transfer: return [.transfer]
             }
+        }
+
+        static func matching(_ kinds: Set<EntryKind>) -> Filter {
+            allCases.first { $0.kinds == kinds } ?? .all
         }
     }
 
@@ -65,9 +71,19 @@ private struct BookTransactionsView: View {
     let groups: [LedgerGroup]
     @Binding var selectedGroupID: NSManagedObjectID?
 
+    @Environment(\.managedObjectContext) private var context
+
+    /// 候選交易用 `@FetchRequest` 取得，讓新增、編輯與作廢在 SwiftUI 這一層就會
+    /// 觸發重算，搜尋服務只負責篩選與分組。
+    @FetchRequest private var entries: FetchedResults<LedgerEntry>
+
     @AppStorage private var selectedBookID: String
-    @State private var filter: Filter = .all
+    @State private var query = TransactionQuery()
+    @State private var scope: ReportBookScope = .currentBook
+    @State private var selectedCustomBookIDs: Set<UUID> = []
+    @State private var result = TransactionSearchResult.empty
     @State private var isPresentingNewEntry = false
+    @State private var isPresentingFilters = false
 
     init(
         group: LedgerGroup,
@@ -80,6 +96,11 @@ private struct BookTransactionsView: View {
         _selectedBookID = AppStorage(
             wrappedValue: "",
             BookSelectionStorage.key(for: group)
+        )
+        _entries = FetchRequest(
+            sortDescriptors: [NSSortDescriptor(keyPath: \LedgerEntry.date, ascending: false)],
+            predicate: NSPredicate(format: "group == %@", group),
+            animation: .default
         )
     }
 
@@ -100,18 +121,37 @@ private struct BookTransactionsView: View {
         EffectivePermissionRepository().transactionWriteRestriction(in: group)
     }
 
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(group.currencyCode)
+    }
+
+    private var kindFilter: Binding<Filter> {
+        Binding(
+            get: { Filter.matching(query.kinds) },
+            set: { query.kinds = $0.kinds }
+        )
+    }
+
+    /// 只有帳本範圍能讓「沒有可搜尋的帳本」與「帳本裡沒有交易」區分開來：自選範圍
+    /// 一本都沒選時，空結果是使用者的選擇造成的，不該催他去新增交易。
+    private var hasSearchableBooks: Bool {
+        !result.includedBookIDs.isEmpty
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
-            if let selectedBook {
-                TransactionListView(
-                    book: selectedBook,
-                    kind: filter.kind,
+            if selectedBook != nil || scope != .currentBook {
+                TransactionResultListView(
+                    result: result,
+                    currencyCode: currencyCode,
+                    isFiltered: !query.isEmpty,
+                    showsBookName: scope != .currentBook,
+                    hasSearchableBooks: hasSearchableBooks,
                     writeRestriction: writeRestriction
                 ) {
                     isPresentingNewEntry = true
                 }
-                .id(selectedBook.objectID)
             } else {
                 ScrollView {
                     LedgerEmptyState(
@@ -124,15 +164,38 @@ private struct BookTransactionsView: View {
                 }
             }
         }
+        .searchable(
+            text: $query.keyword,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜尋備註、分類、帳戶或成員"
+        )
         .toolbar {
-            if selectedBook != nil, writeRestriction == nil {
+            ToolbarItem {
                 Button {
-                    isPresentingNewEntry = true
+                    isPresentingFilters = true
                 } label: {
-                    Image(systemName: "plus")
-                        .fontWeight(.bold)
+                    Image(
+                        systemName: query.hasActiveFilters
+                            ? "line.3.horizontal.decrease.circle.fill"
+                            : "line.3.horizontal.decrease.circle"
+                    )
                 }
-                .accessibilityLabel("新增交易")
+                .accessibilityLabel(
+                    query.hasActiveFilters
+                        ? "篩選交易，已套用 \(query.activeFilterCount) 個條件"
+                        : "篩選交易"
+                )
+            }
+            if selectedBook != nil, writeRestriction == nil {
+                ToolbarItem {
+                    Button {
+                        isPresentingNewEntry = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .fontWeight(.bold)
+                    }
+                    .accessibilityLabel("新增交易")
+                }
             }
         }
         .sheet(isPresented: $isPresentingNewEntry) {
@@ -146,10 +209,55 @@ private struct BookTransactionsView: View {
                 .presentationDragIndicator(.visible)
             }
         }
-        .onAppear(perform: normalizeSelectedBook)
+        .sheet(isPresented: $isPresentingFilters) {
+            NavigationStack {
+                TransactionFilterView(
+                    group: group,
+                    query: $query,
+                    scope: $scope,
+                    selectedBookIDs: $selectedCustomBookIDs,
+                    currentBookName: selectedBook?.name ?? "未選擇帳本"
+                )
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .onAppear {
+            normalizeSelectedBook()
+            reload()
+        }
         .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
+            reload()
         }
+        .onChange(of: query) { _, _ in reload() }
+        .onChange(of: scope) { _, _ in reload() }
+        .onChange(of: selectedCustomBookIDs) { _, _ in reload() }
+        .onChange(of: selectedBookID) { _, _ in reload() }
+        .onChange(of: entries.count) { _, _ in reload() }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { _ in
+            // 作廢狀態存在稽核事件裡，編輯也不會改變交易筆數，兩者都不會讓
+            // `entries.count` 變動，所以還是要跟著 context 的變更重算。
+            reload()
+        }
+    }
+
+    /// 結果是快取的，不是 computed property：每次計算都要掃過群組的稽核事件來判斷
+    /// 作廢狀態，做成 computed property 等於每次 render 都重跑一次完整搜尋。
+    private func reload() {
+        result = TransactionSearchService().results(
+            candidates: Array(entries),
+            in: group,
+            query: query,
+            scope: scope,
+            currentBook: selectedBook,
+            selectedBookIDs: selectedCustomBookIDs
+        )
     }
 
     private var header: some View {
@@ -200,15 +308,58 @@ private struct BookTransactionsView: View {
                 }
             }
 
-            Picker("交易類型", selection: $filter) {
+            Picker("交易類型", selection: kindFilter) {
                 ForEach(Filter.allCases) { item in
                     Text(item.rawValue).tag(item)
                 }
             }
             .pickerStyle(.segmented)
+
+            scopeSummary
         }
         .padding(.horizontal, LedgerTheme.pagePadding)
         .padding(.top, 12)
+    }
+
+    /// 每個搜尋結果都必須說得出自己的範圍與筆數，使用者才知道現在看到的是全部
+    /// 交易還是被條件收斂過的一部分。
+    private var scopeSummary: some View {
+        HStack(spacing: 8) {
+            Label(scopeLabel, systemImage: "book.closed.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            if query.isEmpty {
+                Text("\(result.matchCount) 筆")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("符合 \(result.matchCount) / \(result.scopedCount) 筆")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(LedgerTheme.primaryStrong)
+
+                Button("清除") {
+                    query = TransactionQuery()
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.borderless)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var scopeLabel: String {
+        switch scope {
+        case .allActiveBooks:
+            return "全部帳本（\(result.includedBookIDs.count) 本）"
+        case .currentBook:
+            return selectedBook?.name ?? "未選擇帳本"
+        case .selectedBookIDs:
+            return "自選帳本（\(result.includedBookIDs.count) 本）"
+        }
     }
 
     private func selectorLabel(_ title: String, systemImage: String) -> some View {
@@ -238,68 +389,53 @@ private struct BookTransactionsView: View {
     }
 }
 
-private struct TransactionListView: View {
-    @FetchRequest private var entries: FetchedResults<LedgerEntry>
+private struct TransactionResultListView: View {
+    let result: TransactionSearchResult
+    let currencyCode: String
+    /// 有沒有套用關鍵字或篩選。空結果的說法完全不同：一個是「還沒有交易」，
+    /// 另一個是「有交易，但沒有一筆符合條件」。
+    let isFiltered: Bool
+    let showsBookName: Bool
+    let hasSearchableBooks: Bool
     let writeRestriction: PermissionError?
     let onAddFirst: () -> Void
 
-    init(
-        book: LedgerBook,
-        kind: EntryKind?,
-        writeRestriction: PermissionError?,
-        onAddFirst: @escaping () -> Void
-    ) {
-        self.writeRestriction = writeRestriction
-        self.onAddFirst = onAddFirst
-        let predicate: NSPredicate
-        if let kind {
-            predicate = NSPredicate(format: "book == %@ AND kind == %@", book, kind.rawValue)
-        } else {
-            predicate = NSPredicate(format: "book == %@", book)
-        }
-        _entries = FetchRequest(
-            sortDescriptors: [NSSortDescriptor(keyPath: \LedgerEntry.date, ascending: false)],
-            predicate: predicate,
-            animation: .default
-        )
-    }
-
-    private var visibleEntries: [LedgerEntry] {
-        let repository = EntryRepository()
-        return entries.filter { !repository.isVoided($0) }
-    }
-
     private var addAction: (() -> Void)? {
-        guard writeRestriction == nil else { return nil }
+        guard writeRestriction == nil, !isFiltered else { return nil }
         return onAddFirst
     }
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
                 if let message = writeRestriction?.errorDescription {
                     LedgerNotice(message: message)
                 }
 
-                if visibleEntries.isEmpty {
-                    LedgerEmptyState(
-                        systemImage: "receipt",
-                        title: "沒有有效交易",
-                        message: writeRestriction == nil
-                            ? "新增共同收支後，就能在這裡查看、編輯與核對交易。"
-                            : "目前還沒有可檢視的交易。",
-                        actionTitle: writeRestriction == nil ? "新增交易" : nil,
-                        action: addAction
-                    )
-                } else {
-                    ForEach(visibleEntries, id: \.objectID) { entry in
-                        NavigationLink {
-                            TransactionDetailView(entry: entry)
-                        } label: {
-                            EntryRow(entry: entry)
-                        }
-                        .buttonStyle(.plain)
+                if result.hasMatches {
+                    if isFiltered {
+                        matchTotals
                     }
+                    ForEach(result.sections) { section in
+                        Section {
+                            ForEach(section.entries, id: \.objectID) { entry in
+                                NavigationLink {
+                                    TransactionDetailView(entry: entry)
+                                } label: {
+                                    EntryRow(
+                                        entry: entry,
+                                        showsBookName: showsBookName,
+                                        isVoided: entry.id.map(result.voidedEntryIDs.contains) == true
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        } header: {
+                            monthHeader(section)
+                        }
+                    }
+                } else {
+                    emptyState
                 }
             }
             .padding(.horizontal, LedgerTheme.pagePadding)
@@ -307,10 +443,85 @@ private struct TransactionListView: View {
             .padding(.bottom, 28)
         }
     }
+
+    private var matchTotals: some View {
+        LedgerCard {
+            HStack(spacing: 16) {
+                totalColumn(title: "收入", amount: result.income, tint: LedgerTheme.primary)
+                Divider().frame(height: 30)
+                totalColumn(title: "支出", amount: result.expense, tint: LedgerTheme.coral)
+                Divider().frame(height: 30)
+                totalColumn(title: "淨額", amount: result.net, tint: .primary)
+            }
+        }
+    }
+
+    private func totalColumn(title: String, amount: Decimal, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(LedgerCurrency.format(amount, currencyCode: currencyCode))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func monthHeader(_ section: TransactionSearchSection) -> some View {
+        HStack {
+            Text(section.title)
+                .font(.subheadline.weight(.bold))
+            Spacer()
+            Text(LedgerCurrency.format(section.net, currencyCode: currencyCode))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 7)
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
+        .background(LedgerTheme.surface.opacity(0.94))
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if !hasSearchableBooks {
+            LedgerEmptyState(
+                systemImage: "book.closed",
+                title: "沒有選擇任何帳本",
+                message: "請在篩選面板選擇至少一本帳本，才能搜尋交易。"
+            )
+        } else if isFiltered {
+            LedgerEmptyState(
+                systemImage: "magnifyingglass",
+                title: "沒有符合的交易",
+                message: result.scopedCount > 0
+                    ? "這個範圍內有 \(result.scopedCount) 筆交易，但都不符合目前的關鍵字與篩選條件。"
+                    : "這個範圍內還沒有任何交易。"
+            )
+        } else {
+            LedgerEmptyState(
+                systemImage: "receipt",
+                title: "沒有有效交易",
+                message: writeRestriction == nil
+                    ? "新增共同收支後，就能在這裡查看、編輯與核對交易。"
+                    : "目前還沒有可檢視的交易。",
+                actionTitle: addAction == nil ? nil : "新增交易",
+                action: addAction
+            )
+        }
+    }
 }
 
 private struct EntryRow: View {
     @ObservedObject var entry: LedgerEntry
+    /// 跨帳本搜尋時每一筆都要標示來源帳本，單一帳本範圍下重複顯示只是雜訊。
+    var showsBookName = false
+    var isVoided = false
 
     private var kind: EntryKind {
         EntryKind(rawValue: entry.kind ?? "") ?? .expense
@@ -335,6 +546,9 @@ private struct EntryRow: View {
             parts.append("\(from) → \(to)")
         } else if let account = entry.sourceAccount?.name {
             parts.append(account)
+        }
+        if showsBookName, let book = entry.book?.name, !book.isEmpty {
+            parts.append(book)
         }
         return parts.joined(separator: " · ")
     }
@@ -361,8 +575,19 @@ private struct EntryRow: View {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: kind.systemImage, tint: kind.tint)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 6) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                            .strikethrough(isVoided)
+                        if isVoided {
+                            Text("已作廢")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(.secondary.opacity(0.15), in: Capsule())
+                        }
+                    }
                     if !subtitle.isEmpty {
                         Text(subtitle)
                             .font(.caption)
@@ -372,12 +597,14 @@ private struct EntryRow: View {
                 Spacer()
                 Text(amountText)
                     .font(.subheadline.weight(.bold))
-                    .foregroundStyle(amountColor)
+                    .foregroundStyle(isVoided ? .secondary : amountColor)
+                    .strikethrough(isVoided)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
         }
+        .opacity(isVoided ? 0.75 : 1)
     }
 }
 
