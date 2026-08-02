@@ -58,7 +58,8 @@ struct SettlementRootView: View {
         let members = selectedGroup.members as? Set<Member> ?? []
         return Dictionary(uniqueKeysWithValues: members.compactMap { member in
             guard let id = member.id else { return nil }
-            return (id, member.displayName ?? "未命名成員")
+            return (id, member.displayName
+                ?? LedgerStringKey.commonPlaceholderUnnamedMember.string())
         })
     }
 
@@ -72,32 +73,34 @@ struct SettlementRootView: View {
 
                     if snapshot.hasSkippedEntries {
                         Section {
-                            Label(
-                                """
-                                有 \(snapshot.skippedEntryCount) 筆交易的付款或分攤資料尚未同步完成，\
-                                已暫時不列入結算。等 iCloud 同步完成後會自動重新計算。
-                                """,
-                                systemImage: "exclamationmark.arrow.triangle.2.circlepath"
-                            )
+                            Label {
+                                Text(verbatim: LedgerStringKey.settlementSkippedNotice.string(
+                                    arguments: [Int64(snapshot.skippedEntryCount)]
+                                ))
+                            } icon: {
+                                Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
+                            }
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         }
                     }
 
-                    Section("成員淨額") {
+                    Section {
                         if result.balances.isEmpty {
-                            Text("目前沒有需要計算的共同收支。")
+                            Text(.settlementBalancesEmpty)
                                 .foregroundStyle(.secondary)
                         } else {
                             ForEach(result.balances, id: \.memberID) { balance in
                                 balanceRow(balance)
                             }
                         }
+                    } header: {
+                        Text(.settlementSectionBalances)
                     }
 
-                    Section("建議付款") {
+                    Section {
                         if result.suggestedTransfers.isEmpty {
-                            Label("目前已結清", systemImage: "checkmark.circle.fill")
+                            Label(.settlementSuggestionsSettled, systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(LedgerTheme.primary)
                         } else {
                             ForEach(Array(result.suggestedTransfers.enumerated()), id: \.offset) { _, transfer in
@@ -110,48 +113,54 @@ struct SettlementRootView: View {
                                 .disabled(!canRecordSettlements)
                             }
                         }
+                    } header: {
+                        Text(.settlementSectionSuggestions)
                     }
 
                     if !canRecordSettlements {
                         Section {
-                            Label(
-                                settlementRestriction?.errorDescription
-                                    ?? "目前只能查看結算，不能新增或撤銷。",
-                                systemImage: "lock.fill"
-                            )
+                            Label {
+                                // 權限說明來自資料層的 `PermissionError`，那一層還沒遷移。
+                                Text(verbatim: settlementRestriction?.errorDescription
+                                    ?? LedgerStringKey.settlementReadOnlyFallback.string())
+                            } icon: {
+                                Image(systemName: "lock.fill")
+                            }
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         }
                     }
 
-                    Section("結算歷史") {
+                    Section {
                         if history.isEmpty {
-                            Text("尚無結算紀錄。")
+                            Text(.settlementHistoryEmpty)
                                 .foregroundStyle(.secondary)
                         } else {
                             ForEach(history) { item in
                                 historyRow(item)
                             }
                         }
+                    } header: {
+                        Text(.settlementSectionHistory)
                     }
                 }
             } else if selectedGroup == nil {
                 LedgerEmptyState(
                     systemImage: "person.3",
-                    title: "先建立一個群組",
-                    message: "建立群組與帳本後，就能查看成員淨額與結算建議。"
+                    title: .settlementEmptyNoGroupTitle,
+                    message: .settlementEmptyNoGroupMessage
                 )
                 .padding(.horizontal, LedgerTheme.pagePadding)
             } else {
                 LedgerEmptyState(
                     systemImage: "book.closed",
-                    title: "找不到可用帳本",
-                    message: "請先在群組設定建立或啟用帳本。"
+                    title: .settlementEmptyNoBookTitle,
+                    message: .settlementEmptyNoBookMessage
                 )
                 .padding(.horizontal, LedgerTheme.pagePadding)
             }
         }
-        .navigationTitle("結算")
+        .navigationTitle(Text(.settlementTitle))
         .onAppear {
             normalizeSelection()
             reload()
@@ -193,21 +202,27 @@ struct SettlementRootView: View {
             }
         }
         .confirmationDialog(
-            "確定要撤銷這筆結算？",
+            Text(.settlementReverseConfirmTitle),
             isPresented: reverseConfirmationBinding,
             titleVisibility: .visible
         ) {
-            Button("撤銷結算", role: .destructive, action: reverseSelectedSettlement)
-            Button("取消", role: .cancel) {
+            Button(role: .destructive, action: reverseSelectedSettlement) {
+                Text(.settlementReverseConfirmAction)
+            }
+            Button(role: .cancel) {
                 settlementToReverse = nil
+            } label: {
+                Text(.commonActionCancel)
             }
         } message: {
-            Text("撤銷後會重新計入原本的應收與應付餘額，歷史紀錄本身仍會保留。")
+            Text(.settlementReverseConfirmMessage)
         }
-        .alert("無法處理結算", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.settlementErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -218,110 +233,159 @@ struct SettlementRootView: View {
                     Button {
                         selectedGroupID = candidate.objectID
                     } label: {
+                        let name = candidate.name
+                            ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
                         if candidate.objectID == group.objectID {
-                            Label(candidate.name ?? "未命名群組", systemImage: "checkmark")
+                            Label {
+                                Text(verbatim: name)
+                            } icon: {
+                                Image(systemName: "checkmark")
+                            }
                         } else {
-                            Text(candidate.name ?? "未命名群組")
+                            Text(verbatim: name)
                         }
                     }
                 }
             } label: {
-                selectorLabel(group.name ?? "未命名群組", systemImage: "person.3.fill")
+                selectorLabel(
+                    group.name ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string(),
+                    systemImage: "person.3.fill"
+                )
             }
+            .accessibilityLabel(Text(.transactionGroupPickerAccessibilityLabel))
+            .accessibilityValue(Text(verbatim: group.name
+                ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()))
 
             Menu {
                 ForEach(activeBooks, id: \.objectID) { candidate in
                     Button {
                         selectedBookID = candidate.objectID
                     } label: {
+                        let name = candidate.name
+                            ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
                         if candidate.objectID == book.objectID {
-                            Label(candidate.name ?? "未命名帳本", systemImage: "checkmark")
+                            Label {
+                                Text(verbatim: name)
+                            } icon: {
+                                Image(systemName: "checkmark")
+                            }
                         } else {
-                            Text(candidate.name ?? "未命名帳本")
+                            Text(verbatim: name)
                         }
                     }
                 }
             } label: {
-                selectorLabel(book.name ?? "未命名帳本", systemImage: "book.closed.fill")
+                selectorLabel(
+                    book.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string(),
+                    systemImage: "book.closed.fill"
+                )
             }
+            .accessibilityLabel(Text(.transactionBookPickerAccessibilityLabel))
+            .accessibilityValue(Text(verbatim: book.name
+                ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()))
         }
     }
 
     private func selectorLabel(_ title: String, systemImage: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
-            Text(title)
+                .accessibilityHidden(true)
+            Text(verbatim: title)
             Spacer()
             Image(systemName: "chevron.up.chevron.down")
                 .font(.caption2.weight(.bold))
+                .accessibilityHidden(true)
         }
         .foregroundStyle(LedgerTheme.primary)
     }
 
     private func balanceRow(_ balance: MemberBalance) -> some View {
         HStack {
-            Text(memberNames[balance.memberID] ?? "未命名成員")
+            Text(verbatim: memberName(balance.memberID))
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(balance.amount > 0 ? "應收" : balance.amount < 0 ? "應付" : "已平衡")
+                Text(directionKey(for: balance.amount))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(
-                    LedgerCurrency.format(
-                        balance.amount < 0 ? -balance.amount : balance.amount,
-                        currencyCode: currencyCode
-                    )
-                )
+                Text(verbatim: LedgerCurrency.format(
+                    balance.amount < 0 ? -balance.amount : balance.amount,
+                    currencyCode: currencyCode
+                ))
                 .font(.subheadline.weight(.semibold))
             }
         }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func memberName(_ id: UUID) -> String {
+        memberNames[id] ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
+    }
+
+    private func directionKey(for amount: Decimal) -> LedgerStringKey {
+        if amount > 0 { return .settlementBalanceOwed }
+        if amount < 0 { return .settlementBalanceOwes }
+        return .settlementBalanceBalanced
+    }
+
+    private func route(from: UUID, to: UUID) -> String {
+        LedgerStringKey.settlementTransferRoute.string(
+            arguments: [memberName(from), memberName(to)]
+        )
     }
 
     private func transferRow(_ transfer: SettlementTransfer) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.right.circle.fill")
                 .foregroundStyle(LedgerTheme.primary)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(memberNames[transfer.fromMemberID] ?? "未命名成員") → \(memberNames[transfer.toMemberID] ?? "未命名成員")")
+                Text(verbatim: route(from: transfer.fromMemberID, to: transfer.toMemberID))
                     .font(.subheadline.weight(.semibold))
-                Text(canRecordSettlements ? "點一下記錄全額或部分結算" : "僅供查看")
+                Text(canRecordSettlements
+                     ? LedgerStringKey.settlementTransferHintTappable
+                     : LedgerStringKey.settlementTransferHintReadOnly)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text(LedgerCurrency.format(transfer.amount, currencyCode: currencyCode))
+            Text(verbatim: LedgerCurrency.format(transfer.amount, currencyCode: currencyCode))
                 .font(.subheadline.weight(.bold))
         }
+        .accessibilityElement(children: .combine)
     }
 
     private func historyRow(_ item: SettlementHistoryItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("\(memberNames[item.fromMemberID] ?? "未命名成員") → \(memberNames[item.toMemberID] ?? "未命名成員")")
+                Text(verbatim: route(from: item.fromMemberID, to: item.toMemberID))
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                Text(LedgerCurrency.format(item.amount, currencyCode: currencyCode))
+                Text(verbatim: LedgerCurrency.format(item.amount, currencyCode: currencyCode))
                     .font(.subheadline.weight(.bold))
             }
+            .accessibilityElement(children: .combine)
             HStack {
-                Text(item.recordedAt.formatted(date: .abbreviated, time: .shortened))
+                Text(verbatim: LedgerFormatters.timestamp(item.recordedAt))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if item.isReversed {
-                    Label("已撤銷", systemImage: "arrow.uturn.backward.circle")
+                    Label(.settlementHistoryBadgeReversed, systemImage: "arrow.uturn.backward.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 if !item.isReversed, canRecordSettlements {
-                    Button("撤銷", role: .destructive) {
+                    Button(role: .destructive) {
                         settlementToReverse = item
+                    } label: {
+                        Text(.settlementActionReverse)
                     }
                     .font(.caption.weight(.semibold))
                 }
             }
             if !item.note.isEmpty {
-                Text(item.note)
+                // 備註是使用者輸入的內容。
+                Text(verbatim: item.note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -475,57 +539,86 @@ private struct SettlementRecordSheet: View {
 
     var body: some View {
         Form {
-            Section("付款") {
-                detailRow("付款人", value: payer?.displayName ?? "未命名成員")
-                detailRow("收款人", value: recipient?.displayName ?? "未命名成員")
+            Section {
+                detailRow(.settlementRecordPayer, value: memberName(payer))
+                detailRow(.settlementRecordRecipient, value: memberName(recipient))
                 HStack {
-                    Text("金額")
+                    Text(.settlementRecordAmount)
                     Spacer()
-                    TextField("0", text: $amountText)
-                        .keyboardType(LedgerCurrency.fractionDigits(for: currencyCode) == 0 ? .numberPad : .decimalPad)
+                    TextField("", text: $amountText, prompt: Text(verbatim: "0"))
+                        .keyboardType(
+                            LedgerCurrency.fractionDigits(for: currencyCode) == 0
+                                ? .numberPad
+                                : .decimalPad
+                        )
                         .multilineTextAlignment(.trailing)
-                    Text(currencyCode)
+                        .accessibilityLabel(Text(.settlementRecordAmount))
+                    Text(verbatim: currencyCode)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
-            }
-
-            Section("備註") {
-                TextField("例如：現金、轉帳、外部付款（選填）", text: $note, axis: .vertical)
-                    .lineLimit(2...4)
+            } header: {
+                Text(.settlementRecordSectionPayment)
             }
 
             Section {
-                Text("建議上限：\(LedgerCurrency.format(transfer.amount, currencyCode: currencyCode))。可以只記錄部分金額，剩餘款項會保留在結算建議中。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                TextField(
+                    "",
+                    text: $note,
+                    prompt: Text(.settlementRecordNotePlaceholder),
+                    axis: .vertical
+                )
+                .lineLimit(2...4)
+                .accessibilityLabel(Text(.settlementRecordSectionNote))
+            } header: {
+                Text(.settlementRecordSectionNote)
+            }
+
+            Section {
+                Text(verbatim: LedgerStringKey.settlementRecordLimit.string(
+                    arguments: [LedgerCurrency.format(transfer.amount, currencyCode: currencyCode)]
+                ))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("記錄結算")
+        .navigationTitle(Text(.settlementRecordTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("儲存", action: save)
-                    .disabled(amount.map { $0 <= 0 || $0 > transfer.amount } ?? true)
+                Button(action: save) {
+                    Text(.commonActionSave)
+                }
+                .disabled(amount.map { $0 <= 0 || $0 > transfer.amount } ?? true)
             }
         }
-        .alert("無法儲存結算", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.settlementRecordErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
-    private func detailRow(_ title: String, value: String) -> some View {
+    private func memberName(_ member: Member?) -> String {
+        member?.displayName ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
+    }
+
+    private func detailRow(_ title: LedgerStringKey, value: String) -> some View {
         HStack {
             Text(title)
             Spacer()
-            Text(value)
+            Text(verbatim: value)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var errorBinding: Binding<Bool> {
@@ -537,7 +630,7 @@ private struct SettlementRecordSheet: View {
 
     private func save() {
         guard let payer, let recipient, let amount else {
-            errorMessage = "找不到結算成員或金額格式不正確。"
+            errorMessage = LedgerStringKey.settlementRecordErrorMissingMember.string()
             return
         }
         do {

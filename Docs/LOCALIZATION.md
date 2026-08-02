@@ -50,15 +50,14 @@
 
 ## 遷移進度
 
-基礎建設與下列範圍已完成：分頁、設定頁、iCloud 同步、通知（含系統通知內容）、交易（列表、詳情、新增與編輯、篩選面板）、群組與帳本（群組列表與詳情、建立群組、身分確認、成員管理、帳本管理與封存歷史、iCloud 共享錯誤）、帳戶（列表、明細、餘額調整、對帳與新增）、分類（群組分類管理、帳本可用分類、新增、重新命名、合併與內建分類名稱）、設定裡的匯出資料與刪除資料，以及 `EntryKind`、`AccountType`、`MemberRole`、`ReportBookScope`、`SplitMode` 這些跨畫面共用的列舉與貨幣顯示名稱。
+基礎建設與下列範圍已完成：分頁、設定頁、iCloud 同步、通知（含系統通知內容）、交易（列表、詳情、新增與編輯、篩選面板）、群組與帳本（群組列表與詳情、建立群組、身分確認、成員管理、帳本管理與封存歷史、iCloud 共享錯誤）、帳戶（列表、明細、餘額調整、對帳與新增）、分類（群組分類管理、帳本可用分類、新增、重新命名、合併與內建分類名稱）、設定裡的匯出資料與刪除資料、總覽與報表（含來源交易下鑽）、結算（淨額、建議付款、記錄與撤銷），以及 `EntryKind`、`AccountType`、`MemberRole`、`ReportBookScope`、`SplitMode` 這些跨畫面共用的列舉與貨幣顯示名稱。
 
 跨畫面重複出現的文字集中在 `common.*`：取消、儲存、完成、編輯、好、「請稍後再試。」，以及群組／帳本／帳戶／分類／成員的「未命名」佔位字。遷移其他畫面時直接用這些鍵，不要各自再加一份。
 
-尚未進 catalog 的畫面仍保留硬編碼的正體中文字串，依字串數量排序如下（遷移時一併補上該畫面的 VoiceOver 標籤）：
+畫面已全部遷移完成。剩下的只有資料層自己產生的訊息：
 
 | 範圍 | 主要檔案 |
 | --- | --- |
-| 總覽與結算 | `DashboardView`、`SettlementView` |
 | 資料層錯誤訊息 | `GroupRepository`、`CategoryRepository`、`BookRepository`、`EntryRepository`、`AccountRepository`、`SettlementRepository`、`EffectivePermissionRepository`、`PersistenceController`、`LedgerExportService`、`GroupReportService`、`LedgerNotificationCoordinator`、`AllocationCalculator`、`SettlementCalculator`、`CloudParticipantStatus` |
 
 遷移過程中 `LedgerSectionHeader`、`LedgerEmptyState` 與 `LedgerNavRow` 暫時同時接受 `LedgerStringKey` 與 `String`；全部遷移完成後要移除 `String` 入口，讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
