@@ -86,13 +86,12 @@ struct NewTransactionView: View {
         LedgerCurrency.normalizedCode(book.group?.currencyCode)
     }
 
+    /// 順序由帳本的分類設定決定；FetchRequest 只負責在分類變動時重畫。
     private var availableCategories: [LedgerCategory] {
-        let availableIDs = Set(
-            CategoryRepository()
-                .availableCategories(in: book)
-                .map(\.objectID)
-        )
-        var result = categories.filter { availableIDs.contains($0.objectID) }
+        let fetchedIDs = Set(categories.map(\.objectID))
+        var result = CategoryRepository()
+            .availableCategories(in: book)
+            .filter { fetchedIDs.contains($0.objectID) }
         if let current = entry?.category,
            !result.contains(where: { $0.objectID == current.objectID }) {
             result.append(current)

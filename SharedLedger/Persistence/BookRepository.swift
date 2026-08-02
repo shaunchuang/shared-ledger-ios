@@ -319,10 +319,13 @@ struct BookRepository {
         from source: BookCategorySource,
         in group: LedgerGroup
     ) throws {
-        let categories: [LedgerCategory]
+        // 每個分類帶著自己的顯示順序：沿用其他帳本時連順序一起帶走，
+        // 從群組目錄套用時交給 `CategoryRepository.followsGroupOrder`，
+        // 之後在群組調整的順序才會跟著出現在這本新帳本。
+        let assignedCategories: [(category: LedgerCategory, sortOrder: Int32)]
         switch source {
         case .allGroupCategories:
-            categories = (group.categories as? Set<LedgerCategory> ?? [])
+            assignedCategories = (group.categories as? Set<LedgerCategory> ?? [])
                 .filter { $0.archivedAt == nil }
                 .sorted {
                     if $0.sortOrder == $1.sortOrder {
@@ -330,26 +333,29 @@ struct BookRepository {
                     }
                     return $0.sortOrder < $1.sortOrder
                 }
+                .map { ($0, CategoryRepository.followsGroupOrder) }
         case let .copy(sourceBook):
             guard sourceBook.group == group else { throw BookError.crossGroupCategorySource }
-            categories = (sourceBook.categoryAssignments as? Set<BookCategoryAssignment> ?? [])
+            assignedCategories = (sourceBook.categoryAssignments as? Set<BookCategoryAssignment> ?? [])
                 .filter { $0.isEnabled && $0.category?.archivedAt == nil }
                 .sorted { $0.sortOrder < $1.sortOrder }
-                .compactMap(\.category)
+                .compactMap { assignment in
+                    assignment.category.map { ($0, assignment.sortOrder) }
+                }
         case .empty:
-            categories = []
+            assignedCategories = []
         }
 
         let context = persistence.container.viewContext
         let store = persistence.store(for: group)
-        for (index, category) in categories.enumerated() {
+        for (category, sortOrder) in assignedCategories {
             guard category.group == group else { throw BookError.crossGroupCategorySource }
             let assignment = BookCategoryAssignment(context: context)
             context.assign(assignment, to: store)
             assignment.id = UUID()
             assignment.createdAt = Date()
             assignment.isEnabled = true
-            assignment.sortOrder = Int32(index)
+            assignment.sortOrder = sortOrder
             assignment.book = book
             assignment.category = category
         }

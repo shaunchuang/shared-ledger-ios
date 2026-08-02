@@ -47,10 +47,16 @@ struct CreateGroupView: View {
                         Text("群組貨幣")
                     }
                 }
+                Toggle(isOn: $draft.usesDefaultCategories) {
+                    HStack(spacing: 13) {
+                        LedgerIconBadge(systemImage: "square.grid.2x2.fill", tint: LedgerTheme.amber)
+                        Text("套用內建分類")
+                    }
+                }
             } header: {
                 Text("群組資料")
             } footer: {
-                Text("帳戶、交易與分攤都使用這個貨幣；MVP 不進行跨幣別換算。")
+                Text("帳戶、交易與分攤都使用這個貨幣；MVP 不進行跨幣別換算。內建分類建立後仍可改名、排序、合併或封存。")
             }
             .listRowBackground(LedgerTheme.surface)
 
