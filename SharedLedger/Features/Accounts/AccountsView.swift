@@ -713,7 +713,7 @@ private struct AccountAdjustmentRow: View {
     }
 
     private var dateText: String {
-        adjustment.createdAt.map(LedgerFormatters.day)
+        adjustment.createdAt.map { LedgerFormatters.day($0) }
             ?? LedgerStringKey.commonPlaceholderNoDate.string()
     }
 
@@ -779,7 +779,7 @@ private struct AccountEntryRow: View {
     }
 
     private var subtitle: String {
-        let date = entry.date.map(LedgerFormatters.day)
+        let date = entry.date.map { LedgerFormatters.day($0) }
             ?? LedgerStringKey.commonPlaceholderNoDate.string()
         guard let bookName = entry.book?.name, !bookName.isEmpty else { return date }
         return LedgerStringKey.accountEntrySubtitle.string(arguments: [date, bookName])

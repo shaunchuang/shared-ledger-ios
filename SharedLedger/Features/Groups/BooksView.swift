@@ -383,7 +383,8 @@ private struct ArchivedBookEntryRow: View {
     }
 
     private var dateText: String {
-        entry.date.map(LedgerFormatters.day) ?? LedgerStringKey.bookArchivedEntryNoDate.string()
+        entry.date.map { LedgerFormatters.day($0) }
+            ?? LedgerStringKey.bookArchivedEntryNoDate.string()
     }
 
     /// 金額走群組保存的貨幣，不再硬編碼 `$`：這個畫面原本假設所有群組都是美金符號，
