@@ -284,6 +284,47 @@ struct GroupRepository {
         try saveChanges()
     }
 
+    /// Whether this device may delete the whole group, and why not when it may not.
+    ///
+    /// Deletion is owner-only and private-store-only. A group this device joined
+    /// lives in the shared store, where the rows belong to the owner's iCloud
+    /// account: deleting them locally does not remove anyone else's copy and the
+    /// next sync pulls them straight back. Leaving is the honest action there, so
+    /// this refuses rather than pretending the delete did something.
+    func deletionRestriction(for group: LedgerGroup) -> GroupError? {
+        guard persistence.store(for: group) === persistence.privateStore else {
+            return .deleteRequiresOwnedGroup
+        }
+        guard let actor = CurrentMemberIdentityRepository(persistence: persistence)
+            .currentMember(in: group)
+        else { return .missingCurrentMember }
+        guard actor.role == MemberRole.owner.rawValue else {
+            return .onlyOwnerCanDeleteGroup
+        }
+        return nil
+    }
+
+    /// Deletes a group this device owns, along with every book, account, category,
+    /// transaction, member and audit event under it.
+    ///
+    /// The caller is responsible for confirming with the user first: for a shared
+    /// group this removes the data for every participant, not just this device,
+    /// because the records live in this account's zone.
+    func deleteGroup(_ group: LedgerGroup) throws {
+        if let restriction = deletionRestriction(for: group) { throw restriction }
+
+        let context = persistence.container.viewContext
+        // The local identity mapping lives in its own private-only entity with no
+        // relationship to the group, so the cascade never reaches it. Left behind it
+        // would silently claim a member of a group that no longer exists.
+        CurrentMemberIdentityRepository(persistence: persistence).clearCurrentMember(in: group)
+        EffectivePermissionRepository(persistence: persistence).forgetCachedPermission(for: group)
+        // Every to-many relationship from LedgerGroup uses a cascade delete rule, so
+        // the object graph below it goes with this one delete.
+        context.delete(group)
+        try saveChanges()
+    }
+
     /// Binds the CloudKit participant that is operating this device to the App member.
     /// `cloudParticipantID` is share-local and intentionally does not replace the
     /// private-only `LocalMemberIdentity` mapping used to identify the current user.
@@ -633,6 +674,8 @@ struct GroupRepository {
         case cloudParticipantAlreadyLinked
         case cloudParticipantMismatch
         case cloudParticipantRoleMismatch
+        case onlyOwnerCanDeleteGroup
+        case deleteRequiresOwnedGroup
 
         var errorDescription: String? {
             switch self {
@@ -676,6 +719,10 @@ struct GroupRepository {
                 return "這個 iCloud 共享參與者已經對應到另一位 App 成員。"
             case .cloudParticipantMismatch:
                 return "這位 App 成員已對應到不同的 iCloud 共享參與者，無法直接改綁。"
+            case .onlyOwnerCanDeleteGroup:
+                return "只有群組擁有者可以刪除整個群組。"
+            case .deleteRequiresOwnedGroup:
+                return "這是別人分享給你的群組，資料存在對方的 iCloud，刪不掉也刪不乾淨。請改用「退出群組」。"
             case .cloudParticipantRoleMismatch:
                 return "App 群組擁有者必須對應到 iCloud 共享的擁有者。"
             }

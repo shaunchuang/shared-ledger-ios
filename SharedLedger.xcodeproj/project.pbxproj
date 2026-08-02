@@ -68,6 +68,13 @@
 		C0DE00000000000000000029 /* SettlementRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000028 /* SettlementRepository.swift */; };
 		C0DE0000000000000000002B /* CurrentMemberIdentityRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000002A /* CurrentMemberIdentityRepository.swift */; };
 		C0DE0000000000000000002D /* SettlementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000002C /* SettlementView.swift */; };
+		C0DE00000000000000000050 /* CSVWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000051 /* CSVWriter.swift */; };
+		C0DE00000000000000000052 /* LedgerExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000053 /* LedgerExportService.swift */; };
+		C0DE00000000000000000054 /* DataExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000055 /* DataExportView.swift */; };
+		C0DE00000000000000000056 /* DataPrivacyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000057 /* DataPrivacyView.swift */; };
+		C0DE00000000000000000058 /* CSVWriterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000059 /* CSVWriterTests.swift */; };
+		C0DE0000000000000000005A /* LedgerExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000005B /* LedgerExportServiceTests.swift */; };
+		C0DE0000000000000000005C /* GroupDeletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000005D /* GroupDeletionTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -152,6 +159,13 @@
 		C0DE00000000000000000028 /* SettlementRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementRepository.swift; sourceTree = "<group>"; };
 		C0DE0000000000000000002A /* CurrentMemberIdentityRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentMemberIdentityRepository.swift; sourceTree = "<group>"; };
 		C0DE0000000000000000002C /* SettlementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementView.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000051 /* CSVWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVWriter.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000053 /* LedgerExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerExportService.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000055 /* DataExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExportView.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000057 /* DataPrivacyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPrivacyView.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000059 /* CSVWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVWriterTests.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000005B /* LedgerExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerExportServiceTests.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000005D /* GroupDeletionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupDeletionTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -194,6 +208,7 @@
 		45C5D57ACA3A08343620B37B /* Persistence */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000053 /* LedgerExportService.swift */,
 				C0DE00000000000000000026 /* GroupReportService.swift */,
 				C0DE00000000000000000018 /* TransactionSearchService.swift */,
 				C0DE00000000000000000028 /* SettlementRepository.swift */,
@@ -222,6 +237,7 @@
 		4E2AAC912D128933C96BBF6E /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000051 /* CSVWriter.swift */,
 				C0DE00000000000000000020 /* LedgerCurrency.swift */,
 				C0DE00000000000000000022 /* SettlementCalculator.swift */,
 				C0DE00000000000000000024 /* GroupReport.swift */,
@@ -266,6 +282,8 @@
 		74D83BEED003441E30601CD1 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000055 /* DataExportView.swift */,
+				C0DE00000000000000000057 /* DataPrivacyView.swift */,
 				FA1073B55AF5A68C617E56D9 /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -321,6 +339,9 @@
 		C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */ = {
 			isa = PBXGroup;
 			children = (
+				C0DE00000000000000000059 /* CSVWriterTests.swift */,
+				C0DE0000000000000000005B /* LedgerExportServiceTests.swift */,
+				C0DE0000000000000000005D /* GroupDeletionTests.swift */,
 				C0DE00000000000000000004 /* AllocationCalculatorTests.swift */,
 				C0DE00000000000000000006 /* SettlementCalculatorTests.swift */,
 				C0DE00000000000000000008 /* GroupReportServiceTests.swift */,
@@ -446,6 +467,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000058 /* CSVWriterTests.swift in Sources */,
+				C0DE0000000000000000005A /* LedgerExportServiceTests.swift in Sources */,
+				C0DE0000000000000000005C /* GroupDeletionTests.swift in Sources */,
 				C0DE00000000000000000003 /* AllocationCalculatorTests.swift in Sources */,
 				C0DE00000000000000000005 /* SettlementCalculatorTests.swift in Sources */,
 				C0DE00000000000000000007 /* GroupReportServiceTests.swift in Sources */,
@@ -462,6 +486,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DE00000000000000000050 /* CSVWriter.swift in Sources */,
+				C0DE00000000000000000052 /* LedgerExportService.swift in Sources */,
+				C0DE00000000000000000054 /* DataExportView.swift in Sources */,
+				C0DE00000000000000000056 /* DataPrivacyView.swift in Sources */,
 				C0DE00000000000000000021 /* LedgerCurrency.swift in Sources */,
 				C0DE00000000000000000023 /* SettlementCalculator.swift in Sources */,
 				C0DE00000000000000000025 /* GroupReport.swift in Sources */,
