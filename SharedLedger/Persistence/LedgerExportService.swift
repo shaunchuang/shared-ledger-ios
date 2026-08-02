@@ -162,7 +162,7 @@ struct LedgerExportService {
                 .text(entry.sourceAccount?.name ?? ""),
                 .text(entry.destinationAccount?.name ?? ""),
                 .text(paymentDetail(of: entry)),
-                .generated(splitMode(of: entry).displayName),
+                .generated(splitMode(of: entry).displayNameKey.string(locale: Self.exportLocale)),
                 .text(splitDetail(of: entry)),
                 .text(entry.note ?? ""),
                 .generated(isVoided ? "已作廢" : "有效"),

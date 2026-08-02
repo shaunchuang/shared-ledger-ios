@@ -5,13 +5,15 @@ enum SplitMode: String, CaseIterable, Codable, Sendable {
     case percentage
     case fixedAmount
 
-    var displayName: String {
+    var displayNameKey: LedgerStringKey {
         switch self {
-        case .equal: return "平均"
-        case .percentage: return "比例"
-        case .fixedAmount: return "指定金額"
+        case .equal: return .splitModeEqual
+        case .percentage: return .splitModePercentage
+        case .fixedAmount: return .splitModeFixedAmount
         }
     }
+
+    var displayName: String { displayNameKey.string() }
 }
 
 struct SplitInput: Equatable, Sendable {

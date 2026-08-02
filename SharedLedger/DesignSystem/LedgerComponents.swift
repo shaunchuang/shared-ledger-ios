@@ -115,11 +115,76 @@ struct LedgerSectionHeader: View {
 }
 
 struct LedgerEmptyState: View {
-    let systemImage: String
-    let title: String
-    let message: String
-    var actionTitle: String?
-    var action: (() -> Void)?
+    private let systemImage: String
+    private let title: Text
+    private let message: Text
+    private let actionTitle: Text?
+    private let action: (() -> Void)?
+
+    init(
+        systemImage: String,
+        title: LedgerStringKey,
+        message: LedgerStringKey,
+        actionTitle: LedgerStringKey? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.init(
+            systemImage: systemImage,
+            title: Text(title),
+            message: Text(message),
+            actionTitle: actionTitle.map { Text($0) },
+            action: action
+        )
+    }
+
+    /// 說明文字帶參數時由呼叫端先組好，但仍必須來自 catalog 的鍵——
+    /// `LedgerStringKey.string(arguments:)` 的結果包進 `Text(verbatim:)` 再傳進來。
+    init(
+        systemImage: String,
+        title: LedgerStringKey,
+        message: Text,
+        actionTitle: LedgerStringKey? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.init(
+            systemImage: systemImage,
+            title: Text(title),
+            message: message,
+            actionTitle: actionTitle.map { Text($0) },
+            action: action
+        )
+    }
+
+    /// 還沒進 catalog 的畫面暫時仍傳字串。遷移完成後這個入口要移除。
+    init(
+        systemImage: String,
+        title: String,
+        message: String,
+        actionTitle: String? = nil,
+        action: (() -> Void)? = nil
+    ) {
+        self.init(
+            systemImage: systemImage,
+            title: Text(verbatim: title),
+            message: Text(verbatim: message),
+            actionTitle: actionTitle.map { Text(verbatim: $0) },
+            action: action
+        )
+    }
+
+    private init(
+        systemImage: String,
+        title: Text,
+        message: Text,
+        actionTitle: Text?,
+        action: (() -> Void)?
+    ) {
+        self.systemImage = systemImage
+        self.title = title
+        self.message = message
+        self.actionTitle = actionTitle
+        self.action = action
+    }
 
     var body: some View {
         LedgerCard {
@@ -135,11 +200,13 @@ struct LedgerEmptyState: View {
                         .font(.system(size: 34, weight: .medium))
                         .foregroundStyle(LedgerTheme.primary)
                 }
+                // 圖示只是裝飾，說明全在標題與內文；讓 VoiceOver 唸出符號名稱只是噪音。
+                .accessibilityHidden(true)
 
                 VStack(spacing: 7) {
-                    Text(title)
+                    title
                         .font(.title3.weight(.bold))
-                    Text(message)
+                    message
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -147,7 +214,7 @@ struct LedgerEmptyState: View {
                 }
 
                 if let actionTitle, let action {
-                    Button(actionTitle, action: action)
+                    Button(action: action) { actionTitle }
                         .buttonStyle(LedgerPrimaryButtonStyle())
                 }
             }

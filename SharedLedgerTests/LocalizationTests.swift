@@ -77,7 +77,9 @@ final class LocalizationTests: XCTestCase {
     func testTranslationsAreNotCopiedFromTheSourceLanguage() throws {
         // 產品名稱與格式縮寫在兩種語言本來就一樣，其餘一律視為漏翻。
         let sharedByDesign: Set<String> = [
-            LedgerStringKey.settingsRowExportDetail.rawValue
+            LedgerStringKey.settingsRowExportDetail.rawValue,
+            // 「來源 → 目的」只有一個箭頭與兩個參數，兩種語言沒有不同的寫法。
+            LedgerStringKey.transactionRowTransferRoute.rawValue
         ]
         for key in LedgerStringKey.allCases where !sharedByDesign.contains(key.rawValue) {
             let zh = key.string(locale: Locale(identifier: "zh-Hant"))
@@ -117,6 +119,51 @@ final class LocalizationTests: XCTestCase {
             LedgerStringKey.notificationRowSummaryPartial
                 .string(arguments: [Int64(3)], locale: zhHant),
             "已開啟 3 項"
+        )
+    }
+
+    func testTransactionCountsUseEachLanguagesPluralRules() {
+        let english = Locale(identifier: "en")
+        XCTAssertEqual(
+            LedgerStringKey.transactionResultCount.string(arguments: [Int64(1)], locale: english),
+            "1 transaction"
+        )
+        XCTAssertEqual(
+            LedgerStringKey.transactionResultCount.string(arguments: [Int64(4)], locale: english),
+            "4 transactions"
+        )
+
+        let zhHant = Locale(identifier: "zh-Hant")
+        XCTAssertEqual(
+            LedgerStringKey.transactionResultCount.string(arguments: [Int64(4)], locale: zhHant),
+            "4 筆"
+        )
+    }
+
+    func testTwoArgumentFormatsSubstituteBothPositions() {
+        // 兩個參數的字串在中文是「符合 A／B 筆」、在英文是「A of B match」，位置不同。
+        // 位置代換一旦壞掉，這種字串不是顯示錯誤而是直接讀到不存在的參數。
+        for language in Self.requiredLanguages {
+            let text = LedgerStringKey.transactionResultMatchCount.string(
+                arguments: [Int64(3), Int64(12)],
+                locale: Locale(identifier: language)
+            )
+            XCTAssertTrue(text.contains("3"), "\(language)：\(text)")
+            XCTAssertTrue(text.contains("12"), "\(language)：\(text)")
+            XCTAssertFalse(text.contains("%"), "\(language) 還有沒代換掉的參數：\(text)")
+        }
+    }
+
+    func testSplitModeNamesComeFromTheCatalog() {
+        // 分攤方式同時出現在交易表單與 CSV 匯出；匯出固定用正體中文，畫面跟著使用者
+        // 語言，兩邊都必須查得到。
+        XCTAssertEqual(
+            SplitMode.fixedAmount.displayNameKey.string(locale: Locale(identifier: "zh-Hant")),
+            "指定金額"
+        )
+        XCTAssertEqual(
+            SplitMode.fixedAmount.displayNameKey.string(locale: Locale(identifier: "en")),
+            "Fixed amount"
         )
     }
 

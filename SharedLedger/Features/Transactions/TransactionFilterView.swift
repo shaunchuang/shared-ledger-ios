@@ -55,11 +55,11 @@ struct TransactionFilterView: View {
             memberSection
             voidedSection
         }
-        .navigationTitle("篩選交易")
+        .navigationTitle(Text(.transactionFilterTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("重設篩選") {
+                Button {
                     let keyword = query.keyword
                     query = TransactionQuery()
                     // 關鍵字來自搜尋列而不是這個面板，重設篩選不該把使用者正在
@@ -67,29 +67,36 @@ struct TransactionFilterView: View {
                     query.keyword = keyword
                     scope = .currentBook
                     selectedBookIDs = []
+                } label: {
+                    Text(.transactionFilterActionReset)
                 }
                 .disabled(!query.hasActiveFilters && scope == .currentBook)
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("完成") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionDone)
+                }
             }
         }
     }
 
     private var scopeSection: some View {
         Section {
-            Picker("帳本範圍", selection: $scope) {
+            Picker(selection: $scope) {
                 ForEach(ReportBookScope.allCases) { option in
-                    Text(option.displayName).tag(option)
+                    Text(option.displayNameKey).tag(option)
                 }
+            } label: {
+                Text(.transactionFilterFieldBookScope)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel(Text(.transactionFilterFieldBookScope))
 
             if scope == .selectedBookIDs {
                 ForEach(activeBooks, id: \.objectID) { book in
                     if let id = book.id {
                         selectionRow(
-                            title: book.name ?? "未命名帳本",
+                            title: book.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string(),
                             isSelected: selectedBookIDs.contains(id)
                         ) {
                             toggle(id, in: &selectedBookIDs)
@@ -98,59 +105,70 @@ struct TransactionFilterView: View {
                 }
             }
         } header: {
-            Text("搜尋範圍")
+            Text(.transactionFilterSectionScope)
         } footer: {
-            Text(scopeFooter)
+            Text(verbatim: scopeFooter)
         }
     }
 
     private var scopeFooter: String {
         switch scope {
         case .allActiveBooks:
-            return "結果涵蓋這個群組所有使用中的帳本，每一筆都會標示所屬帳本。已封存帳本不納入。"
+            return LedgerStringKey.transactionFilterScopeFooterAllBooks.string()
         case .currentBook:
-            return "只搜尋「\(currentBookName)」的交易。"
+            return LedgerStringKey.transactionFilterScopeFooterCurrentBook.string(
+                arguments: [currentBookName]
+            )
         case .selectedBookIDs:
-            return selectedBookIDs.isEmpty
-                ? "尚未選擇帳本，目前不會有任何結果。"
-                : "結果涵蓋已選的 \(selectedBookIDs.count) 本帳本。"
+            guard !selectedBookIDs.isEmpty else {
+                return LedgerStringKey.transactionFilterScopeFooterNoSelection.string()
+            }
+            return LedgerStringKey.transactionFilterScopeFooterSelected.string(
+                arguments: [Int64(selectedBookIDs.count)]
+            )
         }
     }
 
     private var dateSection: some View {
         Section {
-            Toggle("限定日期範圍", isOn: dateRangeBinding)
+            Toggle(isOn: dateRangeBinding) {
+                Text(.transactionFilterDateToggle)
+            }
             if query.startDate != nil || query.endDate != nil {
                 DatePicker(
-                    "開始日期",
                     selection: dateBinding(for: \.startDate, fallback: defaultStartDate),
                     displayedComponents: .date
-                )
+                ) {
+                    Text(.transactionFilterDateStart)
+                }
                 DatePicker(
-                    "結束日期",
                     selection: dateBinding(for: \.endDate, fallback: Date()),
                     displayedComponents: .date
-                )
+                ) {
+                    Text(.transactionFilterDateEnd)
+                }
                 HStack {
-                    quickRangeButton("本月", months: 0)
-                    quickRangeButton("上個月", months: -1)
-                    Button("近 90 天") {
+                    quickRangeButton(.transactionFilterDateThisMonth, months: 0)
+                    quickRangeButton(.transactionFilterDateLastMonth, months: -1)
+                    Button {
                         let calendar = Calendar.current
                         query.endDate = Date()
                         query.startDate = calendar.date(byAdding: .day, value: -89, to: Date())
+                    } label: {
+                        Text(.transactionFilterDateLast90Days)
                     }
                     .buttonStyle(.borderless)
                 }
                 .font(.footnote.weight(.semibold))
             }
         } header: {
-            Text("日期")
+            Text(.transactionFilterSectionDate)
         } footer: {
             if query.hasInvertedDateRange {
-                Text("開始日期晚於結束日期，目前不會有任何結果。")
+                Text(.transactionFilterDateFooterInverted)
                     .foregroundStyle(LedgerTheme.coral)
             } else {
-                Text("開始與結束當天的交易都會包含在內。")
+                Text(.transactionFilterDateFooterNormal)
             }
         }
     }
@@ -158,30 +176,42 @@ struct TransactionFilterView: View {
     private var amountSection: some View {
         Section {
             HStack {
-                Text("最低金額")
+                Text(.transactionFilterAmountMin)
                 Spacer()
-                TextField("不限", text: $query.minAmountText)
-                    .keyboardType(amountKeyboard)
-                    .multilineTextAlignment(.trailing)
+                TextField(
+                    "",
+                    text: $query.minAmountText,
+                    prompt: Text(.transactionFilterAmountPlaceholder)
+                )
+                .keyboardType(amountKeyboard)
+                .multilineTextAlignment(.trailing)
+                .accessibilityLabel(Text(.transactionFilterAmountMin))
             }
             HStack {
-                Text("最高金額")
+                Text(.transactionFilterAmountMax)
                 Spacer()
-                TextField("不限", text: $query.maxAmountText)
-                    .keyboardType(amountKeyboard)
-                    .multilineTextAlignment(.trailing)
+                TextField(
+                    "",
+                    text: $query.maxAmountText,
+                    prompt: Text(.transactionFilterAmountPlaceholder)
+                )
+                .keyboardType(amountKeyboard)
+                .multilineTextAlignment(.trailing)
+                .accessibilityLabel(Text(.transactionFilterAmountMax))
             }
         } header: {
-            Text("金額（\(currencyCode)）")
+            Text(verbatim: LedgerStringKey.transactionFilterSectionAmount.string(
+                arguments: [currencyCode]
+            ))
         } footer: {
             if query.hasUnparsableAmountInput {
-                Text("金額格式不正確，這個條件目前沒有生效。")
+                Text(.transactionFilterAmountFooterUnparsable)
                     .foregroundStyle(LedgerTheme.coral)
             } else if query.hasInvertedAmountRange {
-                Text("最低金額大於最高金額，目前不會有任何結果。")
+                Text(.transactionFilterAmountFooterInverted)
                     .foregroundStyle(LedgerTheme.coral)
             } else {
-                Text("比對交易金額本身，不是個別成員的分攤金額。")
+                Text(.transactionFilterAmountFooterNormal)
             }
         }
     }
@@ -189,13 +219,14 @@ struct TransactionFilterView: View {
     private var accountSection: some View {
         Section {
             if accounts.isEmpty {
-                Text("這個群組還沒有帳戶。")
+                Text(.transactionFilterAccountEmpty)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(accounts, id: \.objectID) { account in
                     if let id = account.id {
                         selectionRow(
-                            title: account.name ?? "未命名帳戶",
+                            title: account.name
+                                ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string(),
                             isSelected: query.accountIDs.contains(id)
                         ) {
                             toggle(id, in: &query.accountIDs)
@@ -204,15 +235,18 @@ struct TransactionFilterView: View {
                 }
             }
         } header: {
-            Text("帳戶")
+            Text(.transactionFilterSectionAccount)
         } footer: {
-            Text("轉帳只要轉出或轉入其中一邊符合就會列出。")
+            Text(.transactionFilterAccountFooter)
         }
     }
 
     private var categorySection: some View {
         Section {
-            selectionRow(title: "未分類", isSelected: query.includesUncategorized) {
+            selectionRow(
+                title: LedgerStringKey.transactionFilterCategoryUncategorized.string(),
+                isSelected: query.includesUncategorized
+            ) {
                 query.includesUncategorized.toggle()
             }
             ForEach(categoryOptions) { option in
@@ -225,60 +259,70 @@ struct TransactionFilterView: View {
                 }
             }
         } header: {
-            Text("分類")
+            Text(.transactionFilterSectionCategory)
         } footer: {
-            Text("選擇父分類會一併包含它底下的子分類。")
+            Text(.transactionFilterCategoryFooter)
         }
     }
 
     private var memberSection: some View {
         Section {
             if members.isEmpty {
-                Text("這個群組還沒有成員。")
+                Text(.transactionFilterMemberEmpty)
                     .foregroundStyle(.secondary)
             } else {
-                DisclosureGroup("付款人") {
+                DisclosureGroup {
                     ForEach(members, id: \.objectID) { member in
                         if let id = member.id {
                             selectionRow(
-                                title: member.displayName ?? "未命名成員",
+                                title: memberName(member),
                                 isSelected: query.payerMemberIDs.contains(id)
                             ) {
                                 toggle(id, in: &query.payerMemberIDs)
                             }
                         }
                     }
+                } label: {
+                    Text(.transactionFilterMemberPayers)
                 }
-                DisclosureGroup("參與分攤的成員") {
+                DisclosureGroup {
                     ForEach(members, id: \.objectID) { member in
                         if let id = member.id {
                             selectionRow(
-                                title: member.displayName ?? "未命名成員",
+                                title: memberName(member),
                                 isSelected: query.participantMemberIDs.contains(id)
                             ) {
                                 toggle(id, in: &query.participantMemberIDs)
                             }
                         }
                     }
+                } label: {
+                    Text(.transactionFilterMemberParticipants)
                 }
             }
         } header: {
-            Text("成員")
+            Text(.transactionFilterSectionMember)
         } footer: {
-            Text("付款人比對這筆交易的付款明細，參與成員比對分攤明細。")
+            Text(.transactionFilterMemberFooter)
         }
     }
 
     private var voidedSection: some View {
         Section {
-            Toggle("包含已作廢的交易", isOn: $query.includesVoided)
+            Toggle(isOn: $query.includesVoided) {
+                Text(.transactionFilterVoidedToggle)
+            }
         } footer: {
-            Text("作廢交易不列入收支小計，只用來核對歷史紀錄。")
+            Text(.transactionFilterVoidedFooter)
         }
     }
 
-    private func quickRangeButton(_ title: String, months: Int) -> some View {
-        Button(title) {
+    private func memberName(_ member: Member) -> String {
+        member.displayName ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
+    }
+
+    private func quickRangeButton(_ title: LedgerStringKey, months: Int) -> some View {
+        Button {
             let calendar = Calendar.current
             guard let anchor = calendar.date(byAdding: .month, value: months, to: Date()),
                   let interval = calendar.dateInterval(of: .month, for: anchor)
@@ -330,13 +374,15 @@ struct TransactionFilterView: View {
                 if indent > 0 {
                     Spacer().frame(width: CGFloat(indent) * 16)
                 }
-                Text(title)
+                // 這些列的標題都是帳本、帳戶、分類或成員名稱，屬於資料而不是文案。
+                Text(verbatim: title)
                     .foregroundStyle(.primary)
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(LedgerTheme.primary)
+                        .accessibilityHidden(true)
                 }
             }
             .contentShape(Rectangle())
@@ -362,7 +408,8 @@ struct TransactionFilterView: View {
         let children = all
             .filter { $0.parent == category }
             .flatMap { options(for: $0, depth: depth + 1, all: all) }
-        return [CategoryOption(id: id, name: category.name ?? "未命名分類", depth: depth)] + children
+        let name = category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
+        return [CategoryOption(id: id, name: name, depth: depth)] + children
     }
 
     private struct CategoryOption: Identifiable {

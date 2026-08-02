@@ -50,13 +50,14 @@
 
 ## 遷移進度
 
-基礎建設與下列範圍已完成：分頁、設定頁、iCloud 同步、通知（含系統通知內容），以及 `EntryKind`、`AccountType`、`MemberRole`、`ReportBookScope` 這些跨畫面共用的列舉與貨幣顯示名稱。
+基礎建設與下列範圍已完成：分頁、設定頁、iCloud 同步、通知（含系統通知內容）、交易（列表、詳情、新增與編輯、篩選面板），以及 `EntryKind`、`AccountType`、`MemberRole`、`ReportBookScope`、`SplitMode` 這些跨畫面共用的列舉與貨幣顯示名稱。
+
+跨畫面重複出現的文字集中在 `common.*`：取消、儲存、完成、編輯、好、「請稍後再試。」，以及群組／帳本／帳戶／分類／成員的「未命名」佔位字。遷移其他畫面時直接用這些鍵，不要各自再加一份。
 
 尚未進 catalog 的畫面仍保留硬編碼的正體中文字串，依字串數量排序如下（遷移時一併補上該畫面的 VoiceOver 標籤）：
 
 | 範圍 | 主要檔案 |
 | --- | --- |
-| 交易 | `TransactionsView`、`NewTransactionView`、`TransactionFilterView` |
 | 群組與帳本 | `GroupDetailView`、`BooksView`、`GroupsView`、`CreateGroupView`、`CloudSharingView` |
 | 分類 | `CategoriesView`、`NewCategoryView`、`CategoryNode` |
 | 帳戶 | `AccountsView`、`NewAccountView` |
@@ -64,4 +65,17 @@
 | 設定 | `DataExportView`、`DataPrivacyView` |
 | 資料層錯誤訊息 | `GroupRepository`、`CategoryRepository`、`BookRepository`、`EntryRepository`、`AccountRepository`、`SettlementRepository`、`EffectivePermissionRepository`、`PersistenceController`、`LedgerExportService`、`GroupReportService`、`LedgerNotificationCoordinator`、`AllocationCalculator`、`SettlementCalculator`、`CloudParticipantStatus` |
 
-遷移過程中 `LedgerSectionHeader` 暫時同時接受 `LedgerStringKey` 與 `String`；全部遷移完成後要移除 `String` 入口，讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
+遷移過程中 `LedgerSectionHeader` 與 `LedgerEmptyState` 暫時同時接受 `LedgerStringKey` 與 `String`；全部遷移完成後要移除 `String` 入口，讓「顯示文字」與「先有一個鍵」在型別上再次成為同一件事。
+
+`LedgerExportService` 的欄位標題還是硬編碼的正體中文，所以檔案內容固定用 `exportLocale` 查表，不跟著裝置語言跑。任何在畫面與匯出檔都會出現的列舉（`EntryKind`、`AccountType`、`SplitMode`），在匯出這一側都要記得傳 `locale:`；忘了傳的那一欄會在英文裝置上變成中文標題配英文內容。標題進 catalog 的那一次，這些 `locale:` 要一起拿掉。
+
+## VoiceOver
+
+遷移一個畫面時，同一個 PR 補上這個畫面的 VoiceOver 標籤，不另外排一輪：
+
+- **只有圖示的按鈕一定要有 `accessibilityLabel`。** 工具列的加號、篩選、勾選圖示，沒有標籤就只會被唸成「按鈕」。
+- **狀態要進標籤或 `accessibilityValue`。** 「篩選交易」與「篩選交易，已套用 3 個條件」是兩件事；群組與帳本選單用 `accessibilityValue` 帶出目前選的是哪一個。
+- **一列資料合成一個元素。** 交易列、明細列這種「欄位名稱 + 值」的組合用 `.accessibilityElement(children: .combine)`，否則使用者要滑三次才聽得懂一行。列裡還有按鈕時改用 `.contain`，才不會把按鈕吃掉。
+- **裝飾性圖示標 `accessibilityHidden(true)`。** 空狀態的插圖、列尾的 chevron、金額旁的貨幣代碼都屬於這一類。
+- **表單裡沒有可見標籤的輸入框要自己補標籤。** 付款金額、分攤比例這種一列多欄的欄位，標籤要帶上是誰的（「小美 的付款金額」），否則聽起來每一格都一樣。
+- **切換型的按鈕補 `.isSelected` trait 與 `accessibilityHint`。** 有沒有被選中不能只靠顏色或勾勾。
