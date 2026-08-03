@@ -163,6 +163,14 @@ final class EntryRevisionTests: XCTestCase {
 
         var draft = TransactionDraft(entry: entry)
         draft.amountText = "900"
+        // 金額改了，付款明細也要跟著改：付款總額必須等於交易金額，只改一邊會被資料層
+        // 以 `paymentTotalMismatch` 擋下來——那正是 P0-2 要求的行為，不是這裡要測的東西。
+        draft.paymentDrafts = [
+            TransactionPaymentDraft(
+                memberID: try XCTUnwrap(fixture.owner.id),
+                amountText: "900"
+            )
+        ]
         try fixture.update(entry, with: draft)
 
         // 使用者剛送出的這一版就是最新的答案，落選的那一組沒有理由留著。
