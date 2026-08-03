@@ -36,6 +36,20 @@ struct LedgerNotificationStore {
         encode(digest, forKey: Key.digest)
     }
 
+    /// 使用者調整過偏好，或 App 已經記下遞送基準。兩者都是刪除本機個人資料時要交代的東西。
+    var hasStoredData: Bool {
+        defaults.data(forKey: Key.preferences) != nil || defaults.data(forKey: Key.digest) != nil
+    }
+
+    /// 回到「從沒設定過」的狀態：偏好回到預設值，遞送紀錄清空。
+    ///
+    /// 清掉紀錄之後下一輪會重新取基準而不是補送舊事件，這正是刪除資料時該有的行為：
+    /// 使用者要的是不留痕跡，不是清完之後被過去一天的通知洗版。
+    func reset() {
+        defaults.removeObject(forKey: Key.preferences)
+        defaults.removeObject(forKey: Key.digest)
+    }
+
     /// 解不開就當成沒設定過。
     ///
     /// 這兩份資料都是可以重新推導的偏好與紀錄，為了一筆壞掉的 JSON 讓通知整組壞掉

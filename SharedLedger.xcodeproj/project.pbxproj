@@ -14,6 +14,7 @@
 		C0DE0000000000000000008C /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000008D /* LocalizationTests.swift */; };
 		C0DE00000000000000000099 /* EntryRevisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000009A /* EntryRevisionTests.swift */; };
 		C0DE0000000000000000009B /* EntryRevisionModelMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000009C /* EntryRevisionModelMigrationTests.swift */; };
+		C0DE0000000000000000009D /* LocalPersonalDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000009E /* LocalPersonalDataTests.swift */; };
 		C0DE00000000000000000088 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000089 /* Localizable.xcstrings */; };
 		C0DE0000000000000000008A /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000008B /* InfoPlist.xcstrings */; };
 		A11C0A001122334455667788 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A11C0A011122334455667788 /* Assets.xcassets */; };
@@ -90,6 +91,7 @@
 		C0DE0000000000000000008F /* EntryRevision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000090 /* EntryRevision.swift */; };
 		C0DE00000000000000000091 /* LedgerEntry+Revision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000092 /* LedgerEntry+Revision.swift */; };
 		C0DE00000000000000000093 /* EntryConflictScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000094 /* EntryConflictScanner.swift */; };
+		C0DE00000000000000000095 /* LocalPersonalDataRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000096 /* LocalPersonalDataRepository.swift */; };
 		C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */; };
 		C0DE00000000000000000068 /* LedgerNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000069 /* LedgerNotification.swift */; };
 		C0DE0000000000000000006A /* LedgerNotificationPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000006B /* LedgerNotificationPlanner.swift */; };
@@ -118,6 +120,7 @@
 		C0DE0000000000000000008D /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalizationTests.swift"; sourceTree = "<group>"; };
 		C0DE0000000000000000009A /* EntryRevisionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryRevisionTests.swift"; sourceTree = "<group>"; };
 		C0DE0000000000000000009C /* EntryRevisionModelMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryRevisionModelMigrationTests.swift"; sourceTree = "<group>"; };
+		C0DE0000000000000000009E /* LocalPersonalDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalPersonalDataTests.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000089 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		C0DE0000000000000000008B /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		A11C0A011122334455667788 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -205,6 +208,7 @@
 		C0DE00000000000000000090 /* EntryRevision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryRevision.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000092 /* LedgerEntry+Revision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerEntry+Revision.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000094 /* EntryConflictScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryConflictScanner.swift"; sourceTree = "<group>"; };
+		C0DE00000000000000000096 /* LocalPersonalDataRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalPersonalDataRepository.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerSyncStatusTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000069 /* LedgerNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotification.swift; sourceTree = "<group>"; };
 		C0DE0000000000000000006B /* LedgerNotificationPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationPlanner.swift; sourceTree = "<group>"; };
@@ -288,6 +292,7 @@
 				C0DE00000000000000000041 /* ContextChangeObserver.swift */,
 				C0DE00000000000000000092 /* LedgerEntry+Revision.swift */,
 				C0DE00000000000000000094 /* EntryConflictScanner.swift */,
+				C0DE00000000000000000096 /* LocalPersonalDataRepository.swift */,
 				2705E374C03B78BD3A1C470B /* PersistenceController.swift */,
 			);
 			path = Persistence;
@@ -415,6 +420,7 @@
 				C0DE0000000000000000008D /* LocalizationTests.swift */,
 				C0DE0000000000000000009A /* EntryRevisionTests.swift */,
 				C0DE0000000000000000009C /* EntryRevisionModelMigrationTests.swift */,
+				C0DE0000000000000000009E /* LocalPersonalDataTests.swift */,
 				C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */,
 				C0DE00000000000000000075 /* LedgerNotificationTests.swift */,
 				C0DE00000000000000000059 /* CSVWriterTests.swift */,
@@ -552,6 +558,7 @@
 				C0DE0000000000000000008C /* LocalizationTests.swift in Sources */,
 				C0DE00000000000000000099 /* EntryRevisionTests.swift in Sources */,
 				C0DE0000000000000000009B /* EntryRevisionModelMigrationTests.swift in Sources */,
+				C0DE0000000000000000009D /* LocalPersonalDataTests.swift in Sources */,
 				C0DE00000000000000000074 /* LedgerNotificationTests.swift in Sources */,
 				C0DE00000000000000000058 /* CSVWriterTests.swift in Sources */,
 				C0DE0000000000000000005A /* LedgerExportServiceTests.swift in Sources */,
@@ -582,6 +589,7 @@
 				C0DE0000000000000000008F /* EntryRevision.swift in Sources */,
 				C0DE00000000000000000091 /* LedgerEntry+Revision.swift in Sources */,
 				C0DE00000000000000000093 /* EntryConflictScanner.swift in Sources */,
+				C0DE00000000000000000095 /* LocalPersonalDataRepository.swift in Sources */,
 				C0DE00000000000000000068 /* LedgerNotification.swift in Sources */,
 				C0DE0000000000000000006A /* LedgerNotificationPlanner.swift in Sources */,
 				C0DE0000000000000000006C /* LedgerNotificationStore.swift in Sources */,

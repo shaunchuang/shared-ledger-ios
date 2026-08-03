@@ -27,6 +27,9 @@ private struct GroupDeletionRow: Identifiable {
 struct DataPrivacyView: View {
     @Environment(\.managedObjectContext) private var context
 
+    /// 通知偏好被清掉之後要讓 App 層的協調器重新載入，否則設定頁的開關會停在舊值。
+    @EnvironmentObject private var notifications: LedgerNotificationCoordinator
+
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \LedgerGroup.updatedAt, ascending: false)],
         animation: .default
@@ -35,6 +38,8 @@ struct DataPrivacyView: View {
     @State private var rows: [GroupDeletionRow] = []
     @State private var rowPendingDeletion: GroupDeletionRow?
     @State private var errorMessage: String?
+    @State private var localData = LocalPersonalDataSummary.empty
+    @State private var isConfirmingLocalDeletion = false
 
     var body: some View {
         Form {
@@ -54,6 +59,8 @@ struct DataPrivacyView: View {
                     section(for: row)
                 }
             }
+
+            localDataSection
         }
         .navigationTitle(Text(.settingsRowDeleteTitle))
         .navigationBarTitleDisplayMode(.inline)
@@ -92,6 +99,50 @@ struct DataPrivacyView: View {
             }
         } message: {
             Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
+        }
+        .confirmationDialog(
+            Text(.privacyLocalConfirmTitle),
+            isPresented: $isConfirmingLocalDeletion,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive, action: deleteLocalPersonalData) {
+                Text(.privacyLocalConfirmAction)
+            }
+            Button(role: .cancel) {} label: {
+                Text(.commonActionCancel)
+            }
+        } message: {
+            Text(.privacyLocalConfirmMessage)
+        }
+    }
+
+    /// 只存在這台裝置的個人資料。
+    ///
+    /// 和上面的群組刪除擺在同一個畫面，但講的是相反的一件事：群組刪除會影響其他成員，
+    /// 這一段完全不會，所以文案要把「帳務資料不受影響」講清楚，否則使用者不敢按。
+    private var localDataSection: some View {
+        Section {
+            if localData.isEmpty {
+                Text(.privacyLocalEmpty)
+                    .foregroundStyle(.secondary)
+            } else {
+                if localData.identityMappingCount > 0 {
+                    Text(verbatim: LedgerStringKey.privacyLocalSummaryGroups.string(
+                        arguments: [Int64(localData.identityMappingCount)]
+                    ))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+                Button(role: .destructive) {
+                    isConfirmingLocalDeletion = true
+                } label: {
+                    Text(.privacyLocalAction)
+                }
+            }
+        } header: {
+            Text(.privacyLocalSection)
+        } footer: {
+            Text(.privacyLocalDescription)
         }
     }
 
@@ -179,6 +230,16 @@ struct DataPrivacyView: View {
         )
     }
 
+    private func deleteLocalPersonalData() {
+        do {
+            try LocalPersonalDataRepository().deleteAll()
+            notifications.reloadPreferences()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        reloadRows()
+    }
+
     private func reloadRows() {
         let groupRepository = GroupRepository()
         let bookRepository = BookRepository()
@@ -195,6 +256,7 @@ struct DataPrivacyView: View {
                 restriction: groupRepository.deletionRestriction(for: group)
             )
         }
+        localData = LocalPersonalDataRepository().summary()
     }
 
     private func deletePendingGroup() {
@@ -210,9 +272,8 @@ struct DataPrivacyView: View {
 }
 
 #Preview {
+    let persistence = PersistenceController(inMemory: true)
     NavigationStack { DataPrivacyView() }
-        .environment(
-            \.managedObjectContext,
-            PersistenceController(inMemory: true).container.viewContext
-        )
+        .environment(\.managedObjectContext, persistence.container.viewContext)
+        .environmentObject(LedgerNotificationCoordinator(persistence: persistence))
 }

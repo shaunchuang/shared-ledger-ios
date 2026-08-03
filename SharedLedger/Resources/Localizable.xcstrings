@@ -8857,6 +8857,160 @@
         }
       }
     },
+    "privacy.local.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete on-device data"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除本機個人資料"
+          }
+        }
+      }
+    },
+    "privacy.local.confirm.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete on-device data"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除本機資料"
+          }
+        }
+      }
+    },
+    "privacy.local.confirm.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No ledger data is deleted and nobody you share with is affected. You will be asked again which member you are the next time you open a shared group, and notification preferences return to their defaults."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "帳務資料不會被刪除，其他成員也不受影響。下次開啟共享群組時需要重新確認自己是哪一位成員，通知偏好會回到預設值。"
+          }
+        }
+      }
+    },
+    "privacy.local.confirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete on-device data?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除本機個人資料？"
+          }
+        }
+      }
+    },
+    "privacy.local.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This data never leaves this device: which member you are in each shared group, your notification preferences and what has already been delivered, and the iCloud write permission last resolved for each group."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這些資料只存在這台裝置：共享群組裡「我是哪一位成員」的對應、通知偏好與已送出的通知紀錄，以及每個群組最後一次確認到的 iCloud 寫入權限。"
+          }
+        }
+      }
+    },
+    "privacy.local.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is nothing stored on this device to delete."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台裝置目前沒有可刪除的個人資料。"
+          }
+        }
+      }
+    },
+    "privacy.local.section": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device personal data"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機個人資料"
+          }
+        }
+      }
+    },
+    "privacy.local.summary.groups": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld group identity mapping"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld group identity mappings"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 個群組的身分對應"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "privacy.restriction.fallback": {
       "extractionState": "manual",
       "localizations": {
