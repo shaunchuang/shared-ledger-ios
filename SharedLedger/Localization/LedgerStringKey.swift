@@ -665,6 +665,14 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case splitModePercentage = "splitMode.percentage"
 
     // MARK: - iCloud 同步
+    case syncConflictActionCleanup = "sync.conflict.action.cleanup"
+    case syncConflictCleanupFooter = "sync.conflict.cleanup.footer"
+    case syncConflictErrorTitle = "sync.conflict.error.title"
+    case syncConflictFooter = "sync.conflict.footer"
+    case syncConflictReasonMismatched = "sync.conflict.reason.mismatched"
+    case syncConflictReasonMissingDetails = "sync.conflict.reason.missingDetails"
+    case syncConflictReasonSuperseded = "sync.conflict.reason.superseded"
+    case syncConflictSection = "sync.conflict.section"
     case syncErrorNetwork = "sync.error.network"
     case syncErrorNotAuthenticated = "sync.error.notAuthenticated"
     case syncErrorPermission = "sync.error.permission"

@@ -101,7 +101,7 @@ struct EntryRepository {
         entry.id = UUID()
         entry.createdAt = now
         apply(values, to: entry, updatedAt: now)
-        replaceChildren(of: entry, with: values, in: store)
+        stampRevision(of: entry, with: values, in: store)
 
         if let entryID = entry.id {
             insertAudit(
@@ -155,7 +155,7 @@ struct EntryRepository {
         let now = Date()
         let store = persistence.store(for: entry)
         apply(values, to: entry, updatedAt: now)
-        replaceChildren(of: entry, with: values, in: store)
+        stampRevision(of: entry, with: values, in: store)
         insertAudit(
             action: "transaction.updated",
             entryID: entryID,
@@ -285,11 +285,76 @@ struct EntryRepository {
             payment.id = UUID()
             payment.amount = entry.amount ?? NSDecimalNumber.zero
             payment.sortOrder = 0
+            // 補的是這筆交易目前這一版的付款明細，所以跟著交易現在的 revision 走；
+            // 從未被 V9 編輯過的舊資料兩邊都是 `nil`，同樣成立。
+            payment.entryRevisionID = entry.revisionID
             payment.entry = entry
             payment.member = payer
             if SplitMode(rawValue: entry.splitMode ?? "") == nil {
                 entry.splitMode = SplitMode.equal.rawValue
             }
+            hasChanges = true
+        }
+
+        if hasChanges {
+            try context.save()
+        }
+    }
+
+    /// 被取代的明細要靜置多久才清掉。
+    ///
+    /// CloudKit 不保證交易與它的明細照著同一個順序匯入，所以剛同步進來的交易可能
+    /// 短暫地「交易是新的、明細還是舊的」。這段期間刪掉舊明細等於把還在路上的那一版
+    /// 提前處決掉，而且刪除會同步出去，別台裝置也救不回來。交易已經一天沒有變動，
+    /// 就可以確定匯入已經塵埃落定。使用者在 iCloud 同步頁按下清除時不受這個限制，
+    /// 那是他自己選的當下。
+    static let supersededChildRetention: TimeInterval = 24 * 60 * 60
+
+    /// 使用者主動清除單一交易上被取代的明細。
+    func discardSupersededChildren(of entry: LedgerEntry) throws {
+        guard let group = entry.group else { throw EntryError.missingGroup }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireTransactionWrite(in: group)
+
+        let context = persistence.container.viewContext
+        let superseded = entry.supersededPayments.map { $0 as NSManagedObject }
+            + entry.supersededSplits.map { $0 as NSManagedObject }
+        guard !superseded.isEmpty else { return }
+        superseded.forEach(context.delete)
+
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    /// 背景修復：清掉已經穩定下來的交易上那些落選的明細。
+    ///
+    /// - Parameter writableGroupIDs: 與其他修復一致，只處理這台裝置真的寫得進去的
+    ///   群組；刪除同樣會同步出去，對唯讀群組做這件事只會被 CloudKit 擋下來。
+    func discardSupersededChildren(
+        in writableGroupIDs: Set<UUID>,
+        now: Date = Date()
+    ) async throws {
+        guard !writableGroupIDs.isEmpty else { return }
+        let context = persistence.container.viewContext
+        let request = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+        request.predicate = NSPredicate(
+            format: "group.id IN %@ AND updatedAt < %@",
+            Array(writableGroupIDs),
+            now.addingTimeInterval(-Self.supersededChildRetention) as NSDate
+        )
+        request.relationshipKeyPathsForPrefetching = ["payments", "splits"]
+        let entries = try context.fetch(request)
+
+        var hasChanges = false
+        for entry in entries {
+            let superseded = entry.supersededPayments.map { $0 as NSManagedObject }
+                + entry.supersededSplits.map { $0 as NSManagedObject }
+            guard !superseded.isEmpty else { continue }
+            superseded.forEach(context.delete)
             hasChanges = true
         }
 
@@ -434,12 +499,22 @@ struct EntryRepository {
             : nil
     }
 
-    private func replaceChildren(
+    /// 換掉整組付款與分攤明細，並讓它們帶上這一次寫入的識別碼。
+    ///
+    /// 交易金額與明細必須一起成立，所以兩者在同一次寫入裡拿到同一個 `revisionID`：
+    /// 之後不論 CloudKit 選了哪一台裝置的交易 record，讀取端都能只認那台裝置的明細，
+    /// 不會把兩次編輯的付款或分攤加在一起。規則見 `EntryRevision`。
+    private func stampRevision(
         of entry: LedgerEntry,
         with values: ValidatedEntryValues,
         in store: NSPersistentStore
     ) {
         let context = persistence.container.viewContext
+        let revisionID = UUID()
+        entry.revisionID = revisionID
+
+        // 本機看得到的明細全部清掉，包含被其他裝置的編輯取代、還沒清乾淨的那些：
+        // 使用者剛剛送出的這一版就是最新的答案。
         for split in entry.splits as? Set<EntrySplit> ?? [] {
             context.delete(split)
         }
@@ -454,6 +529,7 @@ struct EntryRepository {
             split.id = UUID()
             split.amount = allocation.amount as NSDecimalNumber
             split.inputValue = allocation.inputValue.map { NSDecimalNumber(decimal: $0) }
+            split.entryRevisionID = revisionID
             split.entry = entry
             split.member = values.membersByID[allocation.memberID]
         }
@@ -463,6 +539,7 @@ struct EntryRepository {
             payment.id = UUID()
             payment.amount = input.amount as NSDecimalNumber
             payment.sortOrder = Int32(index)
+            payment.entryRevisionID = revisionID
             payment.entry = entry
             payment.member = values.membersByID[input.memberID]
         }
@@ -484,7 +561,9 @@ struct EntryRepository {
     }
 
     private func snapshot(from entry: LedgerEntry, isVoided: Bool) -> TransactionAuditPayload.Snapshot {
-        let payments = (entry.payments as? Set<EntryPayment> ?? [])
+        // 快照記錄的是「修改前實際生效的內容」，所以和其他讀取端一樣只看目前這一版的
+        // 明細；被別的裝置取代掉的那組不屬於使用者看到、也不屬於他改動的那筆交易。
+        let payments = entry.livePayments
             .compactMap { payment -> TransactionAuditPayload.Snapshot.Payment? in
                 guard let memberID = payment.member?.id else { return nil }
                 return .init(
@@ -493,7 +572,7 @@ struct EntryRepository {
                 )
             }
             .sorted { $0.memberID.uuidString < $1.memberID.uuidString }
-        let splits = (entry.splits as? Set<EntrySplit> ?? [])
+        let splits = entry.liveSplits
             .compactMap { split -> TransactionAuditPayload.Snapshot.Split? in
                 guard let memberID = split.member?.id else { return nil }
                 return .init(

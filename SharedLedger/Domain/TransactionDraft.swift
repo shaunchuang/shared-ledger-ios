@@ -53,7 +53,7 @@ struct TransactionDraft: Equatable, Sendable {
         destinationAccountID = entry.destinationAccount?.id
         splitMode = SplitMode(rawValue: entry.splitMode ?? "") ?? .equal
 
-        let splits = (entry.splits as? Set<EntrySplit> ?? [])
+        let splits = entry.liveSplits
             .compactMap { split -> (UUID, EntrySplit)? in
                 guard let memberID = split.member?.id else { return nil }
                 return (memberID, split)
@@ -65,7 +65,7 @@ struct TransactionDraft: Equatable, Sendable {
             return (memberID, Self.decimalString(input))
         })
 
-        let payments = (entry.payments as? Set<EntryPayment> ?? [])
+        let payments = entry.livePayments
             .sorted { lhs, rhs in
                 if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
                 return (lhs.member?.id?.uuidString ?? "") < (rhs.member?.id?.uuidString ?? "")

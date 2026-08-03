@@ -10764,6 +10764,142 @@
         }
       }
     },
+    "sync.conflict.action.cleanup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove superseded rows"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除被取代的明細"
+          }
+        }
+      }
+    },
+    "sync.conflict.cleanup.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removing only deletes the payment and split rows that no longer count. Amounts, reports and settlement stay exactly as they are. You can also leave it: the app clears them itself once a transaction has been unchanged for a day."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除只會刪掉已經不算數的那一版付款與分攤，金額、報表與結算結果都不會改變。不清除也可以，交易滿一天沒有變動後 App 會自己清掉。"
+          }
+        }
+      }
+    },
+    "sync.conflict.error.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not remove"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法清除"
+          }
+        }
+      }
+    },
+    "sync.conflict.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When the same transaction is edited on two devices at once, the app keeps the version that synced last and lists the affected transactions here."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一筆交易在兩台裝置上被同時編輯時，App 會採用最後同步到的那一版，並把受影響的交易列在這裡。"
+          }
+        }
+      }
+    },
+    "sync.conflict.reason.mismatched": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its payment or split totals do not add up to the transaction amount, so it stays out of settlement until you edit it."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "付款或分攤合計和交易金額對不起來，這筆交易暫時不會計入結算，請重新編輯一次。"
+          }
+        }
+      }
+    },
+    "sync.conflict.reason.missingDetails": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its payment and split rows still have not arrived from iCloud, so it stays out of settlement for now."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "付款與分攤明細遲遲沒有從 iCloud 同步過來，這筆交易暫時不會計入結算。"
+          }
+        }
+      }
+    },
+    "sync.conflict.reason.superseded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This transaction still carries payment and split rows from another version. The amounts and settlement you see already use the current version only."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這筆交易還留著另一版的付款與分攤紀錄。畫面上的金額與結算已經只採用目前這一版。"
+          }
+        }
+      }
+    },
+    "sync.conflict.section": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data conflicts"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "資料衝突"
+          }
+        }
+      }
+    },
     "sync.error.network": {
       "extractionState": "manual",
       "localizations": {

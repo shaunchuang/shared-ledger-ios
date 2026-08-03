@@ -28,6 +28,10 @@ enum ContextChangeObserver {
         /// each entry points at, so renaming any of those changes which entries a
         /// query returns.
         case transactionSearch
+        /// A transaction together with the payment and split rows a conflict is
+        /// derived from. CloudKit imports the three record types separately, so a
+        /// conflict appears and disappears through changes to the children alone.
+        case entryDetails
 
         /// Only the object's type is inspected, never its properties, so invalidated
         /// objects are safe to test here.
@@ -42,6 +46,8 @@ enum ContextChangeObserver {
             case .transactionSearch:
                 return object is LedgerEntry || object is LedgerCategory
                     || object is LedgerAccount || object is Member
+            case .entryDetails:
+                return object is LedgerEntry || object is EntryPayment || object is EntrySplit
             }
         }
     }

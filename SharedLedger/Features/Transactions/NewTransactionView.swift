@@ -72,8 +72,8 @@ struct NewTransactionView: View {
     private var members: [Member] {
         let set = book.group?.members as? Set<Member> ?? []
         let historicalIDs = Set(
-            ((entry?.splits as? Set<EntrySplit>) ?? []).compactMap { $0.member?.id }
-                + ((entry?.payments as? Set<EntryPayment>) ?? []).compactMap { $0.member?.id }
+            (entry?.liveSplits ?? []).compactMap { $0.member?.id }
+                + (entry?.livePayments ?? []).compactMap { $0.member?.id }
         )
         return set
             .filter { member in

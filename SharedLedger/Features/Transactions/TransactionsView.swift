@@ -711,7 +711,11 @@ private struct EntryRow: View {
     }
 }
 
-private struct TransactionDetailView: View {
+/// 一筆交易的完整內容。
+///
+/// 不是 `private`：iCloud 同步頁列出的資料衝突要能直接點進這裡，讓使用者用平常的
+/// 編輯與作廢流程處理，而不是另外做一套只在衝突時出現的修復畫面。
+struct TransactionDetailView: View {
     @ObservedObject var entry: LedgerEntry
 
     @Environment(\.managedObjectContext) private var context
@@ -737,7 +741,7 @@ private struct TransactionDetailView: View {
     }
 
     private var payments: [EntryPayment] {
-        (entry.payments as? Set<EntryPayment> ?? [])
+        entry.livePayments
             .sorted { lhs, rhs in
                 if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
                 return (lhs.member?.displayName ?? "") < (rhs.member?.displayName ?? "")
@@ -745,7 +749,7 @@ private struct TransactionDetailView: View {
     }
 
     private var splits: [EntrySplit] {
-        (entry.splits as? Set<EntrySplit> ?? [])
+        entry.liveSplits
             .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
     }
 

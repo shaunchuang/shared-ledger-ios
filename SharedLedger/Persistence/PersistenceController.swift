@@ -433,6 +433,8 @@ final class PersistenceController {
                         .migrateLegacyBalanceAdjustments(in: writableGroupIDs)
                     try await EntryRepository(persistence: self)
                         .migrateLegacyPayments(in: writableGroupIDs)
+                    try await EntryRepository(persistence: self)
+                        .discardSupersededChildren(in: writableGroupIDs)
                 } catch {
                     assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
                 }
