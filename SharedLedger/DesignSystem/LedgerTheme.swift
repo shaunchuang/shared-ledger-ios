@@ -54,6 +54,13 @@ enum LedgerTheme {
     static let iconBadgeSize: CGFloat = 40
     static let controlMinHeight: CGFloat = 50
 
+    /// 只有圖示的控制項至少要有這麼大的可點範圍。
+    ///
+    /// 這是下限而不是固定值：符號本身會跟著 Dynamic Type 長大，所以套用時一律用
+    /// `minWidth`／`minHeight`，讓範圍只增不減。畫面上原本散落著 32×44、34×34 這種
+    /// 尺寸，34 這一組連 HIG 的最小點擊範圍都不到。
+    static let tapTargetMinimum: CGFloat = 44
+
     /// 純裝飾的尺寸（頭像圓、圖示底板）照字級等比放大，超過某個倍率
     /// 就只是把旁邊的文字擠掉，所以放大倍率設上限。
     ///
