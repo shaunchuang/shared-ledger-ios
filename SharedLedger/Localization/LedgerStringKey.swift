@@ -63,6 +63,12 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case accountTypeCreditCard = "accountType.creditCard"
     case accountTypeOther = "accountType.other"
 
+    // MARK: - 外觀
+    case appearanceFooter = "appearance.footer"
+    case appearanceOptionDark = "appearance.option.dark"
+    case appearanceOptionLight = "appearance.option.light"
+    case appearanceOptionSystem = "appearance.option.system"
+
     // MARK: - 帳本
     case bookActionAdd = "book.action.add"
     case bookActionArchive = "book.action.archive"
@@ -615,7 +621,6 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
 
     // MARK: - 設定
     case settingsProfileSubtitle = "settings.profile.subtitle"
-    case settingsRowAppearanceDetail = "settings.row.appearance.detail"
     case settingsRowAppearanceTitle = "settings.row.appearance.title"
     case settingsRowDeleteDetail = "settings.row.delete.detail"
     case settingsRowDeleteTitle = "settings.row.delete.title"

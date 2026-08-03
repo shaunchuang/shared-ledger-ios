@@ -92,6 +92,7 @@
 		C0DE00000000000000000091 /* LedgerEntry+Revision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000092 /* LedgerEntry+Revision.swift */; };
 		C0DE00000000000000000093 /* EntryConflictScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000094 /* EntryConflictScanner.swift */; };
 		C0DE00000000000000000095 /* LocalPersonalDataRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000096 /* LocalPersonalDataRepository.swift */; };
+		C0DE00000000000000000097 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000098 /* AppearanceSettingsView.swift */; };
 		C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */; };
 		C0DE00000000000000000068 /* LedgerNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000069 /* LedgerNotification.swift */; };
 		C0DE0000000000000000006A /* LedgerNotificationPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000006B /* LedgerNotificationPlanner.swift */; };
@@ -209,6 +210,7 @@
 		C0DE00000000000000000092 /* LedgerEntry+Revision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerEntry+Revision.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000094 /* EntryConflictScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryConflictScanner.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000096 /* LocalPersonalDataRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalPersonalDataRepository.swift"; sourceTree = "<group>"; };
+		C0DE00000000000000000098 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppearanceSettingsView.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerSyncStatusTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000069 /* LedgerNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotification.swift; sourceTree = "<group>"; };
 		C0DE0000000000000000006B /* LedgerNotificationPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationPlanner.swift; sourceTree = "<group>"; };
@@ -362,6 +364,7 @@
 				C0DE00000000000000000073 /* NotificationSettingsView.swift */,
 				C0DE00000000000000000055 /* DataExportView.swift */,
 				C0DE00000000000000000057 /* DataPrivacyView.swift */,
+				C0DE00000000000000000098 /* AppearanceSettingsView.swift */,
 				FA1073B55AF5A68C617E56D9 /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -590,6 +593,7 @@
 				C0DE00000000000000000091 /* LedgerEntry+Revision.swift in Sources */,
 				C0DE00000000000000000093 /* EntryConflictScanner.swift in Sources */,
 				C0DE00000000000000000095 /* LocalPersonalDataRepository.swift in Sources */,
+				C0DE00000000000000000097 /* AppearanceSettingsView.swift in Sources */,
 				C0DE00000000000000000068 /* LedgerNotification.swift in Sources */,
 				C0DE0000000000000000006A /* LedgerNotificationPlanner.swift in Sources */,
 				C0DE0000000000000000006C /* LedgerNotificationStore.swift in Sources */,

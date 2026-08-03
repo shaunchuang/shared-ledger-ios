@@ -12,6 +12,9 @@ struct SettingsView: View {
     /// 通知協調器由 App 層建立並持有：它在背景監看遠端變更，生命週期不能綁在設定頁上。
     @EnvironmentObject private var notifications: LedgerNotificationCoordinator
 
+    /// 設定列上要顯示目前選的是哪一種外觀，所以這裡也讀一次同一份偏好。
+    @AppStorage(LedgerAppearance.storageKey) private var appearance = LedgerAppearance.system
+
     var body: some View {
         ZStack {
             LedgerBackground()
@@ -63,12 +66,17 @@ struct SettingsView: View {
 
                     Divider().padding(.leading, 68)
 
-                    SettingRow(
-                        title: .settingsRowAppearanceTitle,
-                        detail: .settingsRowAppearanceDetail,
-                        icon: "circle.lefthalf.filled",
-                        tint: .purple
-                    )
+                    NavigationLink {
+                        AppearanceSettingsView()
+                    } label: {
+                        SettingRow(
+                            title: .settingsRowAppearanceTitle,
+                            detail: appearance.displayNameKey,
+                            icon: "circle.lefthalf.filled",
+                            tint: .purple
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
