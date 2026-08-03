@@ -298,6 +298,11 @@ struct MemberIdentitySelectionView: View {
 private struct GroupCard: View {
     @ObservedObject var group: LedgerGroup
 
+    /// 圖示底板是純裝飾，跟著字級等比放大但設上限：再大下去只會把旁邊的群組名稱擠掉。
+    @ScaledMetric(relativeTo: .headline) private var typeScale: CGFloat = 1
+
+    private var badgeScale: CGFloat { LedgerTheme.decorativeScale(typeScale) }
+
     private var members: [Member] {
         Array(group.members as? Set<Member> ?? [])
     }
@@ -320,13 +325,13 @@ private struct GroupCard: View {
         LedgerCard {
             HStack(spacing: 15) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: 18 * badgeScale)
                         .fill(LedgerTheme.mint.opacity(0.20))
                     Image(systemName: "person.3.fill")
-                        .font(.system(size: 21, weight: .semibold))
+                        .font(.system(size: 21 * badgeScale, weight: .semibold))
                         .foregroundStyle(LedgerTheme.primary)
                 }
-                .frame(width: 54, height: 54)
+                .frame(width: 54 * badgeScale, height: 54 * badgeScale)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(verbatim: group.name

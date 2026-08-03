@@ -268,30 +268,35 @@ private struct AccountRow: View {
             } label: {
                 HStack(spacing: 14) {
                     LedgerIconBadge(systemImage: type.systemImage)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(verbatim: account.name
-                            ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string())
-                            .font(.subheadline.weight(.semibold))
-                        Text(verbatim: subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    LedgerAdaptiveStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(verbatim: account.name
+                                ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string())
+                                .font(.subheadline.weight(.semibold))
+                            Text(verbatim: subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        HStack(spacing: 6) {
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text(verbatim: ledgerAmount(
+                                    balance,
+                                    currencyCode: account.group?.currencyCode
+                                ))
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(balance < 0 ? LedgerTheme.coral : .primary)
+                                Text(.accountDetailBalanceCurrent)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.tertiary)
+                                .accessibilityHidden(true)
+                        }
                     }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text(verbatim: ledgerAmount(
-                            balance,
-                            currencyCode: account.group?.currencyCode
-                        ))
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(balance < 0 ? LedgerTheme.coral : .primary)
-                        Text(.accountDetailBalanceCurrent)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
@@ -306,7 +311,7 @@ private struct AccountRow: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .frame(width: 32, height: 44)
+                        .ledgerTapTarget()
                 }
                 .accessibilityLabel(Text(.accountMenuAccessibilityLabel))
             }
@@ -328,6 +333,9 @@ private struct AccountDetailView: View {
     @State private var isConfirmingReconciliation = false
     @State private var isConfirmingArchive = false
     @State private var errorMessage: String?
+
+    /// 餘額是這個畫面的主角，字級要跟著使用者走；`.system(size:)` 本身不會。
+    @ScaledMetric(relativeTo: .largeTitle) private var balanceFontSize: CGFloat = 38
 
     init(account: LedgerAccount) {
         self.account = account
@@ -476,7 +484,8 @@ private struct AccountDetailView: View {
                     currentBalance,
                     currencyCode: account.group?.currencyCode
                 ))
-                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .font(.system(size: balanceFontSize, weight: .bold, design: .rounded))
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(currentBalance < 0 ? LedgerTheme.coral : LedgerTheme.primaryStrong)
                 .contentTransition(.numericText())
                 .accessibilityLabel(Text(.accountDetailBalanceCurrent))
@@ -484,10 +493,10 @@ private struct AccountDetailView: View {
                     currentBalance,
                     currencyCode: account.group?.currencyCode
                 )))
-                HStack {
+                LedgerAdaptiveStack(verticalSpacing: 2) {
                     Text(.accountDetailBalanceOpening)
                         .foregroundStyle(.secondary)
-                    Spacer()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Text(verbatim: ledgerAmount(
                         (account.openingBalance as Decimal?) ?? 0,
                         currencyCode: account.group?.currencyCode
@@ -721,20 +730,22 @@ private struct AccountAdjustmentRow: View {
         LedgerCard {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: "slider.horizontal.3", tint: .blue)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(verbatim: title)
-                        .font(.subheadline.weight(.semibold))
-                    Text(verbatim: dateText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                LedgerAdaptiveStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(verbatim: title)
+                            .font(.subheadline.weight(.semibold))
+                        Text(verbatim: dateText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(verbatim: signedLedgerAmount(
+                        amount,
+                        currencyCode: adjustment.account?.group?.currencyCode
+                    ))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(amount < 0 ? LedgerTheme.coral : LedgerTheme.primary)
                 }
-                Spacer()
-                Text(verbatim: signedLedgerAmount(
-                    amount,
-                    currencyCode: adjustment.account?.group?.currencyCode
-                ))
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(amount < 0 ? LedgerTheme.coral : LedgerTheme.primary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -789,20 +800,22 @@ private struct AccountEntryRow: View {
         LedgerCard {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: kind.systemImage, tint: kind.tint)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(verbatim: title)
-                        .font(.subheadline.weight(.semibold))
-                    Text(verbatim: subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                LedgerAdaptiveStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(verbatim: title)
+                            .font(.subheadline.weight(.semibold))
+                        Text(verbatim: subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(verbatim: signedLedgerAmount(
+                        effect,
+                        currencyCode: account.group?.currencyCode
+                    ))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(effect < 0 ? LedgerTheme.coral : LedgerTheme.primary)
                 }
-                Spacer()
-                Text(verbatim: signedLedgerAmount(
-                    effect,
-                    currencyCode: account.group?.currencyCode
-                ))
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(effect < 0 ? LedgerTheme.coral : LedgerTheme.primary)
             }
         }
         .accessibilityElement(children: .combine)

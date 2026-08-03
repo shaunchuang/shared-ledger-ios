@@ -233,7 +233,7 @@ struct BooksView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .frame(width: 36, height: 44)
+                        .ledgerTapTarget()
                 }
                 .accessibilityLabel(Text(.bookMenuAccessibilityLabel))
             }

@@ -458,6 +458,10 @@ private struct GroupCategoryTreeRow: View {
     let onMove: (LedgerCategory, Int) -> Void
     let onArchive: (LedgerCategory) -> Void
 
+    /// 子分類前面那個小圓點是跟著名稱走的層級記號，字放大時它也要放大，
+    /// 否則在大字級下小到看不見。
+    @ScaledMetric(relativeTo: .subheadline) private var depthMarkerScale: CGFloat = 1
+
     private var children: [LedgerCategory] {
         guard let group = category.group else { return [] }
         return CategoryRepository().siblings(of: category, in: group)
@@ -485,7 +489,7 @@ private struct GroupCategoryTreeRow: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "circle.fill")
-                    .font(.system(size: 5))
+                    .font(.system(size: 5 * depthMarkerScale))
                     .foregroundStyle(.tertiary)
                     .opacity(depth > 0 ? 1 : 0)
                     .accessibilityHidden(true)
@@ -540,7 +544,7 @@ private struct GroupCategoryTreeRow: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis")
-                            .frame(width: 36, height: 36)
+                            .ledgerTapTarget()
                     }
                     .accessibilityLabel(Text(verbatim: LedgerStringKey
                         .categoryMenuAccessibilityLabel.string(arguments: [name])))
@@ -812,7 +816,7 @@ private struct BookCategoryToggleRow: View {
                         .disabled(index == orderableSiblings.count - 1)
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
-                            .frame(width: 36, height: 36)
+                            .ledgerTapTarget()
                     }
                     .accessibilityLabel(Text(verbatim: LedgerStringKey
                         .categoryBookReorderAccessibilityLabel.string(arguments: [name])))
