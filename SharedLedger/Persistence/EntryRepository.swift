@@ -358,8 +358,16 @@ struct EntryRepository {
             hasChanges = true
         }
 
-        if hasChanges {
+        guard hasChanges else { return }
+        do {
             try context.save()
+        } catch {
+            // 失敗時一定要把待刪除的狀態退掉。留著的話 view context 會帶著一批
+            // 刪不掉的物件，之後任何一次儲存都會再撞上同一個錯誤。rollback 會連帶
+            // 丟掉 context 裡其他未儲存的變更，但 repository 的每個寫入都在同一次
+            // 呼叫裡 save，正常情況下這裡沒有別人的東西可丟。
+            context.rollback()
+            throw error
         }
     }
 

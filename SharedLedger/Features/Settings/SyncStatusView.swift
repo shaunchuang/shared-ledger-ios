@@ -33,6 +33,10 @@ struct SyncStatusView: View {
     /// 不放進 `body`。
     @State private var conflicts: [EntryConflict] = []
     @State private var errorMessage: String?
+    /// `NavigationStack` 會把推過的畫面留著，離開後變更通知照樣送到這裡。沒有這個
+    /// 旗標，使用者早就回到設定頁了，這個掃描還在背景一輪一輪跑。
+    @State private var isVisible = false
+    @State private var reloadTask: Task<Void, Never>?
 
     var body: some View {
         Form {
@@ -91,7 +95,15 @@ struct SyncStatusView: View {
         }
         .navigationTitle(Text(.syncTitle))
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear(perform: reloadConflicts)
+        .onAppear {
+            isVisible = true
+            reloadConflicts()
+        }
+        .onDisappear {
+            isVisible = false
+            reloadTask?.cancel()
+            reloadTask = nil
+        }
         .onReceive(
             NotificationCenter.default.publisher(
                 for: .NSManagedObjectContextObjectsDidChange,
@@ -101,7 +113,7 @@ struct SyncStatusView: View {
             guard ContextChangeObserver.touches(notification, .entryDetails, .auditLog) else {
                 return
             }
-            reloadConflicts()
+            scheduleConflictReload()
         }
         .alert(Text(.syncConflictErrorTitle), isPresented: errorBinding) {
             Button(role: .cancel) {} label: { Text(.commonActionOK) }
@@ -153,6 +165,18 @@ struct SyncStatusView: View {
         conflicts = EntryConflictScanner().conflicts()
     }
 
+    /// 一次 CloudKit 匯入會連續送出幾十則變更通知，每一則都重掃一次全部的收支交易，
+    /// 而掃描在 main actor 上跑——使用者會直接感覺到畫面卡住。等這一連串通知停下來
+    /// 之後再掃一次就夠了：中間那些狀態沒有人看得到。
+    private func scheduleConflictReload() {
+        reloadTask?.cancel()
+        reloadTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled, isVisible else { return }
+            reloadConflicts()
+        }
+    }
+
     private func cleanUpSupersededRows() {
         let repository = EntryRepository()
         for conflict in conflicts where conflict.isWritable && conflict.supersededRowCount > 0 {
@@ -172,10 +196,10 @@ private struct ConflictRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            LedgerAdaptiveStack(verticalSpacing: 2) {
                 Text(verbatim: title)
                     .font(.subheadline.weight(.medium))
-                Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text(verbatim: amount)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(conflict.affectsBalances ? LedgerTheme.coral : .secondary)
