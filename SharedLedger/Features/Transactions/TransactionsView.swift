@@ -488,6 +488,10 @@ private struct TransactionResultListView: View {
     let writeAccess: TransactionWriteAccess
     let onAddFirst: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// 三欄合計在最大字級改成直排，分隔線也要跟著換方向。
+    @ScaledMetric(relativeTo: .subheadline) private var totalsDividerHeight: CGFloat = 30
+
     private var addAction: (() -> Void)? {
         guard writeAccess.canWrite, !isFiltered else { return nil }
         return onAddFirst
@@ -534,15 +538,18 @@ private struct TransactionResultListView: View {
 
     private var matchTotals: some View {
         LedgerCard {
-            HStack(spacing: 16) {
+            LedgerAdaptiveStack(horizontalSpacing: 16, verticalSpacing: 12) {
                 totalColumn(title: .entryKindIncome, amount: result.income, tint: LedgerTheme.primary)
-                Divider().frame(height: 30)
+                // 直排時分隔線是橫線，撐一個固定高度只會多出一段空白。
+                Divider().frame(height: isStacked ? nil : totalsDividerHeight)
                 totalColumn(title: .entryKindExpense, amount: result.expense, tint: LedgerTheme.coral)
-                Divider().frame(height: 30)
+                Divider().frame(height: isStacked ? nil : totalsDividerHeight)
                 totalColumn(title: .transactionTotalsNet, amount: result.net, tint: .primary)
             }
         }
     }
+
+    private var isStacked: Bool { dynamicTypeSize.isAccessibilitySize }
 
     private func totalColumn(title: LedgerStringKey, amount: Decimal, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -552,7 +559,7 @@ private struct TransactionResultListView: View {
             Text(verbatim: LedgerCurrency.format(amount, currencyCode: currencyCode))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(tint)
-                .lineLimit(1)
+                .lineLimit(isStacked ? 2 : 1)
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -672,36 +679,41 @@ private struct EntryRow: View {
         LedgerCard {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: kind.systemImage, tint: kind.tint)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        // 標題是分類、備註或交易種類，三者都是資料而不是文案。
-                        Text(verbatim: title)
-                            .font(.subheadline.weight(.semibold))
-                            .strikethrough(isVoided)
-                        if isVoided {
-                            Text(.transactionRowVoided)
-                                .font(.caption2.weight(.bold))
+                LedgerAdaptiveStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            // 標題是分類、備註或交易種類，三者都是資料而不是文案。
+                            Text(verbatim: title)
+                                .font(.subheadline.weight(.semibold))
+                                .strikethrough(isVoided)
+                            if isVoided {
+                                Text(.transactionRowVoided)
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(.secondary.opacity(0.15), in: Capsule())
+                            }
+                        }
+                        if !subtitle.isEmpty {
+                            Text(verbatim: subtitle)
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(.secondary.opacity(0.15), in: Capsule())
                         }
                     }
-                    if !subtitle.isEmpty {
-                        Text(verbatim: subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HStack(spacing: 6) {
+                        Text(verbatim: amountText)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(isVoided ? .secondary : amountColor)
+                            .strikethrough(isVoided)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
                     }
                 }
-                Spacer()
-                Text(verbatim: amountText)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(isVoided ? .secondary : amountColor)
-                    .strikethrough(isVoided)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
             }
         }
         .opacity(isVoided ? 0.75 : 1)
@@ -711,7 +723,11 @@ private struct EntryRow: View {
     }
 }
 
-private struct TransactionDetailView: View {
+/// 一筆交易的完整內容。
+///
+/// 不是 `private`：iCloud 同步頁列出的資料衝突要能直接點進這裡，讓使用者用平常的
+/// 編輯與作廢流程處理，而不是另外做一套只在衝突時出現的修復畫面。
+struct TransactionDetailView: View {
     @ObservedObject var entry: LedgerEntry
 
     @Environment(\.managedObjectContext) private var context
@@ -737,7 +753,7 @@ private struct TransactionDetailView: View {
     }
 
     private var payments: [EntryPayment] {
-        (entry.payments as? Set<EntryPayment> ?? [])
+        entry.livePayments
             .sorted { lhs, rhs in
                 if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
                 return (lhs.member?.displayName ?? "") < (rhs.member?.displayName ?? "")
@@ -745,7 +761,7 @@ private struct TransactionDetailView: View {
     }
 
     private var splits: [EntrySplit] {
-        (entry.splits as? Set<EntrySplit> ?? [])
+        entry.liveSplits
             .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
     }
 
@@ -970,10 +986,10 @@ private struct TransactionDetailView: View {
     }
 
     private func detailRow(_ title: Text, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        LedgerAdaptiveStack(horizontalSpacing: 16, verticalSpacing: 2, rowAlignment: .firstTextBaseline) {
             title
                 .foregroundStyle(.secondary)
-            Spacer(minLength: 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(verbatim: value)
                 .multilineTextAlignment(.trailing)
         }

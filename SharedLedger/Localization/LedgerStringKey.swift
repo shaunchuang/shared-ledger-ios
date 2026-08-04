@@ -63,6 +63,12 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case accountTypeCreditCard = "accountType.creditCard"
     case accountTypeOther = "accountType.other"
 
+    // MARK: - 外觀
+    case appearanceFooter = "appearance.footer"
+    case appearanceOptionDark = "appearance.option.dark"
+    case appearanceOptionLight = "appearance.option.light"
+    case appearanceOptionSystem = "appearance.option.system"
+
     // MARK: - 帳本
     case bookActionAdd = "book.action.add"
     case bookActionArchive = "book.action.archive"
@@ -544,6 +550,14 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case privacyFooterLeaveInstead = "privacy.footer.leaveInstead"
     case privacyFooterOwnGroup = "privacy.footer.ownGroup"
     case privacyIntro = "privacy.intro"
+    case privacyLocalAction = "privacy.local.action"
+    case privacyLocalConfirmAction = "privacy.local.confirm.action"
+    case privacyLocalConfirmMessage = "privacy.local.confirm.message"
+    case privacyLocalConfirmTitle = "privacy.local.confirm.title"
+    case privacyLocalDescription = "privacy.local.description"
+    case privacyLocalEmpty = "privacy.local.empty"
+    case privacyLocalSection = "privacy.local.section"
+    case privacyLocalSummaryGroups = "privacy.local.summary.groups"
     case privacyRestrictionFallback = "privacy.restriction.fallback"
     case privacyRowBooks = "privacy.row.books"
     case privacyRowEntries = "privacy.row.entries"
@@ -607,7 +621,6 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
 
     // MARK: - 設定
     case settingsProfileSubtitle = "settings.profile.subtitle"
-    case settingsRowAppearanceDetail = "settings.row.appearance.detail"
     case settingsRowAppearanceTitle = "settings.row.appearance.title"
     case settingsRowDeleteDetail = "settings.row.delete.detail"
     case settingsRowDeleteTitle = "settings.row.delete.title"
@@ -665,6 +678,14 @@ enum LedgerStringKey: String, CaseIterable, Sendable {
     case splitModePercentage = "splitMode.percentage"
 
     // MARK: - iCloud 同步
+    case syncConflictActionCleanup = "sync.conflict.action.cleanup"
+    case syncConflictCleanupFooter = "sync.conflict.cleanup.footer"
+    case syncConflictErrorTitle = "sync.conflict.error.title"
+    case syncConflictFooter = "sync.conflict.footer"
+    case syncConflictReasonMismatched = "sync.conflict.reason.mismatched"
+    case syncConflictReasonMissingDetails = "sync.conflict.reason.missingDetails"
+    case syncConflictReasonSuperseded = "sync.conflict.reason.superseded"
+    case syncConflictSection = "sync.conflict.section"
     case syncErrorNetwork = "sync.error.network"
     case syncErrorNotAuthenticated = "sync.error.notAuthenticated"
     case syncErrorPermission = "sync.error.permission"

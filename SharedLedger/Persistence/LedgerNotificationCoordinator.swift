@@ -46,6 +46,14 @@ final class LedgerNotificationCoordinator: ObservableObject {
         observers.forEach(NotificationCenter.default.removeObserver)
     }
 
+    /// 偏好在別處被清掉之後重新讀一次。
+    ///
+    /// 目前唯一的呼叫端是「刪除本機個人資料」：協調器活在 App 層並把偏好留在記憶體，
+    /// 沒有這一步，設定頁的開關會維持在已經不存在的舊值。
+    func reloadPreferences() {
+        preferences = store.loadPreferences()
+    }
+
     /// 可以重複呼叫；App 每次回到前景都會再叫一次。
     ///
     /// 這裡不會主動詢問通知權限。啟動就跳出授權對話框，等於在使用者還不知道通知有什麼

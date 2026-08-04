@@ -300,9 +300,9 @@ struct SettlementRootView: View {
     }
 
     private func balanceRow(_ balance: MemberBalance) -> some View {
-        HStack {
+        LedgerAdaptiveStack(verticalSpacing: 4) {
             Text(verbatim: memberName(balance.memberID))
-            Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 2) {
                 Text(directionKey(for: balance.amount))
                     .font(.caption)
@@ -338,28 +338,30 @@ struct SettlementRootView: View {
             Image(systemName: "arrow.right.circle.fill")
                 .foregroundStyle(LedgerTheme.primary)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: route(from: transfer.fromMemberID, to: transfer.toMemberID))
-                    .font(.subheadline.weight(.semibold))
-                Text(canRecordSettlements
-                     ? LedgerStringKey.settlementTransferHintTappable
-                     : LedgerStringKey.settlementTransferHintReadOnly)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            LedgerAdaptiveStack(verticalSpacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: route(from: transfer.fromMemberID, to: transfer.toMemberID))
+                        .font(.subheadline.weight(.semibold))
+                    Text(canRecordSettlements
+                         ? LedgerStringKey.settlementTransferHintTappable
+                         : LedgerStringKey.settlementTransferHintReadOnly)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(verbatim: LedgerCurrency.format(transfer.amount, currencyCode: currencyCode))
+                    .font(.subheadline.weight(.bold))
             }
-            Spacer()
-            Text(verbatim: LedgerCurrency.format(transfer.amount, currencyCode: currencyCode))
-                .font(.subheadline.weight(.bold))
         }
         .accessibilityElement(children: .combine)
     }
 
     private func historyRow(_ item: SettlementHistoryItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            LedgerAdaptiveStack(verticalSpacing: 2) {
                 Text(verbatim: route(from: item.fromMemberID, to: item.toMemberID))
                     .font(.subheadline.weight(.semibold))
-                Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text(verbatim: LedgerCurrency.format(item.amount, currencyCode: currencyCode))
                     .font(.subheadline.weight(.bold))
             }
@@ -612,9 +614,9 @@ private struct SettlementRecordSheet: View {
     }
 
     private func detailRow(_ title: LedgerStringKey, value: String) -> some View {
-        HStack {
+        LedgerAdaptiveStack(verticalSpacing: 2) {
             Text(title)
-            Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(verbatim: value)
                 .foregroundStyle(.secondary)
         }

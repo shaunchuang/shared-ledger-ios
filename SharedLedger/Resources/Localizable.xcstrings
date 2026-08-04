@@ -885,6 +885,74 @@
         }
       }
     },
+    "appearance.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appearance applies to this device only. It is not synced to your other devices and does not change what anyone you share with sees."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外觀只套用在這台裝置，不會同步到其他裝置，也不影響其他成員看到的畫面。"
+          }
+        }
+      }
+    },
+    "appearance.option.dark": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深色"
+          }
+        }
+      }
+    },
+    "appearance.option.light": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "淺色"
+          }
+        }
+      }
+    },
+    "appearance.option.system": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match system"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟隨系統"
+          }
+        }
+      }
+    },
     "book.action.add": {
       "extractionState": "manual",
       "localizations": {
@@ -8857,6 +8925,160 @@
         }
       }
     },
+    "privacy.local.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete on-device data"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除本機個人資料"
+          }
+        }
+      }
+    },
+    "privacy.local.confirm.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete on-device data"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除本機資料"
+          }
+        }
+      }
+    },
+    "privacy.local.confirm.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No ledger data is deleted and nobody you share with is affected. You will be asked again which member you are the next time you open a shared group, and notification preferences return to their defaults."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "帳務資料不會被刪除，其他成員也不受影響。下次開啟共享群組時需要重新確認自己是哪一位成員，通知偏好會回到預設值。"
+          }
+        }
+      }
+    },
+    "privacy.local.confirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete on-device data?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除本機個人資料？"
+          }
+        }
+      }
+    },
+    "privacy.local.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This data never leaves this device: which member you are in each shared group, your notification preferences and what has already been delivered, and the iCloud write permission last resolved for each group."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這些資料只存在這台裝置：共享群組裡「我是哪一位成員」的對應、通知偏好與已送出的通知紀錄，以及每個群組最後一次確認到的 iCloud 寫入權限。"
+          }
+        }
+      }
+    },
+    "privacy.local.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is nothing stored on this device to delete."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台裝置目前沒有可刪除的個人資料。"
+          }
+        }
+      }
+    },
+    "privacy.local.section": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device personal data"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機個人資料"
+          }
+        }
+      }
+    },
+    "privacy.local.summary.groups": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld group identity mapping"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld group identity mappings"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld 個群組的身分對應"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "privacy.restriction.fallback": {
       "extractionState": "manual",
       "localizations": {
@@ -9862,23 +10084,6 @@
         }
       }
     },
-    "settings.row.appearance.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Match system"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跟隨系統"
-          }
-        }
-      }
-    },
     "settings.row.appearance.title": {
       "extractionState": "manual",
       "localizations": {
@@ -10760,6 +10965,142 @@
           "stringUnit": {
             "state": "translated",
             "value": "比例"
+          }
+        }
+      }
+    },
+    "sync.conflict.action.cleanup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove superseded rows"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除被取代的明細"
+          }
+        }
+      }
+    },
+    "sync.conflict.cleanup.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removing only deletes the payment and split rows that no longer count. Amounts, reports and settlement stay exactly as they are. You can also leave it: the app clears them itself once a transaction has been unchanged for a day."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除只會刪掉已經不算數的那一版付款與分攤，金額、報表與結算結果都不會改變。不清除也可以，交易滿一天沒有變動後 App 會自己清掉。"
+          }
+        }
+      }
+    },
+    "sync.conflict.error.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not remove"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法清除"
+          }
+        }
+      }
+    },
+    "sync.conflict.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When the same transaction is edited on two devices at once, the app keeps the version that synced last and lists the affected transactions here."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一筆交易在兩台裝置上被同時編輯時，App 會採用最後同步到的那一版，並把受影響的交易列在這裡。"
+          }
+        }
+      }
+    },
+    "sync.conflict.reason.mismatched": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its payment or split totals do not add up to the transaction amount, so it stays out of settlement until you edit it."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "付款或分攤合計和交易金額對不起來，這筆交易暫時不會計入結算，請重新編輯一次。"
+          }
+        }
+      }
+    },
+    "sync.conflict.reason.missingDetails": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its payment and split rows still have not arrived from iCloud, so it stays out of settlement for now."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "付款與分攤明細遲遲沒有從 iCloud 同步過來，這筆交易暫時不會計入結算。"
+          }
+        }
+      }
+    },
+    "sync.conflict.reason.superseded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This transaction still carries payment and split rows from another version. The amounts and settlement you see already use the current version only."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這筆交易還留著另一版的付款與分攤紀錄。畫面上的金額與結算已經只採用目前這一版。"
+          }
+        }
+      }
+    },
+    "sync.conflict.section": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data conflicts"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "資料衝突"
           }
         }
       }

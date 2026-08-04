@@ -248,14 +248,13 @@ struct TransactionSearchService {
     /// 舊資料只有單一 `payer`，V7 之後才有 `payments`。兩邊都看，搜尋才不會因為
     /// 某台裝置還沒跑完遷移就漏掉交易。
     private func payerIDs(of entry: LedgerEntry) -> [UUID] {
-        let payments = entry.payments as? Set<EntryPayment> ?? []
+        let payments = entry.livePayments
         let ids = payments.compactMap { $0.member?.id }
         return ids.isEmpty ? [entry.payer?.id].compactMap { $0 } : ids
     }
 
     private func participantIDs(of entry: LedgerEntry) -> [UUID] {
-        let splits = entry.splits as? Set<EntrySplit> ?? []
-        return splits.compactMap { $0.member?.id }
+        entry.liveSplits.compactMap { $0.member?.id }
     }
 
     private func searchableText(of entry: LedgerEntry) -> String {
@@ -265,13 +264,12 @@ struct TransactionSearchService {
         if let source = entry.sourceAccount?.name { parts.append(source) }
         if let destination = entry.destinationAccount?.name { parts.append(destination) }
 
-        let payments = entry.payments as? Set<EntryPayment> ?? []
+        let payments = entry.livePayments
         parts.append(contentsOf: payments.compactMap { $0.member?.displayName })
         if payments.isEmpty, let payerName = entry.payer?.displayName {
             parts.append(payerName)
         }
-        let splits = entry.splits as? Set<EntrySplit> ?? []
-        parts.append(contentsOf: splits.compactMap { $0.member?.displayName })
+        parts.append(contentsOf: entry.liveSplits.compactMap { $0.member?.displayName })
 
         return TransactionQuery.normalizedForSearch(parts.joined(separator: "\n"))
     }

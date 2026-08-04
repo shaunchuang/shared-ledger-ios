@@ -118,9 +118,25 @@ struct CloudPermissionCache {
         self.defaults = defaults
     }
 
+    private static let keyPrefix = "cloudWritePermission."
+
     private func key(for group: LedgerGroup) -> String? {
         guard let id = group.id else { return nil }
-        return "cloudWritePermission.\(id.uuidString)"
+        return Self.keyPrefix + id.uuidString
+    }
+
+    /// 這台裝置目前記著多少個群組的權限。刪除本機個人資料的畫面要說出數量，
+    /// 不能只說「有一些」。
+    var storedGroupCount: Int {
+        storedKeys.count
+    }
+
+    func clearAll() {
+        storedKeys.forEach(defaults.removeObject(forKey:))
+    }
+
+    private var storedKeys: [String] {
+        defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(Self.keyPrefix) }
     }
 
     func lastKnownWritePermission(for group: LedgerGroup) -> Bool? {

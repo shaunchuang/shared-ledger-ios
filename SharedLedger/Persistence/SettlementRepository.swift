@@ -83,7 +83,7 @@ struct SettlementRepository {
                 continue
             }
 
-            let storedPayments = entry.payments as? Set<EntryPayment> ?? []
+            let storedPayments = entry.livePayments
             var payments = storedPayments.compactMap { payment -> PaymentInput? in
                 guard let memberID = payment.member?.id else { return nil }
                 return PaymentInput(
@@ -104,7 +104,7 @@ struct SettlementRepository {
                 ]
             }
 
-            let storedSplits = entry.splits as? Set<EntrySplit> ?? []
+            let storedSplits = entry.liveSplits
             let splits = storedSplits.compactMap { split -> SettlementShareInput? in
                 guard let memberID = split.member?.id else { return nil }
                 return SettlementShareInput(

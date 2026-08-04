@@ -96,6 +96,66 @@ struct LedgerAvatar: View {
     }
 }
 
+extension View {
+    /// 只有圖示的控制項（列尾的 `ellipsis`、月份切換的箭頭）的最小可點範圍。
+    ///
+    /// 用最小值而不是固定尺寸：符號本身跟著 Dynamic Type 長大，固定 frame 會把放大後的
+    /// 符號切掉。`contentShape` 讓整塊範圍都能點，而不是只有符號實際畫到的那幾個像素。
+    func ledgerTapTarget() -> some View {
+        modifier(LedgerTapTargetModifier())
+    }
+}
+
+private struct LedgerTapTargetModifier: ViewModifier {
+    @ScaledMetric(relativeTo: .body) private var minimum: CGFloat = LedgerTheme.tapTargetMinimum
+
+    func body(content: Content) -> some View {
+        content
+            .frame(minWidth: minimum, minHeight: minimum)
+            .contentShape(Rectangle())
+    }
+}
+
+/// 一排並列的內容，字級進入 accessibility 範圍後改成上下堆疊。
+///
+/// 「名稱在左、金額在右」是這個 App 每個列表的基本長相，而它在最大字級下必然壞掉：
+/// 兩段文字搶同一行的寬度，先被犧牲的通常是金額，使用者會看到「餐飲…」和「NT$1,2…」。
+/// 到了 accessibility 字級改成上下兩行，兩邊都完整，也不需要為此縮小字級。
+///
+/// 呼叫端不要在裡面放 `Spacer()`：橫排時它撐開空間，直排時卻會把兩段內容推到畫面兩端。
+/// 要讓左邊的內容吃掉剩餘寬度，用 `.frame(maxWidth: .infinity, alignment: .leading)`，
+/// 兩種排法下的結果都正確。
+struct LedgerAdaptiveStack<Content: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private let horizontalSpacing: CGFloat
+    private let verticalSpacing: CGFloat
+    private let stackedAlignment: HorizontalAlignment
+    private let rowAlignment: VerticalAlignment
+    private let content: Content
+
+    init(
+        horizontalSpacing: CGFloat = 12,
+        verticalSpacing: CGFloat = 8,
+        stackedAlignment: HorizontalAlignment = .leading,
+        rowAlignment: VerticalAlignment = .center,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.horizontalSpacing = horizontalSpacing
+        self.verticalSpacing = verticalSpacing
+        self.stackedAlignment = stackedAlignment
+        self.rowAlignment = rowAlignment
+        self.content = content()
+    }
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: stackedAlignment, spacing: verticalSpacing))
+            : AnyLayout(HStackLayout(alignment: rowAlignment, spacing: horizontalSpacing))
+        layout { content }
+    }
+}
+
 struct LedgerSectionHeader: View {
     private let title: LedgerStringKey
 

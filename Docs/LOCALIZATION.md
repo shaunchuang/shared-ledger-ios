@@ -68,6 +68,16 @@
 
 `LedgerExportService` 的欄位標題、狀態值與檔名都跟著使用者的語言，`exportLocale` 已經移除：整份檔案要嘛全中文、要嘛全英文，不會出現中文標題配英文內容。代價是同一個群組在不同語言的裝置上匯出的標題不同，未來做 CSV 匯入時不能靠標題文字認欄位，得改用欄位順序或另外寫一行版本標記。日期與金額不受影響：它們固定用 `en_US_POSIX` 與原始數值，匯出檔的意義不隨開檔者的地區設定改變。
 
+## Dynamic Type 與版面
+
+文字放大是在地化的一部分：翻譯讓句子變長，Dynamic Type 讓每個字變大，兩者壓垮版面的方式一模一樣。規則同樣是「遷移一個畫面時一起做」，不另外排一輪。
+
+- **不要用 `.system(size:)` 當字級。** SwiftUI 的固定字級完全不理會 Dynamic Type：畫面上最大的那個數字會在最大字級下和說明文字一樣大。需要特定尺寸時用 `@ScaledMetric(relativeTo:)` 以基準值換算，例如總覽的金額 `@ScaledMetric(relativeTo: .largeTitle) private var heroAmountSize: CGFloat = 42`。
+- **只有圖示的控制項套 `ledgerTapTarget()`。** 它給的是最小值（`LedgerTheme.tapTargetMinimum`）而不是固定尺寸，符號放大時範圍跟著長，也把可點區域補到 44pt。
+- **「名稱在左、金額在右」用 `LedgerAdaptiveStack`。** 到了 accessibility 字級它會改成上下堆疊，兩邊都完整。裡面不要放 `Spacer()`——橫排時它撐開空間，直排時卻會把內容推到畫面兩端；要吃掉剩餘寬度就用 `.frame(maxWidth: .infinity, alignment: .leading)`。
+- **裝飾尺寸用 `LedgerTheme.decorativeScale` 設上限。** 頭像、圖示底板這類東西要跟著字放大，但超過某個倍率就只是把旁邊的文字擠掉。
+- **不要用 `lineLimit(1)` 把金額切掉。** 會換行的文字用 `.fixedSize(horizontal: false, vertical: true)` 讓它長高；真的必須單行時才配 `minimumScaleFactor`。
+
 ## VoiceOver
 
 遷移一個畫面時，同一個 PR 補上這個畫面的 VoiceOver 標籤，不另外排一輪：

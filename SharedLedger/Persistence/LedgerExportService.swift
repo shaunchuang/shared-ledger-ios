@@ -182,7 +182,7 @@ struct LedgerExportService {
     /// 付款人與分攤成員都是一對多，攤平成 `姓名:金額` 並以分號相接。
     /// 同一欄裡不用逗號，是為了讓這一欄在任何試算表裡都維持單一欄位。
     private func paymentDetail(of entry: LedgerEntry) -> String {
-        let payments = (entry.payments as? Set<EntryPayment> ?? [])
+        let payments = entry.livePayments
             .sorted { lhs, rhs in
                 if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
                 return (lhs.member?.displayName ?? "") < (rhs.member?.displayName ?? "")
@@ -198,7 +198,7 @@ struct LedgerExportService {
     }
 
     private func splitDetail(of entry: LedgerEntry) -> String {
-        (entry.splits as? Set<EntrySplit> ?? [])
+        entry.liveSplits
             .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
             .map { detailPair(for: $0.member, amount: ($0.amount as Decimal?) ?? 0) }
             .joined(separator: ";")

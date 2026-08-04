@@ -58,6 +58,13 @@ private struct GroupDashboardView: View {
     @State private var isPresentingBookSelection = false
     @State private var snapshot = GroupReportSnapshot.empty
 
+    /// SwiftUI 的 `.system(size:)` 是固定字級，完全不理會 Dynamic Type：這張卡片
+    /// 最重要的那個數字，原本在最大字級下和旁邊的說明一樣大。`@ScaledMetric` 讓它
+    /// 以 42 為基準跟著使用者的字級走。
+    @ScaledMetric(relativeTo: .largeTitle) private var heroAmountSize: CGFloat = 42
+    /// 選擇器是一個包住文字的按鈕，高度要跟著裡面的字一起長。
+    @ScaledMetric(relativeTo: .subheadline) private var selectorMinHeight: CGFloat = 42
+
     init(
         group: LedgerGroup,
         groups: [LedgerGroup],
@@ -241,7 +248,7 @@ private struct GroupDashboardView: View {
                         shiftMonth(by: -1)
                     } label: {
                         Image(systemName: "chevron.left")
-                            .frame(width: 34, height: 34)
+                            .ledgerTapTarget()
                     }
                     .accessibilityLabel(Text(.reportMonthPreviousAccessibilityLabel))
 
@@ -260,7 +267,7 @@ private struct GroupDashboardView: View {
                         shiftMonth(by: 1)
                     } label: {
                         Image(systemName: "chevron.right")
-                            .frame(width: 34, height: 34)
+                            .ledgerTapTarget()
                     }
                     .accessibilityLabel(Text(.reportMonthNextAccessibilityLabel))
                 }
@@ -337,7 +344,9 @@ private struct GroupDashboardView: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(verbatim: LedgerCurrency.format(snapshot.expense, currencyCode: currencyCode))
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .font(.system(size: heroAmountSize, weight: .bold, design: .rounded))
+                    // 卡片本來就是為這個數字存在的，寬度不夠時讓它換行，不要縮小或截斷。
+                    .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.numericText())
                     .accessibilityLabel(Text(.reportHeroExpense))
                     .accessibilityValue(Text(verbatim: LedgerCurrency.format(
@@ -352,7 +361,7 @@ private struct GroupDashboardView: View {
                 .foregroundStyle(.white.opacity(0.74))
             }
 
-            HStack(spacing: 8) {
+            LedgerAdaptiveStack(horizontalSpacing: 8, verticalSpacing: 8) {
                 statCapsule(
                     title: .reportStatEntries,
                     value: LedgerStringKey.reportStatEntriesValue.string(
@@ -397,7 +406,8 @@ private struct GroupDashboardView: View {
     }
 
     private var metricGrid: some View {
-        HStack(spacing: 12) {
+        // 三張並排的卡片在最大字級只剩下每張三個字的寬度，改成一張一列。
+        LedgerAdaptiveStack(horizontalSpacing: 12, verticalSpacing: 12, rowAlignment: .top) {
             NavigationLink {
                 ReportSourceListView(
                     title: .reportMetricIncome,
@@ -440,21 +450,23 @@ private struct GroupDashboardView: View {
         LedgerCard(padding: 18) {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: "building.columns.fill", tint: LedgerTheme.primary)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(.reportAccountBalanceTitle)
-                        .font(.subheadline.weight(.semibold))
-                    Text(.reportAccountBalanceDetail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                LedgerAdaptiveStack(horizontalSpacing: 12, verticalSpacing: 4) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(.reportAccountBalanceTitle)
+                            .font(.subheadline.weight(.semibold))
+                        Text(.reportAccountBalanceDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(verbatim: LedgerCurrency.format(
+                        snapshot.accountBalance,
+                        currencyCode: currencyCode
+                    ))
+                    .font(.headline.monospacedDigit())
+                    .multilineTextAlignment(.trailing)
                 }
-                Spacer(minLength: 12)
-                Text(verbatim: LedgerCurrency.format(
-                    snapshot.accountBalance,
-                    currencyCode: currencyCode
-                ))
-                .font(.headline.monospacedDigit())
-                .multilineTextAlignment(.trailing)
             }
             .accessibilityElement(children: .combine)
         }
@@ -503,41 +515,46 @@ private struct GroupDashboardView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 LedgerIconBadge(systemImage: "book.closed.fill")
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(verbatim: book.name)
-                                        .font(.subheadline.weight(.semibold))
-                                    Text(verbatim: LedgerStringKey.reportBookAmounts.string(
-                                        arguments: [
-                                            LedgerCurrency.format(
-                                                book.income,
-                                                currencyCode: currencyCode
-                                            ),
-                                            LedgerCurrency.format(
-                                                book.expense,
-                                                currencyCode: currencyCode
-                                            )
-                                        ]
-                                    ))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    Text(verbatim: LedgerStringKey.reportCategoryShare.string(
-                                        arguments: [ReportShare.formatted(book.expenseShare)]
-                                    ))
-                                    .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(.tertiary)
+                                LedgerAdaptiveStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(verbatim: book.name)
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(verbatim: LedgerStringKey.reportBookAmounts.string(
+                                            arguments: [
+                                                LedgerCurrency.format(
+                                                    book.income,
+                                                    currencyCode: currencyCode
+                                                ),
+                                                LedgerCurrency.format(
+                                                    book.expense,
+                                                    currencyCode: currencyCode
+                                                )
+                                            ]
+                                        ))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        Text(verbatim: LedgerStringKey.reportCategoryShare.string(
+                                            arguments: [ReportShare.formatted(book.expenseShare)]
+                                        ))
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.tertiary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                    HStack(spacing: 6) {
+                                        Text(verbatim: LedgerCurrency.format(
+                                            book.net,
+                                            currencyCode: currencyCode,
+                                            showPositiveSign: true
+                                        ))
+                                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(.tertiary)
+                                            .accessibilityHidden(true)
+                                    }
                                 }
-                                Spacer()
-                                Text(verbatim: LedgerCurrency.format(
-                                    book.net,
-                                    currencyCode: currencyCode,
-                                    showPositiveSign: true
-                                ))
-                                .font(.subheadline.weight(.semibold).monospacedDigit())
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.tertiary)
-                                    .accessibilityHidden(true)
                             }
                             .padding(16)
                             .accessibilityElement(children: .combine)
@@ -644,19 +661,21 @@ private struct GroupDashboardView: View {
         let fraction = min(1, max(0, NSDecimalNumber(decimal: category.expenseShare).doubleValue))
 
         return VStack(alignment: .leading, spacing: 9) {
-            HStack {
+            LedgerAdaptiveStack(verticalSpacing: 4) {
                 Text(verbatim: category.name)
                     .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(verbatim: LedgerCurrency.format(
-                    category.expense,
-                    currencyCode: currencyCode
-                ))
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 6) {
+                    Text(verbatim: LedgerCurrency.format(
+                        category.expense,
+                        currencyCode: currencyCode
+                    ))
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
             }
             ProgressView(value: fraction)
                 .tint(LedgerTheme.primary)
@@ -718,7 +737,7 @@ private struct GroupDashboardView: View {
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(LedgerTheme.primary)
         .padding(.horizontal, 12)
-        .frame(minHeight: 42)
+        .frame(minHeight: selectorMinHeight)
         .background(LedgerTheme.mint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
     }
 
@@ -779,11 +798,11 @@ private struct MetricTile: View {
                     Text(verbatim: value)
                         .font(.title3.weight(.bold).monospacedDigit())
                         .minimumScaleFactor(0.75)
-                        .lineLimit(1)
+                        .lineLimit(2)
                     Text(detail)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -801,28 +820,32 @@ private struct ReportSourceRow: View {
                 systemImage: entry.kind == .income ? "arrow.down.left" : "arrow.up.right",
                 tint: entry.kind == .income ? LedgerTheme.primary : LedgerTheme.coral
             )
-            VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: entry.note.isEmpty ? entry.categoryName : entry.note)
-                    .font(.subheadline.weight(.semibold))
-                Text(verbatim: LedgerStringKey.reportSourceRowSubtitle.string(
-                    arguments: [entry.bookName, LedgerFormatters.day(entry.date)]
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            LedgerAdaptiveStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: entry.note.isEmpty ? entry.categoryName : entry.note)
+                        .font(.subheadline.weight(.semibold))
+                    Text(verbatim: LedgerStringKey.reportSourceRowSubtitle.string(
+                        arguments: [entry.bookName, LedgerFormatters.day(entry.date)]
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 6) {
+                    Text(verbatim: LedgerCurrency.formatSigned(
+                        entry.amount,
+                        kind: entry.kind,
+                        currencyCode: currencyCode
+                    ))
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(entry.kind == .income ? LedgerTheme.primary : LedgerTheme.coral)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
             }
-            Spacer()
-            Text(verbatim: LedgerCurrency.formatSigned(
-                entry.amount,
-                kind: entry.kind,
-                currencyCode: currencyCode
-            ))
-            .font(.subheadline.weight(.bold).monospacedDigit())
-            .foregroundStyle(entry.kind == .income ? LedgerTheme.primary : LedgerTheme.coral)
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
         }
         .accessibilityElement(children: .combine)
     }
