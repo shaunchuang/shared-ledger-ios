@@ -11,8 +11,9 @@ import Network
 /// 沒有 iCloud 帳號、沒有網路的測試機器上驗證所有狀態組合。
 @MainActor
 final class SyncStatusMonitor: ObservableObject {
-    /// `@Sendable`：`init` 是 `nonisolated`，傳進來的 closure 必須能跨到 main actor
-    /// 才存得進 main actor 隔離的 stored property。
+    /// `@Sendable`：`init` 是 `nonisolated`，可以在任何 executor 上執行，而它要把傳進來的
+    /// closure 存進 main actor 隔離的 stored property。非 Sendable 的函式值屬於呼叫端的
+    /// isolation region，編譯器不會讓它跨過這道邊界；標成 `@Sendable` 才存得進去。
     typealias AccountStatusProvider = @Sendable () async -> CKAccountStatus?
 
     @Published private(set) var state: LedgerSyncState = .undetermined

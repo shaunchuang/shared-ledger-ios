@@ -102,14 +102,17 @@ final class PersistenceController {
 
     /// 只在 `-initialize-cloudkit-schema` 這個開發者維護模式下呼叫。
     ///
-    /// 先確認 iCloud 帳號可用再寫入 schema，並且不論成功或失敗都只輸出說明、不中斷執行：
-    /// 這條路徑沒有使用者要保護，把 App 停在 `assertionFailure` 只會讓「還沒登入 iCloud」
-    /// 這種環境問題看起來像程式崩潰。寫入是否真的完成，仍要照 `Docs/ARCHITECTURE.md`
-    /// 的步驟到 CloudKit Console 確認後才能部署到 Production。
-    private static func initializeCloudKitSchemaIfPossible(on container: NSPersistentCloudKitContainer) {
+    /// 先確認 iCloud 帳號可用再寫入 schema，並且不論成功或失敗都只輸出說明、不停在
+    /// `assertionFailure`：這條路徑沒有使用者要保護，把 App 停在斷言只會讓「還沒登入
+    /// iCloud」這種環境問題看起來像程式崩潰。寫入是否真的完成，仍要照
+    /// `Docs/ARCHITECTURE.md` 的步驟到 CloudKit Console 確認後才能部署到 Production。
+    /// - Returns: schema 是否真的寫入了。
+    private static func initializeCloudKitSchemaIfPossible(
+        on container: NSPersistentCloudKitContainer
+    ) -> Bool {
         if case let .blocked(reason) = schemaInitializationReadiness(for: currentAccountStatus()) {
             report(schema: "已略過 CloudKit schema 初始化。\n\(reason)")
-            return
+            return false
         }
 
         do {
@@ -121,6 +124,7 @@ final class PersistenceController {
                 完成後請移除 -initialize-cloudkit-schema 啟動參數再正常執行 App。
                 """
             )
+            return true
         } catch {
             report(
                 schema: """
@@ -128,6 +132,7 @@ final class PersistenceController {
                 \(error)
                 """
             )
+            return false
         }
     }
 
@@ -145,7 +150,14 @@ final class PersistenceController {
     ///   而畫面上的資料狀態並不代表正常執行的樣子。
     ///
     /// 所以這裡直接結束行程，讓開發者照主控台指示移除啟動參數後再正常執行。
-    private static func endSchemaInitializationRun() -> Never {
+    ///
+    /// exit code 就代表「schema 有沒有寫進去」：略過與失敗都是沒寫進去，回 `EXIT_SUCCESS`
+    /// 會讓包著這一步的腳本以為可以往下部署了。
+    private static func endSchemaInitializationRun(schemaWritten: Bool) -> Never {
+        guard schemaWritten else {
+            report(schema: "維護模式執行結束：schema 未寫入，請依上方說明處理後重跑一次。")
+            exit(EXIT_FAILURE)
+        }
         report(
             schema: "維護模式執行結束（此模式只載入 private store，不適合繼續操作 App）。"
         )
@@ -284,11 +296,11 @@ final class PersistenceController {
             // schema」這個相依關係留在程式碼裡，而不是依賴預設值。
             storeLoadGroup.wait()
             sharedStore = privateStore
-            Self.initializeCloudKitSchemaIfPossible(on: container)
+            let schemaWritten = Self.initializeCloudKitSchemaIfPossible(on: container)
             // 測試行程不會帶這個啟動參數，但真的帶了也不該被結束掉：那會讓整份測試
             // 報告變成沒有結果，而不是一個看得懂的失敗。
             if !Self.isRunningTests {
-                Self.endSchemaInitializationRun()
+                Self.endSchemaInitializationRun(schemaWritten: schemaWritten)
             }
         }
 
