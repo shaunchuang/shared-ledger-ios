@@ -1,5 +1,6 @@
-import CoreData
 import CloudKit
+import CoreData
+import Foundation
 
 final class PersistenceController {
     /// The app target hosts the unit tests, so this is also constructed when the
@@ -123,11 +124,32 @@ final class PersistenceController {
         } catch {
             report(
                 schema: """
-                CloudKit schema 初始化失敗，App 會繼續以未更新的 schema 執行。
+                CloudKit schema 初始化失敗。
                 \(error)
                 """
             )
         }
+    }
+
+    /// 結束 `-initialize-cloudkit-schema` 這次維護執行。
+    ///
+    /// 這個模式不是「App 的另一種啟動方式」，而是一次性的維護動作，跑完就該停：
+    ///
+    /// - 只載入了 private store，`sharedStore` 是指向 private store 的替身。任何把
+    ///   物件 assign 到 shared store 的路徑（接受共享邀請、共享群組的寫入）在這個
+    ///   狀態下都會寫錯 store。
+    /// - `initializeCloudKitSchema` 會建立再刪掉一輪 dummy record，mirroring delegate
+    ///   因此收到 `UserPurgedZone` 並重置同步狀態，接著把整個本機 store 重新匯出一次。
+    ///   繼續留在前景只是讓這次重置的匯出活動一直排程（主控台上就是那串
+    ///   `com.apple.coredata.cloudkit.activity.export` 的 BGSystemTaskScheduler 錯誤），
+    ///   而畫面上的資料狀態並不代表正常執行的樣子。
+    ///
+    /// 所以這裡直接結束行程，讓開發者照主控台指示移除啟動參數後再正常執行。
+    private static func endSchemaInitializationRun() -> Never {
+        report(
+            schema: "維護模式執行結束（此模式只載入 private store，不適合繼續操作 App）。"
+        )
+        exit(EXIT_SUCCESS)
     }
 
     /// 同步取得 iCloud 帳號狀態。這是啟動時的一次性維護檢查，`initializeCloudKitSchema`
@@ -263,6 +285,11 @@ final class PersistenceController {
             storeLoadGroup.wait()
             sharedStore = privateStore
             Self.initializeCloudKitSchemaIfPossible(on: container)
+            // 測試行程不會帶這個啟動參數，但真的帶了也不該被結束掉：那會讓整份測試
+            // 報告變成沒有結果，而不是一個看得懂的失敗。
+            if !Self.isRunningTests {
+                Self.endSchemaInitializationRun()
+            }
         }
 
         container.viewContext.automaticallyMergesChangesFromParent = true
