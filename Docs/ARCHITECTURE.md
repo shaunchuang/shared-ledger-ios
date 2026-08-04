@@ -177,7 +177,9 @@ CloudKit 的 Production 環境不允許在執行期新增 record type 或欄位�
 每次修改 `SharedLedger.xcdatamodeld` 後，發佈前必須：
 
 1. 先確認要執行的裝置或模擬器已登入 Apple 帳號並開啟 iCloud：`initializeCloudKitSchema(options:)` 需要 mirroring delegate 初始化成功，沒有帳號時 delegate 會以 `CKAccountStatusNoAccount` 失敗，schema 一個字都寫不進去。
-2. 以 Debug 組態加上啟動參數 `-initialize-cloudkit-schema` 執行 App（Scheme → Run → Arguments Passed On Launch），`PersistenceController` 會先檢查 iCloud 帳號狀態，可用才呼叫 `initializeCloudKitSchema(options:)` 把目前模型寫入 Development schema。此模式只載入 private store（`initializeCloudKitSchema` 不支援 `.shared` scope），完成後移除該參數再正常執行。結果（已寫入、已略過或失敗原因）會以 `[CloudKit schema]` 前綴輸出到主控台；帳號不可用時只會略過並印出說明，不會讓 App 停在 assertion。
+2. 以 Debug 組態加上啟動參數 `-initialize-cloudkit-schema` 執行 App（Scheme → Run → Arguments Passed On Launch），`PersistenceController` 會先檢查 iCloud 帳號狀態，可用才呼叫 `initializeCloudKitSchema(options:)` 把目前模型寫入 Development schema。此模式只載入 private store（`initializeCloudKitSchema` 不支援 `.shared` scope），因此 App 會在印完結果後**自行結束**，不會進入畫面；請移除該參數再正常執行。結果（已寫入、已略過或失敗原因）會以 `[CloudKit schema]` 前綴輸出到主控台；帳號不可用時只會略過並印出說明，不會讓 App 停在 assertion。
+
+  維護模式跑完會看到 `com.apple.coredata.cloudkit.activity.export.<UUID>` 的 `BGSystemTaskSchedulerErrorDomain Code=3` 錯誤，以及 `NSCloudKitMirroringDelegate ... reason: 'UserPurgedZone'`。前者是 `NSPersistentCloudKitContainer` 用系統私有排程器安排匯出活動時印的，那個 identifier 不由 App 註冊，模擬器上必定失敗，屬於無害噪音；後者是 `initializeCloudKitSchema` 建立再清掉 dummy record 的正常結果，mirroring delegate 會重置同步狀態並在下次正常執行時重新匯出本機資料。兩者都不需要（也無法）在 App 端修正。
 3. 到 [CloudKit Console](https://icloud.developer.apple.com/) → 容器 `iCloud.com.shaunchuang.SharedLedger` → Development 環境確認 `CD_<Entity>` record types 齊全，再執行「Deploy Schema Changes…」部署到 Production。
 4. 部署完成後再送 TestFlight／App Store 建置版本。
 

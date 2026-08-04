@@ -8,7 +8,11 @@ struct CategoryRepository {
     ///
     /// 沒有這個值的話，assignment 建立當下的順序就會被永久釘住，之後在群組分類管理
     /// 調整的順序永遠不會出現在交易的分類選單裡。
-    static let followsGroupOrder: Int32 = -1
+    ///
+    /// `nonisolated`：這是不可變的常數，背景 context 的 `perform` closure（例如
+    /// `repairLegacyCategoryAssignments(in:)`）也要拿它寫 `sortOrder`，不該為了讀一個
+    /// 數字被迫跳回 main actor。
+    nonisolated static let followsGroupOrder: Int32 = -1
 
     private let persistence: PersistenceController
 
