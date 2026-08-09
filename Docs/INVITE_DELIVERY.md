@@ -119,6 +119,82 @@ C 是現況的明顯缺口（目前沒有「複製連結」，owner 只能用系
 B 才是問題的正解；A 用來救「雜湊對不上」的情境（受邀者用的 Apple Account email 跟
 owner 輸入的不同）。
 
+## 該不該加登入帳號？——不建議
+
+既然 App 認不出目前的 Apple Account，直覺的下一步是「那就加登入吧」。**不要。**
+
+### 登入解決不了這個問題
+
+Sign in with Apple 給的是一組穩定的 app 內使用者 ID，但 **owner 邀請時手上只有對方的
+email／電話**，不是對方的 SIWA ID。更麻煩的是 SIWA 允許使用者隱藏真實信箱，換來一個
+`@privaterelay.appleid.com` 位址——owner 永遠不會去輸入那串位址。
+
+所以加了登入，owner 一樣算不出收件人 key，一樣得靠「使用者自行登記聯絡方式」的目錄來
+對應。**而那個目錄不需要登入也能做。** 登入沒有帶來任何額外能力。
+
+### 登入會製造一個會分岔的第二身分
+
+資料層是 CloudKit：能不能讀寫某個群組，完全由 Apple Account 對應的 CKShare
+participant 決定（`EffectivePermissionRepository` 就是在做這件事）。App 帳號管不到這件事。
+
+加上 app 帳號之後，「使用者用 Apple Account X 接受了 share，卻用 app 帳號 Y 登入」是
+完全合法的組合。此時權限還是看 X，Y 只會製造錯誤的期待，以及一整類新的 mismatch。
+這個專案已經為了單一身分的錯配寫了 `SharingError.participantIdentityMismatch` 與
+`EffectivePermission.participantMismatch` 的防線；再引入第二套身分，等於自願把這個
+問題面積放大一倍。
+
+### App Store 審查規則不站在登入這邊
+
+[App Review Guideline 5.1.1(v) Account Sign-In](https://developer.apple.com/app-store/review/guidelines/) 明文：
+
+> If your app doesn't include significant account-based features, let people use it
+> without a login. … Apps may not require users to enter personal information to
+> function, except when directly relevant to the core functionality of the app or
+> required by law. … **inviting friends to use the app are not considered core app
+> functionality.**
+
+記帳這件事本身完全不需要帳號，而「邀請朋友」被同一條規則明確排除在核心功能之外。強制
+登入有被退件的風險，就算過了也只是白白增加首次啟動的摩擦。同一條還規定：一旦支援建立
+帳號，就**必須在 App 內提供刪除帳號**。
+
+### 也牴觸本專案已經寫下的原則
+
+- `ARCHITECTURE.md`：「沒有 iCloud 帳號時仍允許本機記帳」——目前 App 沒有任何硬性
+  前置條件就能用，這是刻意的。
+- `ARCHITECTURE.md`「聯絡人與隱私」：「新增第三方分析、crash reporting、廣告、**帳號**
+  或後端服務前，必須重新稽核資料流、隱私政策與 App Privacy 申報。」
+
+### 什麼情況才該重新考慮
+
+- 要支援 Android／Web（脫離 Apple 生態系）
+- 要自建後端取代 CloudKit
+- 出現真正跨 Apple Account 的商業需求
+
+這三件事都不在目前路線上。
+
+### 該做的是「聯絡方式登記」，那不是登入
+
+方案 B 需要的東西比登入小得多：一個 **opt-in 的設定項**，使用者輸入 email／電話，App
+只把加鹽雜湊寫進 public DB。
+
+- 完全選擇性，不登記也不影響任何既有功能
+- 沒有密碼、沒有 session、沒有 token，不構成「帳號」，因此沒有 5.1.1(v) 的刪除帳號義務
+  （但仍要提供「取消登記」，並併入現有的「刪除本機個人資料」流程）
+- 目的是「讓別人找得到我」的目錄，不是「證明我是誰」的驗證
+
+**要誠實面對的弱點**：這個登記沒有驗證，任何人都可以登記別人的 email，於是收到本來要給
+別人的邀請卡片。要不要為此做驗證碼？我的判斷是**不做**：
+
+- 它不會洩漏帳務資料。`publicPermission` 維持 `.none`，冒名者就算拿到 share URL 也
+  無法接受——真正的授權關卡是 CKShare 本身，不是這個目錄。
+- 它洩漏的是「有人邀請了這個 email」這件事，而 public DB 裡只存雜湊、不存原文，攻擊者
+  必須先知道那個 email 才能查。
+- 做驗證碼需要能寄信的後端，那才是真的把這個 App 變成有後端的 App——為了一個 CKShare
+  已經擋住的風險付這個代價不划算。
+
+代價是真正的收件人可能收不到卡片。緩解方式：保留系統分享連結這條路（方案 C），任何時候
+都能繞過目錄直接送 URL。
+
 ## 方案 B 的落地設計（對應本專案）
 
 ### 資料
