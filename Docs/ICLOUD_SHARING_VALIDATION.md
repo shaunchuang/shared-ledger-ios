@@ -23,6 +23,24 @@
 
 預期：App Member 與 CKShare participant 為一對一；同一 participant 不得認領第二個 Member。
 
+執行第 3 步時順便記下：系統分享表單實際列出哪些管道（有沒有 LINE 這類第三方 App、有沒有
+「拷貝連結」）。這決定「複製邀請連結」還有多少價值，也是 [邀請投遞設計](INVITE_DELIVERY.md)
+下一步的判斷依據。
+
+## A2. 複製邀請連結
+
+1. A 在群組詳情按「複製邀請連結」，確認出現「已複製邀請連結」。
+2. 把連結貼到任一通訊軟體傳給 B（走系統分享表單以外的管道）。
+3. B 點該連結，能完成與 A 段第 4～7 步相同的加入流程。
+4. A 在「從未建立過共享」的新群組上按「複製邀請連結」：應建立 share 並複製到可用連結，
+   而不是複製到空值或報錯。
+5. 重複按「複製邀請連結」與「邀請／管理 iCloud 共享」數次，確認 CloudKit Dashboard 上
+   該群組只有一份 share。
+6. 未登入 iCloud 時按下：應顯示可讀的錯誤，而不是靜默失敗。
+7. 把連結轉傳給**未受邀**的第三個 Apple Account，確認對方無法加入。
+
+預期：連結可用、同一群組只有一份 share、`publicPermission` 維持 `.none`。
+
 ## B. 可編輯 participant
 
 1. B 新增一筆交易。
@@ -103,6 +121,7 @@ App 權限只能比 CloudKit 權限更嚴格，不能讓 CloudKit read-only part
 - 自動 CI build-for-testing 與 unsigned archive 通過。
 - V7 → V8 migration 測試通過。
 - owner + read/write participant + read-only participant 的實機流程通過。
+- 複製邀請連結送出的邀請能被接受，且同一群組仍只有一份 share。
 - owner 停止共享不刪除本機資料。
 - participant 退出只移除自己的 shared graph。
 - App role 與 CloudKit effective permission 的所有寫入入口都有一致的本機拒絕規則。

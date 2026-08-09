@@ -46,8 +46,8 @@ CloudKit sharing 行為不可靠）。要回答的是三個問題：
 
 ### 第 2 步：依第 1 步的結果決定
 
-- **若流程是通的，只是連結不好送** → 做方案 C（在 owner 端補「複製邀請連結」，
-  必要時加 `ShareLink`）。半天到一天，零架構風險。這很可能就解掉八成的實際痛點。
+- **若流程是通的，只是連結不好送** → 方案 C 的「複製邀請連結」**已實作**（群組詳情，
+  見下方「方案 C」一節）。驗收時順便確認它在實機上真的複製到可用的連結。
 - **若流程有 bug** → 先修，這比任何新功能優先。
 - **若第 1 步的第 2 題答案是「分享表單已經有 LINE 和拷貝連結」** → 方案 C 的價值大幅下降，
   真正的缺口才確定是「受邀者端看不到」，此時再評估方案 B。
@@ -141,14 +141,27 @@ Owner 端把邀請寫成 public DB 的一筆 `GroupInvitation`，收件人欄位
 - 優點：真正做到「對方 App 端看得到邀請」，而且接受動作完全走官方 API。
 - 缺點：需要多一個 public DB record type、一套識別碼登記流程與清理機制。
 
-### 方案 C：只優化現況（不改架構）
+### 方案 C：只優化現況（不改架構）——**已實作**
 
-用 SwiftUI `ShareLink` + `CKShareTransferRepresentation` 取代／並存
-`UICloudSharingController`，並在 owner 端補上「複製邀請連結」按鈕，讓 owner 能用任何
-管道（LINE、WhatsApp）貼給對方。
+在 owner 端補上「複製邀請連結」，讓 owner 能用任何管道（LINE、WhatsApp）貼給對方。
 
 - 優點：幾乎沒有風險，一天內可完成。
 - 缺點：受邀者 App 端還是空的。
+
+已落地的部分：
+
+- `GroupDetailView` 的共享區塊在「邀請／管理 iCloud 共享」下方多一個「複製邀請連結」。
+- `GroupsView.copyInviteLink(_:)` 走同一個 `PersistenceController.prepareShare(for:)`，
+  因此重用既有 share，不會為同一個群組建立第二份；取得 `CKShare.url` 後放進
+  `UIPasteboard.general.url`。
+- `CKShare.url` 只在 share 存到伺服器後才有值。取不到時顯示
+  `group.error.share.linkUnavailable`，明講連結尚未就緒，而不是複製空值假裝成功。
+- 複製成功的確認訊息同時說明「只有你邀請的人能加入，連結被轉傳也無法加入」——這句話
+  成立的前提是 `availablePermissions` 不含 `.allowPublic`。
+
+尚未做、也刻意不做的：SwiftUI `ShareLink` + `CKShareTransferRepresentation`。
+`UICloudSharingController` 目前已經負責建立與管理 participant，再加一條並行的分享路徑
+只會多一個要維護的狀態機。等第 1 步驗收確認系統分享表單的實際內容之後再判斷。
 
 ### 建議
 

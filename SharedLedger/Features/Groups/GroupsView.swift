@@ -1,5 +1,6 @@
 import CoreData
 import SwiftUI
+import UIKit
 
 struct GroupsView: View {
     @FetchRequest(
@@ -13,6 +14,7 @@ struct GroupsView: View {
     @State private var sharePayload: CloudSharePayload?
     @State private var sharingError: String?
     @State private var isPreparingShare = false
+    @State private var didCopyInviteLink = false
     /// Groups this device has been removed from. Deciding that per group runs a fetch
     /// against the private `LocalMemberIdentity` store, so it is resolved when the
     /// groups or their members change instead of on every `body` pass.
@@ -33,7 +35,11 @@ struct GroupsView: View {
                         groupSummary
                         ForEach(visibleGroups, id: \.objectID) { group in
                             NavigationLink {
-                                GroupDetailView(group: group, onInvite: prepareShare)
+                                GroupDetailView(
+                                    group: group,
+                                    onInvite: prepareShare,
+                                    onCopyInviteLink: copyInviteLink
+                                )
                             } label: {
                                 GroupCard(group: group)
                             }
@@ -85,6 +91,13 @@ struct GroupsView: View {
         } message: {
             // CloudKit 的錯誤說明由系統提供，只有預設訊息是自己的文案。
             Text(verbatim: sharingError ?? LedgerStringKey.groupErrorShareMessage.string())
+        }
+        .alert(Text(.groupCopyInviteLinkConfirmTitle), isPresented: $didCopyInviteLink) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
+        } message: {
+            Text(.groupCopyInviteLinkConfirmMessage)
         }
     }
 
@@ -164,6 +177,37 @@ struct GroupsView: View {
                     group: group,
                     title: group.name ?? LedgerStringKey.groupShareDefaultTitle.string()
                 )
+            } catch {
+                sharingError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Puts the share's invitation URL on the pasteboard so the owner can send it
+    /// through a messenger the system share sheet does not list.
+    ///
+    /// This goes through `prepareShare` like the sharing controller does, because a
+    /// group that has never been shared has no URL to copy: `CKShare.url` is only
+    /// populated once the share exists on the server. Reusing that path also keeps the
+    /// "one share per group" rule — it returns the existing share when there is one.
+    @MainActor
+    private func copyInviteLink(_ group: LedgerGroup) {
+        guard !isPreparingShare else { return }
+        isPreparingShare = true
+
+        Task { @MainActor in
+            defer { isPreparingShare = false }
+
+            do {
+                let (share, _) = try await PersistenceController.shared.prepareShare(for: group)
+                guard let url = share.url else {
+                    // The share exists locally but CloudKit has not handed back a URL
+                    // yet. Saying so beats copying nothing and looking like it worked.
+                    sharingError = LedgerStringKey.groupErrorShareLinkUnavailable.string()
+                    return
+                }
+                UIPasteboard.general.url = url
+                didCopyInviteLink = true
             } catch {
                 sharingError = error.localizedDescription
             }
