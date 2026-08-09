@@ -20,6 +20,44 @@ share」這種查詢；所有接受路徑（包含 iOS 26 新增的 API）都以
 App**，再由 App 端自行呈現「待接受邀請」清單並完成接受。CloudKit 端的接受動作依然
 走官方 API，不需要任何 hack。
 
+## 建議的執行順序：先別做收件匣
+
+這份文件後面設計了完整的方案 B，但**現在不該從方案 B 開始**。
+
+`Docs/MVP.md` 寫得很清楚：MVP 最大的缺口是「**雙帳號端到端驗收從未執行**」，而「群組與
+邀請」這一列的狀態是「大致完成，待雙帳號驗收」。也就是說——**現有的邀請流程從來沒有用
+兩個真實 Apple Account 跑過。**
+
+「對方看不到邀請」可能根本不是「CloudKit 沒有收件匣」造成的，而是現有流程本身有問題。
+在確認之前做方案 B 沒有意義：方案 B 最後還是呼叫同一個
+`PersistenceController.acceptShare(metadata:)`，現有流程若是壞的，方案 B 一樣不會動。
+
+### 第 1 步：跑雙帳號驗收（先做這個）
+
+照 [`Docs/ICLOUD_SHARING_VALIDATION.md`](ICLOUD_SHARING_VALIDATION.md) 的 A 段
+「建立與接受分享」走一遍，兩個 Apple Account、兩台裝置（或一台實機 + 一台實機；模擬器的
+CloudKit sharing 行為不可靠）。要回答的是三個問題：
+
+1. B 點了連結之後，`SceneDelegate.windowScene(_:userDidAcceptCloudKitShareWith:)` 有沒有
+   真的被呼叫？群組有沒有出現在 B 的 shared store？
+2. `UICloudSharingController` 的邀請畫面上，**有沒有列出 LINE／WhatsApp 這類第三方 App，
+   以及「拷貝連結」**？這一題決定第 2 步還值不值得做。
+3. B 接受後，`MemberIdentitySelectionView` 的身分確認流程是否如預期出現並可完成？
+
+### 第 2 步：依第 1 步的結果決定
+
+- **若流程是通的，只是連結不好送** → 做方案 C（在 owner 端補「複製邀請連結」，
+  必要時加 `ShareLink`）。半天到一天，零架構風險。這很可能就解掉八成的實際痛點。
+- **若流程有 bug** → 先修，這比任何新功能優先。
+- **若第 1 步的第 2 題答案是「分享表單已經有 LINE 和拷貝連結」** → 方案 C 的價值大幅下降，
+  真正的缺口才確定是「受邀者端看不到」，此時再評估方案 B。
+
+### 第 3 步：方案 B 要帶著真實回饋再決定
+
+方案 B 不是小工程：新的 public database record type、聯絡方式登記流程與設定 UI、查詢／
+推播／清理、schema 部署到 Production、以及 App Privacy 申報重審（這會是本 App 第一次使用
+public database）。在第 1、2 步之後，帶著真實使用回饋再判斷這個成本值不值得。
+
 ## 官方文件依據
 
 | 事實 | 出處 |
