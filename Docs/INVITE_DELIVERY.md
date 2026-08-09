@@ -49,6 +49,41 @@ App**，再由 App 端自行呈現「待接受邀請」清單並完成接受。C
 
 結論不變：**URL 一定要靠我們自己送。**
 
+## 現況盤點：App 目前認不出「這是哪個 Apple Account」
+
+這是方案 B 的前置條件，先講清楚。目前程式碼裡**沒有任何 container 層級的使用者識別**，
+只有三層各自受限的資訊：
+
+| 層級 | 程式位置 | 知道什麼 | 不知道什麼 |
+| --- | --- | --- | --- |
+| `CKAccountStatus` | `PersistenceController.swift:172`、`accountStatus(for:)`、`SyncStatusMonitor` | 有沒有登入 iCloud（`.available` / `.noAccount` / `.restricted`） | 是**誰** |
+| `share.currentUserParticipant.participantID` → `Member.cloudParticipantID` | `PersistenceController.bindCurrentParticipantIfAvailable`、`GroupRepository.bindCurrentCloudParticipant`、`EffectivePermissionRepository` | 這台裝置在**這個 share 裡**是哪個 participant | 跨 share／跨群組是不是同一人 |
+| `LocalMemberIdentity`（private store） | `CurrentMemberIdentityRepository`、`RootTabView.swift:78`、`GroupsView.swift:278` | 使用者**自己選**的群組成員身分 | 這個選擇對不對——App 沒有驗證能力 |
+
+兩個必須記住的限制：
+
+- `CKShare.Participant.ID` 的官方宣告就是 [`typealias ID = String`](https://developer.apple.com/documentation/cloudkit/ckshare/participant/id)，
+  文件**沒有任何跨 share 穩定性的保證**。`GroupRepository.swift` 已經註明
+  「`cloudParticipantID` is share-local」，這個保守假設要維持，不可以拿它當使用者 ID。
+- 受邀者接受 share 後，App 是用 `MemberIdentitySelectionView` **請使用者自己指認**
+  「我是哪一位成員」（`claimCurrentMember`）。也就是說目前的身分是「使用者宣告的」，
+  不是系統認證的。
+
+未使用的 API 與為什麼不能直接套用在方案 B：
+
+- `CKContainer.userRecordID()`：每個 container、每個 Apple Account 穩定的不透明 ID，
+  是最接近「使用者 ID」的東西。但 **owner 在對方接受前拿不到對方的值**——owner 是用
+  email／電話邀請的，[`CKFetchShareParticipantsOperation`](https://developer.apple.com/documentation/cloudkit/ckfetchshareparticipantsoperation)
+  的文件只保證「participant 會在**接受 share 時**才跟 iCloud 帳號關聯」。收件人 key
+  必須在邀請當下就算得出來，所以這條路走不通。
+- `CKUserIdentity` 系列（姓名／email）：discoverability 已不可倚賴，而且 iOS 26 的
+  [extended share access entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.icloud-extended-share-access)
+  明文規定這類資訊「may not store」。不能拿來當我們資料庫的 key。
+
+**結論：方案 B 必須自己收識別碼。** 下面「受邀者端流程」第 1 步的「使用者在設定頁登記
+email／電話」不是可選項，而是方案 B 的前置工作，目前 App 沒有這個流程。方案 A（邀請碼）
+完全不需要身分，這正是它作為備援的價值。
+
 ## 三個可行方案
 
 ### 方案 A：App 內邀請碼（低成本）
