@@ -168,6 +168,8 @@ MVP 的 CloudKit share 邊界是整個 `LedgerGroup`：加入群組即能同步�
 
 App 必須呈現未登入 iCloud、暫時不可用、同步中、同步成功、離線及同步失敗等狀態。沒有 iCloud 帳號時仍允許本機記帳，但停用共享邀請並說明原因。邀請畫面維持 private、read-write CloudKit Sharing；已存在的群組 share 必須重用，不可為同一個 root group 建立第二份 share。分享控制器的儲存與同步錯誤必須顯示給使用者，不可只在 Release 中停用的 assertion 回報。
 
+除了系統分享控制器，群組詳情另外提供「複製邀請連結」，把 `CKShare.url` 放進剪貼簿，讓擁有者能用系統分享表單沒有列出的通訊軟體把連結送出去。它走的是同一個 `prepareShare(for:)`，因此一樣重用既有 share，不會為同一個群組建立第二份。`CKShare.url` 只有在 share 存到伺服器之後才有值，取不到時必須明講連結尚未就緒，不可以複製空值再假裝成功。這個做法安全的前提是 `availablePermissions` 不含 `.allowPublic`，`publicPermission` 因此維持 `.none`：連結被轉傳出去，未受邀者也無法加入。要放寬公開權限之前，必須先重新檢視這個入口。
+
 Debug／Release 產生的 Info.plist 都必須包含 `CKSharingSupported = YES`，讓系統能把邀請連結交回 App。TestFlight 與 App Store 使用 CloudKit Production environment；每次 model version 新增 record type 或欄位後，必須先在 Development 驗證，再將 schema 部署到 Production。
 
 ### CloudKit schema 部署

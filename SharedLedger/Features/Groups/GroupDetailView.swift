@@ -56,6 +56,11 @@ struct GroupDetailView: View {
 
     @ObservedObject var group: LedgerGroup
     let onInvite: (LedgerGroup) -> Void
+    /// Copying the link is a separate affordance from the system sharing controller
+    /// because that controller only offers the channels iOS knows about. The people
+    /// this app is shared with are reached through whatever messenger they already
+    /// use, and pasting a link is the one route that works for all of them.
+    let onCopyInviteLink: (LedgerGroup) -> Void
 
     @AppStorage private var selectedBookID: String
     @State private var errorMessage: String?
@@ -66,9 +71,14 @@ struct GroupDetailView: View {
     /// so it is resolved when that data changes rather than on every `body` pass.
     @State private var totalAccountBalance: Decimal = 0
 
-    init(group: LedgerGroup, onInvite: @escaping (LedgerGroup) -> Void) {
+    init(
+        group: LedgerGroup,
+        onInvite: @escaping (LedgerGroup) -> Void,
+        onCopyInviteLink: @escaping (LedgerGroup) -> Void
+    ) {
         self.group = group
         self.onInvite = onInvite
+        self.onCopyInviteLink = onCopyInviteLink
         _selectedBookID = AppStorage(
             wrappedValue: "",
             BookSelectionStorage.key(for: group)
@@ -419,6 +429,14 @@ struct GroupDetailView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(LedgerPrimaryButtonStyle())
+
+                Button {
+                    onCopyInviteLink(group)
+                } label: {
+                    Label(.groupDetailActionCopyInviteLink, systemImage: "link")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
 
                 Text(.groupDetailShareFooter)
                     .font(.caption)

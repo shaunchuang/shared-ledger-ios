@@ -6095,6 +6095,40 @@
         }
       }
     },
+    "group.copyInviteLink.confirm.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste it into any messaging app to send it. Only the people you invite can join — forwarding the link to someone else does not let them in."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "貼到任何通訊軟體傳給對方即可。只有你邀請的人能加入，連結被轉傳給其他人也無法加入。"
+          }
+        }
+      }
+    },
+    "group.copyInviteLink.confirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitation link copied"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已複製邀請連結"
+          }
+        }
+      }
+    },
     "group.create.action.addContacts": {
       "extractionState": "manual",
       "localizations": {
@@ -6346,6 +6380,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "建立群組"
+          }
+        }
+      }
+    },
+    "group.detail.action.copyInviteLink": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy invitation link"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製邀請連結"
           }
         }
       }
@@ -6772,6 +6823,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "建立第一個群組"
+          }
+        }
+      }
+    },
+    "group.error.share.linkUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The invitation link is not ready yet. Set up sharing with “Invite and manage iCloud sharing” first, then try again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邀請連結還沒準備好。請先用「邀請／管理 iCloud 共享」建立共享，稍候再試一次。"
           }
         }
       }
