@@ -55,7 +55,7 @@ struct AccountRepository {
         let audit = AuditEvent(context: context)
         audit.id = UUID()
         audit.action = "account.archived"
-        audit.actorDisplayName = currentActorName(in: group)
+        audit.recordActor(currentActor(in: group))
         audit.createdAt = now
         audit.summary = "封存帳戶「\(account.name ?? "未命名帳戶")」，歷史交易與餘額調整保持不變"
         audit.group = group
@@ -169,11 +169,10 @@ struct AccountRepository {
             : trimmedNote
         adjustment.account = account
 
-        let actorName = currentActorName(in: group)
         let audit = AuditEvent(context: context)
         audit.id = UUID()
         audit.action = "account.balance.adjusted"
-        audit.actorDisplayName = actorName
+        audit.recordActor(currentActor(in: group))
         audit.createdAt = now
         let oldBalance = LedgerCurrency.format(currentBalance, currencyCode: currencyCode)
         let newBalance = LedgerCurrency.format(targetBalance, currencyCode: currencyCode)
@@ -204,7 +203,7 @@ struct AccountRepository {
         let audit = AuditEvent(context: context)
         audit.id = UUID()
         audit.action = "account.reconciled"
-        audit.actorDisplayName = currentActorName(in: group)
+        audit.recordActor(currentActor(in: group))
         audit.createdAt = date
         let formattedBalance = LedgerCurrency.format(
             balance,
@@ -293,11 +292,8 @@ struct AccountRepository {
         }
     }
 
-    private func currentActorName(in group: LedgerGroup) -> String {
-        CurrentMemberIdentityRepository(persistence: persistence)
-            .currentMember(in: group)?
-            .displayName
-            ?? LedgerStringKey.defaultMemberCurrentUser.string()
+    private func currentActor(in group: LedgerGroup) -> Member? {
+        CurrentMemberIdentityRepository(persistence: persistence).currentMember(in: group)
     }
 
     enum AccountError: LocalizedError {

@@ -64,7 +64,7 @@ struct GroupRepository {
 
         insertAudit(
             action: "group.created",
-            actorDisplayName: draft.trimmedOwnerDisplayName,
+            actor: owner,
             summary: "建立群組「\(draft.trimmedName)」",
             in: group,
             at: now
@@ -96,7 +96,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "group.renamed",
-            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
+            actor: actor,
             summary: "將群組「\(previousName)」重新命名為「\(trimmedName)」",
             in: group,
             at: now
@@ -122,7 +122,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.invitation.resent",
-            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
+            actor: actor,
             summary: "重新邀請成員「\(member.displayName ?? "未命名成員")」",
             in: group,
             at: now
@@ -144,7 +144,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.invitation.revoked",
-            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
+            actor: actor,
             summary: "撤回成員「\(member.displayName ?? "未命名成員")」的 App 邀請狀態",
             in: group,
             at: now
@@ -168,7 +168,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.removed",
-            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
+            actor: actor,
             summary: "將成員「\(member.displayName ?? "未命名成員")」移出群組；歷史帳務關聯保留",
             in: group,
             at: now
@@ -208,7 +208,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "group.ownership.transferred",
-            actorDisplayName: previousOwnerName,
+            actor: actor,
             summary: "將群組擁有權移轉給「\(member.displayName ?? "未命名成員")」；"
                 + "「\(previousOwnerName)」改為管理員。iCloud 共享仍由原共享擁有者管理",
             in: group,
@@ -285,7 +285,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.left",
-            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
+            actor: actor,
             summary: "成員「\(actor.displayName ?? "未命名成員")」退出群組；歷史帳務關聯保留",
             in: group,
             at: now
@@ -636,16 +636,22 @@ struct GroupRepository {
     private func insertIdentityAudit(for member: Member, in group: LedgerGroup, at date: Date) {
         insertAudit(
             action: "member.identity.confirmed",
-            actorDisplayName: member.displayName ?? LedgerStringKey.defaultMemberSharedMember.string(),
+            actor: member,
+            actorFallbackName: LedgerStringKey.defaultMemberSharedMember.string(),
             summary: "確認群組成員身分「\(member.displayName ?? LedgerStringKey.defaultMemberSharedMember.string())」並對應 iCloud 共享參與者",
             in: group,
             at: date
         )
     }
 
+    /// - Parameter actor: 做這件事的成員。這裡刻意不問「目前使用者是誰」：擁有權移轉
+    ///   記的是移轉前的擁有者，身分確認記的是剛認領的那位成員，兩者都在寫入的當下就
+    ///   已經不是（或還不是）`CurrentMemberIdentityRepository` 會回答的那一位。
     private func insertAudit(
         action: String,
-        actorDisplayName: String,
+        actor: Member?,
+        actorFallbackName: @autoclosure () -> String
+            = LedgerStringKey.defaultMemberCurrentUser.string(),
         summary: String,
         in group: LedgerGroup,
         at date: Date
@@ -655,7 +661,7 @@ struct GroupRepository {
         context.assign(audit, to: persistence.store(for: group))
         audit.id = UUID()
         audit.action = action
-        audit.actorDisplayName = actorDisplayName
+        audit.recordActor(actor, fallbackName: actorFallbackName())
         audit.createdAt = date
         audit.summary = summary
         audit.group = group

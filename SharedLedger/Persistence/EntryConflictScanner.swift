@@ -63,9 +63,7 @@ struct EntryConflictScanner {
         guard let entries = try? context.fetch(request) else { return [] }
 
         let settled = now.addingTimeInterval(-EntryRepository.supersededChildRetention)
-        let entryRepository = EntryRepository(persistence: persistence)
         let permissions = EffectivePermissionRepository(persistence: persistence)
-        var voidedIDsByGroup: [NSManagedObjectID: Set<UUID>] = [:]
         var writableByGroup: [NSManagedObjectID: Bool] = [:]
         var conflicts: [EntryConflict] = []
 
@@ -73,14 +71,9 @@ struct EntryConflictScanner {
             guard conflicts.count < limit else { break }
             guard let group = entry.group else { continue }
 
-            if voidedIDsByGroup[group.objectID] == nil {
-                voidedIDsByGroup[group.objectID] = entryRepository.voidedEntryIDs(in: group)
-            }
-            let voidedIDs = voidedIDsByGroup[group.objectID] ?? []
-            let isVoided = entry.id.map { voidedIDs.contains($0) } ?? false
             guard let reason = reason(
                 for: entry,
-                isVoided: isVoided,
+                isVoided: entry.voidedAt != nil,
                 settledBefore: settled
             ) else { continue }
 

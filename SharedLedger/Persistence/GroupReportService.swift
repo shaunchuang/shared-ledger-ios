@@ -29,12 +29,12 @@ struct GroupReportService {
         )
 
         let includedObjectIDs = Set(includedBooks.map(\.objectID))
-        let voidedEntryIDs = EntryRepository(persistence: persistence).voidedEntryIDs(in: group)
         let entries = (group.entries as? Set<LedgerEntry> ?? [])
             .filter { entry in
                 // DateInterval.contains 含右端點，會讓剛好落在下個月 1 日 00:00:00
                 // 的交易同時被算進兩個月，所以這裡自行做左閉右開判斷。
-                guard let book = entry.book,
+                guard entry.voidedAt == nil,
+                      let book = entry.book,
                       includedObjectIDs.contains(book.objectID),
                       let date = entry.date,
                       date >= interval.start, date < interval.end,
@@ -42,9 +42,6 @@ struct GroupReportService {
                       kind == .income || kind == .expense
                 else { return false }
 
-                if let entryID = entry.id, voidedEntryIDs.contains(entryID) {
-                    return false
-                }
                 return true
             }
             .sorted { lhs, rhs in

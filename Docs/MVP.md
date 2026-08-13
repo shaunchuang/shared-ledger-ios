@@ -46,10 +46,14 @@ MVP 剩下的工作已經不是「再寫幾個功能」。P0 的 1～12 項在�
 
 ### P0：資料模型的正確性風險
 
-1. **`AuditEvent.summary` 一個欄位承載兩種格式。** 交易事件往裡面塞 `TransactionAuditPayload`（`EntryRepository.swift:4`）encode 出來的 JSON，含 before／after 的完整付款與分攤快照；群組、帳本、分類事件塞的卻是組好的中文句子（`GroupRepository.swift:68`、`CategoryRepository.swift:307`、`BookRepository.swift:163` 等四十餘處）。更關鍵的是**交易的作廢狀態沒有欄位**，而是靠掃描稽核事件再解析字串推導（`EntryRepository.swift:240` 的 `voidedEntryIDs(in:)`），報表、結算、搜尋與餘額全部走這條路。要做的是：給 `LedgerEntry` 加 `voidedAt`，讓作廢變成可以下 predicate 的欄位並由既有稽核資料回填一次；`AuditEvent` 拆成選填的 `payload` 與 `messageKey` ＋ `messageArguments`，`summary` 只留給舊資料當 fallback。順帶解決在地化：那些中文句子是寫進 Core Data 並同步給每一位成員的，英文使用者永遠只會看到中文稽核紀錄，而已寫入的資料無法事後在地化。
-2. **通知的「自己的操作不通知自己」靠顯示名稱字串比對。** `AuditEvent` 只存 `actorDisplayName`，所以 `LedgerNotificationPlanner` 的 `currentActorNames` 只能拿名字比對。同群組出現同名成員、或成員改名之後就會誤判——該通知的不通知，或自己的操作通知自己。加一個 `actorMemberID: UUID?` 就能解決，與第 1 項併在同一次 migration 做。
+1. **`AuditEvent.summary` 一個欄位承載兩種格式。** 交易事件往裡面塞 `TransactionAuditPayload`（`EntryRepository.swift:4`）encode 出來的 JSON，含 before／after 的完整付款與分攤快照；群組、帳本、分類事件塞的卻是組好的中文句子（`GroupRepository.swift:68`、`CategoryRepository.swift:307`、`BookRepository.swift:163` 等四十餘處）。
+
+   **作廢的部分已完成（V10）。** 作廢狀態現在是 `LedgerEntry.voidedAt`，可以直接下 predicate；報表、結算、衝突掃描改成直接讀欄位，不再各自掃一遍整份稽核紀錄再解析字串。既有資料與混合版本由 `EntryRepository.backfillVoidedEntries(in:)` 依稽核事件補上，細節見[架構說明](ARCHITECTURE.md)的 V10 部署檢查表。
+
+   **剩下在地化的部分。** `AuditEvent` 仍需拆成選填的 `payload` 與 `messageKey` ＋ `messageArguments`，`summary` 只留給舊資料當 fallback。那些中文句子是寫進 Core Data 並同步給每一位成員的，英文使用者永遠只會看到中文稽核紀錄，而已寫入的資料無法事後在地化——所以這一半仍然是愈晚做愈貴。
+2. **通知的「自己的操作不通知自己」靠顯示名稱字串比對。已完成（V10）。** `AuditEvent.actorMemberID` 記下做這件事的成員，`LedgerNotificationPlanner` 有識別碼時只認識別碼：同群組的同名成員不再互相蓋掉通知，使用者改名之後也不會開始收到自己每一筆操作的通知。沒有識別碼的事件（V10 之前寫下的、或還沒更新的裝置寫的）仍退回名稱比對，也就是維持原本的行為，而不是反過來把它們都當成別人做的而通知使用者自己。
 3. **`LedgerEntry.payer` 與 `payments` 是兩個可寫的真實來源。** V7 已經把單一 `payer` 轉成 `EntryPayment`，但關聯還留著而且仍在寫入（`EntryRepository.swift:505` 在單筆付款時同時寫 `payer`），讀取端也還在 `payments.isEmpty` 時回頭讀它（`SettlementRepository.swift:98`、`TransactionSearchService.swift:253`、`LedgerExportService.swift:192`、`TransactionDraft.swift:81`）。同一件事有兩個可寫位置，遲早會分岔。讀取一律收斂到 `payments`，`payer` 降級為唯讀的 migration 遺跡並排定移除。
-4. **稽核事件無限成長，也沒有清理策略。** 每次交易編輯存一份 before ＋ after 的完整付款與分攤快照，全部經 CloudKit 同步給每一位成員，程式碼裡沒有任何保留期限或 prune。長期使用的群組，稽核資料會比帳務本身大上數倍，而第 1 項的作廢判斷每次都要掃它。需要一份保留策略：作廢事件永久保留，編輯快照過期後只留摘要。
+4. **稽核事件無限成長，也沒有清理策略。** 每次交易編輯存一份 before ＋ after 的完整付款與分攤快照，全部經 CloudKit 同步給每一位成員，程式碼裡沒有任何保留期限或 prune。長期使用的群組，稽核資料會比帳務本身大上數倍。V10 讓報表與結算不必再掃它，壓力小了很多，但資料量本身沒有變：需要一份保留策略——作廢事件永久保留（回填仍要靠它），編輯快照過期後只留摘要。清理會刪除同步中的 record，因此要和第 1 項剩下的那一半一起設計，並且只在可寫入的群組執行。
 
 ### P1：效能與架構
 
@@ -66,7 +70,7 @@ MVP 剩下的工作已經不是「再寫幾個功能」。P0 的 1～12 項在�
 ### 執行順序
 
 1. **先做雙帳號端到端驗收**（[iCloud 分享與權限驗收矩陣](ICLOUD_SHARING_VALIDATION.md)）。它會決定其他項目的優先序，而且會反過來揭露上面幾項的實際影響——例如同名成員的通知誤判，要兩台裝置才看得出來。
-2. **V10 資料模型**：`LedgerEntry.voidedAt`、`AuditEvent.actorMemberID`、稽核的 payload 與文案分離（第 1、2、4 項）。三件事併成一次 migration，愈晚做回填成本愈高。
+2. **V10 資料模型**：`LedgerEntry.voidedAt` 與 `AuditEvent.actorMemberID` 已完成（第 1 項的作廢部分、第 2 項）。剩下稽核的 payload 與文案分離，以及依賴它的保留策略（第 1 項的在地化部分、第 4 項）——同樣愈晚做回填成本愈高。
 3. **報表、搜尋與結算改用 fetch request ＋ predicate**（第 5 項）。
 4. **收斂 `payer`、修 CI 的三個缺口、開啟 strict concurrency**（第 3、8、9 項）。都是小而獨立的改動。
 5. **抽 ViewModel、拆大型畫面檔、補 UI test**（第 6、7、10 項），可以隨著前面幾項順手做。

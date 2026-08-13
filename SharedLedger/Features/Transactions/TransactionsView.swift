@@ -735,10 +735,11 @@ struct TransactionDetailView: View {
     @State private var isEditing = false
     @State private var showVoidConfirmation = false
     @State private var errorMessage: String?
-    /// Both of these reach outside the entry to resolve — `isVoided` fetches the
-    /// group's void audits, and the write access makes a synchronous `fetchShares`
-    /// call — and `body` reads each of them several times per pass. They are resolved
-    /// once per change instead of once per read.
+    /// The write access reaches outside the entry to resolve — a synchronous
+    /// `fetchShares` call — and `body` reads it several times per pass, so it is
+    /// resolved once per change instead of once per read. `isVoided` is now a plain
+    /// read of `entry.voidedAt`, but it stays cached alongside it so both halves of
+    /// the screen's status refresh from the same notification.
     @State private var isVoided = false
     @State private var writeAccess = TransactionWriteAccess.unresolved
 
@@ -914,7 +915,17 @@ struct TransactionDetailView: View {
                 object: context
             )
         ) { notification in
-            guard ContextChangeObserver.touches(notification, .auditLog, .groupPermissions) else {
+            // `.entryDetails` covers the entry itself: since V10 the voided flag lives
+            // on `LedgerEntry.voidedAt`, so a void this screen did not perform arrives
+            // as a change to the entry rather than to the audit log. `.auditLog` stays
+            // because the pre-void snapshot shown above still comes from the audit
+            // payload.
+            guard ContextChangeObserver.touches(
+                notification,
+                .entryDetails,
+                .auditLog,
+                .groupPermissions
+            ) else {
                 return
             }
             reloadStatus()

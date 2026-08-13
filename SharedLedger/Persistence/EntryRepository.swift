@@ -207,6 +207,7 @@ struct EntryRepository {
         // The immutable audit payload above preserves the original amount.
         entry.amount = NSDecimalNumber.zero
         entry.updatedAt = now
+        entry.voidedAt = now
         insertAudit(
             action: "transaction.voided",
             entryID: entryID,
@@ -227,28 +228,25 @@ struct EntryRepository {
     }
 
     func isVoided(_ entry: LedgerEntry) -> Bool {
-        guard let entryID = entry.id, let group = entry.group else { return false }
-        return voidedEntryIDs(in: group).contains(entryID)
+        entry.voidedAt != nil
     }
 
-    /// Fetched rather than walked through `group.auditEvents`: the audit log grows
-    /// with every ledger change and never shrinks, so traversing the relationship
-    /// pulls the whole thing into memory just to keep the void events. The predicate
-    /// pushes that filter down to the store, leaving only the rows this actually
-    /// decodes. Pending inserts are included, so a void is visible to the same
-    /// `save()` that recorded it.
+    /// V10 之前，作廢狀態只存在稽核紀錄裡：判斷一筆交易有沒有被作廢，要把整個群組
+    /// `transaction.voided` 的稽核事件撈出來，逐筆把 `summary` 當 JSON 解碼再取出
+    /// `entryID`。報表、搜尋、結算與衝突掃描全部走這條路，而稽核紀錄只會愈長愈大，
+    /// 等於每次看報表都要付一次「解碼整份作廢歷史」的成本。
+    ///
+    /// V10 之後作廢是 `LedgerEntry.voidedAt`，可以直接下 predicate。稽核事件仍然完整
+    /// 保留（作廢當下的金額與明細只存在那份快照裡），但不再是判斷狀態的來源。
+    ///
+    /// 呼叫端如果本來就拿著 `LedgerEntry`，直接讀 `voidedAt` 比呼叫這裡更省；這個函式
+    /// 留給需要一整組識別碼的地方（例如搜尋結果要把作廢集合交給畫面與匯出）。
+    /// fetch 預設包含尚未儲存的變更，因此同一次 `save()` 裡剛作廢的交易在這裡看得到。
     func voidedEntryIDs(in group: LedgerGroup) -> Set<UUID> {
-        let request = NSFetchRequest<AuditEvent>(entityName: "AuditEvent")
-        request.predicate = NSPredicate(
-            format: "group == %@ AND action == %@",
-            group,
-            "transaction.voided"
-        )
-        // Every returned row is decoded below, so hydrate them in one step instead of
-        // firing a fault per row.
-        request.returnsObjectsAsFaults = false
-        guard let audits = try? persistence.container.viewContext.fetch(request) else { return [] }
-        return Set(audits.compactMap { TransactionAuditPayload.decode($0.summary)?.entryID })
+        let request = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+        request.predicate = NSPredicate(format: "group == %@ AND voidedAt != nil", group)
+        guard let entries = try? persistence.container.viewContext.fetch(request) else { return [] }
+        return Set(entries.compactMap(\.id))
     }
 
     func auditPayloads(for entry: LedgerEntry) -> [TransactionAuditPayload] {
@@ -298,6 +296,70 @@ struct EntryRepository {
 
         if hasChanges {
             try context.save()
+        }
+    }
+
+    /// 把只存在稽核紀錄裡的作廢狀態補進 `LedgerEntry.voidedAt`。
+    ///
+    /// 兩種情況會產生這種資料，而且都不是一次性的：
+    ///
+    /// - **升級。** V10 之前作廢只寫稽核事件，所以既有的作廢交易 `voidedAt` 是 `nil`。
+    /// - **混合版本。** 還沒更新的裝置作廢一筆交易時，一樣只寫得出稽核事件。這台裝置
+    ///   同步到的就是「有 `transaction.voided` 稽核、`voidedAt` 卻是 `nil`」的交易。
+    ///
+    /// 所以這個修復跟其他幾個一樣掛在每次遠端變更後的修復迴圈上，而不是只跑一次。
+    /// 補上的時間用稽核事件的 `createdAt`，作廢發生的時間才不會被改寫成升級的時間。
+    ///
+    /// 收斂之前有一小段窗口：舊裝置作廢的交易在這台裝置上還不會標成已作廢。但作廢
+    /// 同時把 `amount` 歸零，而金額是跟著交易 record 同步的，所以那段期間金額已經不
+    /// 算進任何餘額或報表，差別只在畫面上還沒標示「已作廢」。
+    ///
+    /// - Parameter writableGroupIDs: see `BookRepository.backfillMissingBookRelationships(in:)`.
+    func backfillVoidedEntries(in writableGroupIDs: Set<UUID>) async throws {
+        guard !writableGroupIDs.isEmpty else { return }
+        let context = persistence.container.viewContext
+
+        let auditRequest = NSFetchRequest<AuditEvent>(entityName: "AuditEvent")
+        auditRequest.predicate = NSPredicate(
+            format: "group.id IN %@ AND action == %@",
+            Array(writableGroupIDs),
+            "transaction.voided"
+        )
+        auditRequest.returnsObjectsAsFaults = false
+        let audits = try context.fetch(auditRequest)
+        guard !audits.isEmpty else { return }
+
+        // 同一筆交易被作廢一次，但重跑修復或重複同步都可能讓這裡看到多筆事件；
+        // 取最早的一筆，作廢時間才不會隨著資料重送而往後跑。
+        var voidedAtByEntryID: [UUID: Date] = [:]
+        for audit in audits {
+            guard let entryID = TransactionAuditPayload.decode(audit.summary)?.entryID,
+                  let createdAt = audit.createdAt
+            else { continue }
+            voidedAtByEntryID[entryID] = min(voidedAtByEntryID[entryID] ?? createdAt, createdAt)
+        }
+        guard !voidedAtByEntryID.isEmpty else { return }
+
+        let entryRequest = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+        entryRequest.predicate = NSPredicate(
+            format: "voidedAt == nil AND id IN %@",
+            Array(voidedAtByEntryID.keys)
+        )
+        let entries = try context.fetch(entryRequest)
+        guard !entries.isEmpty else { return }
+
+        for entry in entries {
+            guard let id = entry.id, let voidedAt = voidedAtByEntryID[id] else { continue }
+            entry.voidedAt = voidedAt
+        }
+
+        if context.hasChanges {
+            do {
+                try context.save()
+            } catch {
+                context.rollback()
+                throw error
+            }
         }
     }
 
@@ -656,7 +718,7 @@ struct EntryRepository {
         context.assign(audit, to: store)
         audit.id = UUID()
         audit.action = action
-        audit.actorDisplayName = currentActorName(in: group)
+        audit.recordActor(currentActor(in: group))
         audit.createdAt = date
         let payload = TransactionAuditPayload(
             entryID: entryID,
@@ -668,11 +730,8 @@ struct EntryRepository {
         audit.group = group
     }
 
-    private func currentActorName(in group: LedgerGroup) -> String {
-        CurrentMemberIdentityRepository(persistence: persistence)
-            .currentMember(in: group)?
-            .displayName
-            ?? LedgerStringKey.defaultMemberCurrentUser.string()
+    private func currentActor(in group: LedgerGroup) -> Member? {
+        CurrentMemberIdentityRepository(persistence: persistence).currentMember(in: group)
     }
 
     private func decimalString(_ value: Decimal?) -> String {

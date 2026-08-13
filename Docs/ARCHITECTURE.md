@@ -129,8 +129,9 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | V7 | 新增 `EntryPayment`、`LedgerEntry.splitMode`、`EntrySplit.inputValue` 與 `Member.archivedAt` | 以 lightweight migration 建立欄位與 entity；啟動及 remote change 後，將仍只有 legacy `payer` 的既有交易冪等轉成一筆全額付款，不改寫既有 split amount |
 | V8 | 在 shared `Member` 新增 optional `cloudParticipantID`，保存該成員對應的 `CKShare.Participant.participantID` | 以 lightweight migration 新增單一 optional String 欄位；既有成員維持 `nil`，下次在有效 CKShare 上認領或加入時才綁定 participant。此欄位是 share-local 識別碼，不取代 private-only 的 `LocalMemberIdentity` |
 | V9 | 新增 `LedgerEntry.revisionID` 與 `EntryPayment`／`EntrySplit` 的 `entryRevisionID`，標記每一筆明細屬於哪一次交易寫入 | 以 lightweight migration 新增三個 optional UUID 欄位；既有交易與明細都維持 `nil`，不做回填。`nil == nil` 代表舊明細仍屬於交易目前這一版，因此升級不改變任何既有金額、分攤或結算結果 |
+| V10 | 新增 `LedgerEntry.voidedAt` 與 `AuditEvent.actorMemberID`，把作廢狀態與「誰做的」從稽核字串裡拿出來變成欄位 | 以 lightweight migration 新增兩個 optional 欄位；升級本身不回填，改由背景修復 `EntryRepository.backfillVoidedEntries(in:)` 依既有 `transaction.voided` 稽核事件補上 `voidedAt`（時間取自稽核事件，不是修復當下）。這個修復掛在每次遠端變更後的迴圈上而非只跑一次，因為混合版本會持續產生同樣的資料 |
 
-V1→V2→V3→V4→V5→V6→V7→V8→V9 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。V8 只在 `Member` 加一個 optional String，因此 lightweight migration 可自動推得；升級後的既有成員 `cloudParticipantID` 為 `nil`，不做任何猜測式回填，必須等到該成員在真實 CKShare 上完成認領或加入，才由 `GroupRepository` 綁定當下已接受的 participant ID。`SharedLedgerTests/CloudParticipantModelMigrationTests` 驗證 V7→V8 可推導 mapping、V8 除該欄位外沒有其他 schema 漂移、既有 V7 store 升級後資料保留且 `cloudParticipantID` 為 `nil`，以及 `LocalMemberIdentity` 仍只屬於 private configuration。 V9 同樣只加 optional 欄位，`SharedLedgerTests/EntryRevisionModelMigrationTests` 驗證 V8→V9 可推導 mapping、除這三個欄位外沒有其他漂移、既有 store 升級後 revision 為 `nil` 且原有明細仍算數。
+V1→V2→V3→V4→V5→V6→V7→V8→V9→V10 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。V8 只在 `Member` 加一個 optional String，因此 lightweight migration 可自動推得；升級後的既有成員 `cloudParticipantID` 為 `nil`，不做任何猜測式回填，必須等到該成員在真實 CKShare 上完成認領或加入，才由 `GroupRepository` 綁定當下已接受的 participant ID。`SharedLedgerTests/CloudParticipantModelMigrationTests` 驗證 V7→V8 可推導 mapping、V8 除該欄位外沒有其他 schema 漂移、既有 V7 store 升級後資料保留且 `cloudParticipantID` 為 `nil`，以及 `LocalMemberIdentity` 仍只屬於 private configuration。 V9 同樣只加 optional 欄位，`SharedLedgerTests/EntryRevisionModelMigrationTests` 驗證 V8→V9 可推導 mapping、除這三個欄位外沒有其他漂移、既有 store 升級後 revision 為 `nil` 且原有明細仍算數。V10 一樣只加 optional 欄位，`SharedLedgerTests/VoidedEntryModelMigrationTests` 驗證 V9→V10 可推導 mapping、除這兩個欄位外沒有其他漂移、既有 store 升級後兩個欄位都是 `nil` 且作廢稽核的 summary 快照完整保留，以及回填能只憑稽核事件標記作廢、重跑不改變作廢時間、沒有作廢稽核的交易不受影響。
 
 V4 資料修復對每個既有分類採以下規則：
 
@@ -209,6 +210,20 @@ V9 一樣沒有新增 record type，只在三個既有 record type 上各加一�
 4. 部署完成後才建立 TestFlight／App Store 建置版本。
 
 未部署就送版時，Production 的 mirroring delegate 會以 `CKError "Invalid Arguments" (12/2006)` 失敗。特別注意混合版本的情況：尚未更新的舊版裝置不認得 revision 欄位，它覆寫交易 record 時可能把 `revisionID` 清成 `nil`，此時只有同樣沒有 revision 的明細算數，行為退回 V9 之前的樣子——會少算，但不會把兩次編輯的明細混著算。
+
+#### V10 部署檢查表（未完成前不得送出含 V10 的建置版本）
+
+V10 一樣沒有新增 record type，只在兩個既有 record type 上各加一個欄位：`CD_LedgerEntry.CD_voidedAt`（Date／Timestamp, optional）與 `CD_AuditEvent.CD_actorMemberID`（UUID／String, optional）。
+
+1. 在已登入 iCloud 的裝置或模擬器上，以 Debug 組態、啟動參數 `-initialize-cloudkit-schema` 執行一次 App，把 V10 寫入 Development schema，完成後移除該參數。
+2. CloudKit Console → `iCloud.com.shaunchuang.SharedLedger` → Development → Schema → Record Types，確認上述兩個欄位都存在。
+3. 執行「Deploy Schema Changes…」部署到 Production，並在 Production 重新確認兩個欄位。
+4. 部署完成後才建立 TestFlight／App Store 建置版本。
+
+混合版本在這一版的行為是設計好的、可收斂的，不是待修的缺口：
+
+- **作廢。** 舊版裝置作廢一筆交易時只寫得出 `transaction.voided` 稽核事件與歸零的金額，寫不出 `voidedAt`。新版裝置同步到之後，由 `backfillVoidedEntries(in:)` 依稽核事件補上——所以那個修復掛在每次遠端變更後的迴圈上，不是只在升級時跑一次。收斂之前的空窗期只影響畫面上的「已作廢」標示：金額已經隨交易 record 歸零，餘額、報表與結算都已經不算它。反過來，舊版裝置永遠讀不到 `voidedAt`，它看到的仍是稽核紀錄那條路，行為不變。
+- **通知。** 舊版裝置寫的稽核事件沒有 `actorMemberID`，`LedgerNotificationPlanner` 對這種事件會退回顯示名稱比對，也就是 V10 之前的行為（同名成員可能互相蓋掉通知）。帶得出識別碼的事件則只認識別碼。
 
 ## 聯絡人與隱私
 

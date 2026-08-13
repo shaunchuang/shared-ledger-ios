@@ -14,6 +14,7 @@
 		C0DE0000000000000000008C /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000008D /* LocalizationTests.swift */; };
 		C0DE00000000000000000099 /* EntryRevisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000009A /* EntryRevisionTests.swift */; };
 		C0DE0000000000000000009B /* EntryRevisionModelMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000009C /* EntryRevisionModelMigrationTests.swift */; };
+		C0DE000000000000000000A1 /* VoidedEntryModelMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE000000000000000000A2 /* VoidedEntryModelMigrationTests.swift */; };
 		C0DE0000000000000000009D /* LocalPersonalDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000009E /* LocalPersonalDataTests.swift */; };
 		C0DE00000000000000000088 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000089 /* Localizable.xcstrings */; };
 		C0DE0000000000000000008A /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000008B /* InfoPlist.xcstrings */; };
@@ -90,6 +91,7 @@
 		C0DE00000000000000000064 /* SyncStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000065 /* SyncStatusView.swift */; };
 		C0DE0000000000000000008F /* EntryRevision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000090 /* EntryRevision.swift */; };
 		C0DE00000000000000000091 /* LedgerEntry+Revision.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000092 /* LedgerEntry+Revision.swift */; };
+		C0DE0000000000000000009F /* AuditEvent+Actor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE000000000000000000A0 /* AuditEvent+Actor.swift */; };
 		C0DE00000000000000000093 /* EntryConflictScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000094 /* EntryConflictScanner.swift */; };
 		C0DE00000000000000000095 /* LocalPersonalDataRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000096 /* LocalPersonalDataRepository.swift */; };
 		C0DE00000000000000000097 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000098 /* AppearanceSettingsView.swift */; };
@@ -121,6 +123,7 @@
 		C0DE0000000000000000008D /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalizationTests.swift"; sourceTree = "<group>"; };
 		C0DE0000000000000000009A /* EntryRevisionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryRevisionTests.swift"; sourceTree = "<group>"; };
 		C0DE0000000000000000009C /* EntryRevisionModelMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryRevisionModelMigrationTests.swift"; sourceTree = "<group>"; };
+		C0DE000000000000000000A2 /* VoidedEntryModelMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoidedEntryModelMigrationTests.swift"; sourceTree = "<group>"; };
 		C0DE0000000000000000009E /* LocalPersonalDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalPersonalDataTests.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000089 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		C0DE0000000000000000008B /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
@@ -189,6 +192,7 @@
 		B00CDAF7000000000000000C /* SharedLedgerV7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV7.xcdatamodel; sourceTree = "<group>"; };
 		B00CDAF7000000000000000D /* SharedLedgerV8.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV8.xcdatamodel; sourceTree = "<group>"; };
 		B00CDAF7000000000000000E /* SharedLedgerV9.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV9.xcdatamodel; sourceTree = "<group>"; };
+		B00CDAF7000000000000000F /* SharedLedgerV10.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = SharedLedgerV10.xcdatamodel; sourceTree = "<group>"; };
 		C0DE00000000000000000020 /* LedgerCurrency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerCurrency.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000022 /* SettlementCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementCalculator.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000024 /* GroupReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupReport.swift; sourceTree = "<group>"; };
@@ -208,6 +212,7 @@
 		C0DE00000000000000000065 /* SyncStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusView.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000090 /* EntryRevision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryRevision.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000092 /* LedgerEntry+Revision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerEntry+Revision.swift"; sourceTree = "<group>"; };
+		C0DE000000000000000000A0 /* AuditEvent+Actor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AuditEvent+Actor.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000094 /* EntryConflictScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EntryConflictScanner.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000096 /* LocalPersonalDataRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalPersonalDataRepository.swift"; sourceTree = "<group>"; };
 		C0DE00000000000000000098 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppearanceSettingsView.swift"; sourceTree = "<group>"; };
@@ -293,6 +298,7 @@
 				C0DE00000000000000000010 /* CloudParticipantStatus.swift */,
 				C0DE00000000000000000041 /* ContextChangeObserver.swift */,
 				C0DE00000000000000000092 /* LedgerEntry+Revision.swift */,
+				C0DE000000000000000000A0 /* AuditEvent+Actor.swift */,
 				C0DE00000000000000000094 /* EntryConflictScanner.swift */,
 				C0DE00000000000000000096 /* LocalPersonalDataRepository.swift */,
 				2705E374C03B78BD3A1C470B /* PersistenceController.swift */,
@@ -423,6 +429,7 @@
 				C0DE0000000000000000008D /* LocalizationTests.swift */,
 				C0DE0000000000000000009A /* EntryRevisionTests.swift */,
 				C0DE0000000000000000009C /* EntryRevisionModelMigrationTests.swift */,
+				C0DE000000000000000000A2 /* VoidedEntryModelMigrationTests.swift */,
 				C0DE0000000000000000009E /* LocalPersonalDataTests.swift */,
 				C0DE00000000000000000067 /* LedgerSyncStatusTests.swift */,
 				C0DE00000000000000000075 /* LedgerNotificationTests.swift */,
@@ -561,6 +568,7 @@
 				C0DE0000000000000000008C /* LocalizationTests.swift in Sources */,
 				C0DE00000000000000000099 /* EntryRevisionTests.swift in Sources */,
 				C0DE0000000000000000009B /* EntryRevisionModelMigrationTests.swift in Sources */,
+				C0DE000000000000000000A1 /* VoidedEntryModelMigrationTests.swift in Sources */,
 				C0DE0000000000000000009D /* LocalPersonalDataTests.swift in Sources */,
 				C0DE00000000000000000074 /* LedgerNotificationTests.swift in Sources */,
 				C0DE00000000000000000058 /* CSVWriterTests.swift in Sources */,
@@ -591,6 +599,7 @@
 				C0DE00000000000000000064 /* SyncStatusView.swift in Sources */,
 				C0DE0000000000000000008F /* EntryRevision.swift in Sources */,
 				C0DE00000000000000000091 /* LedgerEntry+Revision.swift in Sources */,
+				C0DE0000000000000000009F /* AuditEvent+Actor.swift in Sources */,
 				C0DE00000000000000000093 /* EntryConflictScanner.swift in Sources */,
 				C0DE00000000000000000095 /* LocalPersonalDataRepository.swift in Sources */,
 				C0DE00000000000000000097 /* AppearanceSettingsView.swift in Sources */,
@@ -935,8 +944,9 @@
 				B00CDAF7000000000000000C /* SharedLedgerV7.xcdatamodel */,
 				B00CDAF7000000000000000D /* SharedLedgerV8.xcdatamodel */,
 				B00CDAF7000000000000000E /* SharedLedgerV9.xcdatamodel */,
+				B00CDAF7000000000000000F /* SharedLedgerV10.xcdatamodel */,
 			);
-			currentVersion = B00CDAF7000000000000000E /* SharedLedgerV9.xcdatamodel */;
+			currentVersion = B00CDAF7000000000000000F /* SharedLedgerV10.xcdatamodel */;
 			path = SharedLedger.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;
