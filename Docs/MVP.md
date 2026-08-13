@@ -21,7 +21,7 @@
 
 以下狀態依 2026-08-03 的 `develop` 實際程式碼整理（含 PR #38 結算引擎、#39 跨帳本報表、#40 V8 participant 對應、#41 共享權限與唯讀 UI、#45 擁有權移轉、#47～#50 架構拆分與主執行緒效能修正、#51 交易搜尋與複合篩選、#52 CSV 匯出與資料刪除、iCloud 同步狀態呈現、P0-12 通知與提醒最低版本、#55 群組分類目錄補齊、在地化基礎建設、全部畫面的在地化與 VoiceOver 遷移、#58 設計系統的可及性，以及 V9 交易 revision 衝突策略、本機個人資料刪除與外觀設定），只代表該日期的 repository 快照；開始實作前必須重新查證。
 
-MVP 剩下的工作已經不是「再寫幾個功能」。P0 的 1～12 項在程式碼層面已經落地，剩下的是兩件事：**雙帳號端到端驗收從未執行**（下表多數列的「待驗收」都指向同一份 [iCloud 分享與權限驗收矩陣](ICLOUD_SHARING_VALIDATION.md)），以及 **P0-13 可及性的實機驗證**。原本列為缺口的同步衝突策略已經實作：交易的每一次寫入帶一個 revision，付款與分攤明細只在屬於交易目前 revision 時才算數，兩台裝置同時編輯不會再把兩組明細加在一起，處理不了的情況則列在 iCloud 同步頁請使用者重新編輯。
+MVP 剩下的工作已經不是「再寫幾個功能」。P0 的 1～12 項在程式碼層面已經落地，剩下的是三件事：**雙帳號端到端驗收從未執行**（下表多數列的「待驗收」都指向同一份 [iCloud 分享與權限驗收矩陣](ICLOUD_SHARING_VALIDATION.md)）、**P0-13 可及性的實機驗證**，以及下一節列出的**結構性缺口**——那些已經能跑、但作法本身會在資料量或語言變多之後出問題的地方。原本列為缺口的同步衝突策略已經實作：交易的每一次寫入帶一個 revision，付款與分攤明細只在屬於交易目前 revision 時才算數，兩台裝置同時編輯不會再把兩組明細加在一起，處理不了的情況則列在 iCloud 同步頁請使用者重新編輯。
 
 | 領域 | 狀態 | 已確認內容 | 主要缺口 |
 | --- | --- | --- | --- |
@@ -38,9 +38,42 @@ MVP 剩下的工作已經不是「再寫幾個功能」。P0 的 1～12 項在�
 | 設定與資料可攜 | 匯出、刪除、通知與外觀已實作 | 交易／帳戶／結算三份 CSV 匯出，含帳本範圍、日期區間與作廢選項、系統分享；群組刪除與共享影響說明，擁有者以外或共享來源的群組會被擋下並導向退出；刪除本機個人資料（身分對應、通知偏好與遞送紀錄、CloudKit 權限快取）且不動任何帳務資料；群組邀請與成員異動、交易修改、待結算三類本機通知可個別關閉，未授權時 App 完整可用；外觀可選跟隨系統／淺色／深色 | CSV 匯入與 PDF 匯出維持 P1；匯出、刪除與通知仍需實機與雙帳號驗收 |
 | 品質與可及性（P0-13） | 測試涵蓋核心計算與衝突策略，可及性已做到畫面層，待實機驗證 | 18 個測試檔涵蓋分攤與尾差、結算、跨帳本報表、交易搜尋、匯出、群組刪除、擁有權移轉、effective 權限、通知規則、同步狀態機、交易 revision 與衝突偵測、本機個人資料刪除，以及在地化完整性（含複數規則與兩參數字串的位置代換）；交易的建立／編輯／作廢與稽核快照、帳戶餘額與對帳、帳本與分類生命週期都有 repository 層測試；V3→V4 至 V8→V9 有 migration mapping 測試 | 可及性的程式碼面已補齊：設計系統之外，總覽、交易、帳戶、結算、分類與群組的固定字級改用 `@ScaledMetric`，只有圖示的控制項套 `ledgerTapTarget()` 補到 44pt，「名稱在左、金額在右」的列改用 `LedgerAdaptiveStack`，到 accessibility 字級會上下堆疊；規則寫在 [LOCALIZATION.md](LOCALIZATION.md)。剩下的是實機驗證：Dynamic Type（含 AX5）、VoiceOver、深色模式與減少動態效果都還沒在真實裝置上走過一遍，`GroupDetailView` 與交易表單的長列也要一併看；V1→V2、V2→V3 沒有 mapping 測試 |
 
+## 結構性缺口
+
+依 2026-08-13 的 `develop`（`776af91`）程式碼盤點。上表的「主要缺口」講的是還沒驗收的功能，這一節講的是另一種東西：已經實作、測試也過，但作法本身撐不到正式使用的地方。編號在本節之後的「執行順序」沿用；涉及技術基線的部分（Swift 版本、CI、測試 target）以[架構說明](ARCHITECTURE.md)為實作依據，這裡只定優先順序。
+
+這些缺口有一個共同特徵：現在改的成本，遠低於等到有真實使用者資料之後再改。第 1～4 項需要 migration，資料愈多回填愈痛；第 5 項要等群組累積幾千筆交易才會痛，但那時候痛的是使用者。
+
+### P0：資料模型的正確性風險
+
+1. **`AuditEvent.summary` 一個欄位承載兩種格式。** 交易事件往裡面塞 `TransactionAuditPayload`（`EntryRepository.swift:4`）encode 出來的 JSON，含 before／after 的完整付款與分攤快照；群組、帳本、分類事件塞的卻是組好的中文句子（`GroupRepository.swift:68`、`CategoryRepository.swift:307`、`BookRepository.swift:163` 等四十餘處）。更關鍵的是**交易的作廢狀態沒有欄位**，而是靠掃描稽核事件再解析字串推導（`EntryRepository.swift:240` 的 `voidedEntryIDs(in:)`），報表、結算、搜尋與餘額全部走這條路。要做的是：給 `LedgerEntry` 加 `voidedAt`，讓作廢變成可以下 predicate 的欄位並由既有稽核資料回填一次；`AuditEvent` 拆成選填的 `payload` 與 `messageKey` ＋ `messageArguments`，`summary` 只留給舊資料當 fallback。順帶解決在地化：那些中文句子是寫進 Core Data 並同步給每一位成員的，英文使用者永遠只會看到中文稽核紀錄，而已寫入的資料無法事後在地化。
+2. **通知的「自己的操作不通知自己」靠顯示名稱字串比對。** `AuditEvent` 只存 `actorDisplayName`，所以 `LedgerNotificationPlanner` 的 `currentActorNames` 只能拿名字比對。同群組出現同名成員、或成員改名之後就會誤判——該通知的不通知，或自己的操作通知自己。加一個 `actorMemberID: UUID?` 就能解決，與第 1 項併在同一次 migration 做。
+3. **`LedgerEntry.payer` 與 `payments` 是兩個可寫的真實來源。** V7 已經把單一 `payer` 轉成 `EntryPayment`，但關聯還留著而且仍在寫入（`EntryRepository.swift:505` 在單筆付款時同時寫 `payer`），讀取端也還在 `payments.isEmpty` 時回頭讀它（`SettlementRepository.swift:98`、`TransactionSearchService.swift:253`、`LedgerExportService.swift:192`、`TransactionDraft.swift:81`）。同一件事有兩個可寫位置，遲早會分岔。讀取一律收斂到 `payments`，`payer` 降級為唯讀的 migration 遺跡並排定移除。
+4. **稽核事件無限成長，也沒有清理策略。** 每次交易編輯存一份 before ＋ after 的完整付款與分攤快照，全部經 CloudKit 同步給每一位成員，程式碼裡沒有任何保留期限或 prune。長期使用的群組，稽核資料會比帳務本身大上數倍，而第 1 項的作廢判斷每次都要掃它。需要一份保留策略：作廢事件永久保留，編輯快照過期後只留摘要。
+
+### P1：效能與架構
+
+5. **查詢一律在主執行緒上把整個群組載進記憶體。** repository 都標 `@MainActor` 且用 `viewContext`，全專案只有 3 處 `newBackgroundContext()`（都在 migration 修復路徑）。查詢方式的落差更大：`NSFetchRequest` 用了 15 次，`as? Set<…>` 把關聯整包載入卻有 67 次。以 `GroupReportService.swift:33` 為例，看一個月的報表會把群組**歷來所有交易** fault 進主執行緒，再用 Swift 過濾日期與帳本；`SettlementRepository.swift:73`、`TransactionSearchService.swift:70`、`BookRepository.swift:279` 是同一個模式。報表、搜尋與結算應改用 `NSFetchRequest` ＋ `NSPredicate`（日期區間、帳本、`kind` 都能下條件，並在模型補上 index），較重的聚合搬到背景 context 只回傳值型別——`GroupReportSnapshot` 已經是值型別，很適合當交界。這是目前最大的擴展性風險。
+6. **畫面的 computed property 直接呼叫 repository。** `activeBooks` 這個寫法在 `DashboardView.swift:82`、`TransactionsView.swift:142`、`GroupDetailView.swift:168`、`BooksView.swift:429`、`TransactionFilterView.swift:26`、`SettlementView.swift:27`、`DataExportView.swift:60` 各出現一次，每次 body 重算都重跑一次查詢與排序；`Features` 底下共 55 處 `Repository().`。`DashboardView` 的 `reloadSnapshot()` 已經用快取處理過這件事，也留了註解說明為什麼不能做成 computed property，但這個做法沒有推廣到其他畫面。
+7. **沒有 ViewModel 層，畫面檔案過大。** `TransactionsView` 1036 行、`GroupDetailView` 956 行、`DashboardView` 937 行、`CategoriesView` 851 行、`AccountsView` 838 行；全專案只有兩個 `ObservableObject`（`SyncStatusMonitor`、`LedgerNotificationCoordinator`），畫面狀態與資料組裝都寫在 View 裡。至少把總覽、交易與群組詳情的資料組裝抽成 `@Observable` model，順帶讓這段邏輯變成可測——目前 248 個測試沒有任何一個測得到畫面層。
+
+### P2：工程流程
+
+8. **語言版本與並行檢查沒有守住。** `project.pbxproj` 仍是 `SWIFT_VERSION = 5.9`，也沒有設 `SWIFT_STRICT_CONCURRENCY`；但 `65ea8cf` 才剛修過一批 Swift 6 並行錯誤——修了卻沒有把檢查打開，同樣的問題會再回來。先開 `targeted`，清乾淨後再進 `complete` 與 Swift 6 語言模式。
+9. **CI 有三個缺口**（`.github/workflows/ios-ci.yml`）：`-skip-testing:SharedLedgerTests/CloudSharingTests` 指向一個已經不存在的測試檔，這個旗標現在是空轉的，註解卻還在解釋為什麼要跳過——要嘛刪掉旗標與註解，要嘛把測試補回來；`push` 只觸發 `main`，`develop` 上的 merge commit 本身沒被驗過（PR 有跑，因為 `pull_request` 對任何 base 都會觸發）；沒有 lint／format 設定，也沒有覆蓋率門檻。以這個專案的協作方式來說，加一個 SwiftLint 的投資報酬率很高。
+10. **沒有 UI test target。** P0-13 的可及性門檻（Dynamic Type、VoiceOver、深色模式、減少動態效果）目前完全靠人工驗證，而大字級適配是最近才做完的——沒有自動化就守不住，下一個 PR 就可能改回去。加一個 UI test target 跑幾條核心流程，或針對 `LedgerComponents` 在最大字級下的版面做 snapshot test。
+
+### 執行順序
+
+1. **先做雙帳號端到端驗收**（[iCloud 分享與權限驗收矩陣](ICLOUD_SHARING_VALIDATION.md)）。它會決定其他項目的優先序，而且會反過來揭露上面幾項的實際影響——例如同名成員的通知誤判，要兩台裝置才看得出來。
+2. **V10 資料模型**：`LedgerEntry.voidedAt`、`AuditEvent.actorMemberID`、稽核的 payload 與文案分離（第 1、2、4 項）。三件事併成一次 migration，愈晚做回填成本愈高。
+3. **報表、搜尋與結算改用 fetch request ＋ predicate**（第 5 項）。
+4. **收斂 `payer`、修 CI 的三個缺口、開啟 strict concurrency**（第 3、8、9 項）。都是小而獨立的改動。
+5. **抽 ViewModel、拆大型畫面檔、補 UI test**（第 6、7、10 項），可以隨著前面幾項順手做。
+
 ## P0：完整 MVP 必須補齊
 
-下列功能直接影響帳務正確性、共享可信度或核心流程，優先於 OCR、Widget 等增強功能。這份清單定義的是 MVP 的需求範圍，不是進度；目前各項的實作狀態以上方的「功能完整度快照」為準。
+下列功能直接影響帳務正確性、共享可信度或核心流程，優先於 OCR、Widget 等增強功能。這份清單定義的是 MVP 的需求範圍，不是進度；目前各項的實作狀態以上方的「功能完整度快照」為準，作法層面的缺口見「結構性缺口」。
 
 1. **交易完整生命週期**：交易詳情、編輯、作廢／刪除確認與變更稽核；已參與結算的交易不得靜默改寫。
 2. **完整分攤與多人付款**：平均、比例、指定金額、部分成員與多人付款；保存使用者選擇的分攤模式及輸入值，付款總額和分攤總額都必須等於交易金額，並依貨幣最小單位明確處理尾差。
