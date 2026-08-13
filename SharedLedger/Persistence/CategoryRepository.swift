@@ -735,10 +735,9 @@ struct CategoryRepository {
         context.assign(audit, to: store)
         audit.id = UUID()
         audit.action = action
-        audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
-            .currentMember(in: group)?
-            .displayName
-            ?? LedgerStringKey.defaultMemberCurrentUser.string()
+        audit.recordActor(
+            CurrentMemberIdentityRepository(persistence: persistence).currentMember(in: group)
+        )
         audit.createdAt = Date()
         audit.summary = summary
         audit.group = group

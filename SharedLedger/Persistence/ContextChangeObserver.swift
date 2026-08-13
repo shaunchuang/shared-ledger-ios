@@ -17,7 +17,10 @@ enum ContextChangeObserver {
         /// permission — and the CloudKit participant mapping shown beside it — is
         /// resolved from.
         case groupPermissions
-        /// Voided transactions are derived from the group's audit events.
+        /// The group's audit events. A transaction's voided state is no longer read
+        /// from here — that is `LedgerEntry.voidedAt` since V10 — but the amount and
+        /// the payment/split detail a transaction had *before* it was voided only
+        /// exist in the audit payload, so screens showing those still depend on it.
         case auditLog
         /// Everything an account balance is summed from: the account's own opening
         /// balance, its manual adjustments, and the entries that move money in or

@@ -77,6 +77,9 @@ struct LedgerAuditEventSummary: Equatable, Sendable, Identifiable {
     let groupID: UUID
     let groupName: String
     let action: String
+    /// 做這件事的成員。V10 之前的事件、以及還沒更新的裝置寫出來的事件是 `nil`，
+    /// 那時只能退回顯示名稱比對。
+    let actorMemberID: UUID?
     let actorDisplayName: String
     let createdAt: Date
 
@@ -85,6 +88,7 @@ struct LedgerAuditEventSummary: Equatable, Sendable, Identifiable {
         groupID: UUID,
         groupName: String,
         action: String,
+        actorMemberID: UUID? = nil,
         actorDisplayName: String,
         createdAt: Date
     ) {
@@ -92,6 +96,7 @@ struct LedgerAuditEventSummary: Equatable, Sendable, Identifiable {
         self.groupID = groupID
         self.groupName = groupName
         self.action = action
+        self.actorMemberID = actorMemberID
         self.actorDisplayName = actorDisplayName
         self.createdAt = createdAt
     }
