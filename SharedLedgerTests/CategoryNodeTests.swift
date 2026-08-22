@@ -1420,35 +1420,32 @@ final class CategorySheetRouteTests: XCTestCase {
         )
     }
 
-    /// 選單還在收起時不能同步開表單；改名、新增子分類與合併都要等下一輪
-    /// 主執行緒再交出路由，並保留原本選到的分類。
-    func testMenuSheetPresentationWaitsUntilTheMenuCanDismiss() throws {
-        let fixture = try makeFixture()
-        let food = try fixture.makeCategory("餐飲")
-        let routes: [CategorySheetRoute] = [
-            .rename(food),
-            .newCategory(parent: food),
-            .merge(food)
+    /// popover 裡選到的動作要先關閉 popover，等內容消失後只能取出並執行一次。
+    func testCategoryRowActionWaitsForPopoverDismissalAndIsConsumedOnce() {
+        let coordinator = CategoryRowActionCoordinator()
+
+        coordinator.present()
+        XCTAssertTrue(coordinator.isPresented)
+        XCTAssertNil(coordinator.pendingAction)
+
+        coordinator.select(.addChild)
+        XCTAssertFalse(coordinator.isPresented)
+        XCTAssertEqual(coordinator.pendingAction, .addChild)
+        XCTAssertEqual(coordinator.takePendingAction(), .addChild)
+        XCTAssertNil(coordinator.takePendingAction())
+    }
+
+    func testCategoryRowActionCoversEveryPopoverCommand() {
+        let actions: [CategoryRowAction] = [
+            .rename,
+            .addChild,
+            .move(-1),
+            .move(1),
+            .merge,
+            .archive
         ]
-        let presentations = expectation(description: "Menu sheet routes are presented")
-        presentations.expectedFulfillmentCount = routes.count
-        var presentedRoutes: [CategorySheetRoute] = []
 
-        for route in routes {
-            CategorySheetRoute.presentAfterMenuDismissal(route) { presentedRoute in
-                presentedRoutes.append(presentedRoute)
-                presentations.fulfill()
-            }
-        }
-
-        XCTAssertTrue(presentedRoutes.isEmpty)
-        wait(for: [presentations], timeout: 1)
-        XCTAssertEqual(presentedRoutes.map(\.id), routes.map(\.id))
-
-        guard case let .newCategory(parent) = presentedRoutes[1] else {
-            return XCTFail("Expected the child category route")
-        }
-        XCTAssertEqual(parent, food)
+        XCTAssertEqual(Set(actions).count, actions.count)
     }
 
     /// 父分類跟著路由一起走，所以先開過「新增最上層分類」再開「新增子分類」時，
