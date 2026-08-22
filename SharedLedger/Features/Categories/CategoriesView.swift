@@ -107,6 +107,18 @@ enum CategorySheetRoute: Identifiable {
         }
     }
 
+    /// `Menu` 的按鈕動作會在選單還沒完全收起時執行；同一輪立刻開 sheet，
+    /// UIKit 會把它視為第二次同時呈現，導致點了改名或新增子分類卻沒有反應。
+    /// 等主執行緒的下一輪再設定路由，讓選單先完成自己的 dismiss。
+    static func presentAfterMenuDismissal(
+        _ route: CategorySheetRoute,
+        perform presentation: @escaping (CategorySheetRoute) -> Void
+    ) {
+        DispatchQueue.main.async {
+            presentation(route)
+        }
+    }
+
     private static func identifier(_ category: LedgerCategory) -> String {
         category.objectID.uriRepresentation().absoluteString
     }
@@ -174,8 +186,8 @@ struct CategoriesView: View {
                                         depth: 0,
                                         canManage: canManage,
                                         onAddChild: presentChildCategory,
-                                        onRename: { sheetRoute = .rename($0) },
-                                        onMerge: { sheetRoute = .merge($0) },
+                                        onRename: { presentMenuSheet(.rename($0)) },
+                                        onMerge: { presentMenuSheet(.merge($0)) },
                                         onMove: move,
                                         onArchive: requestArchive
                                     )
@@ -291,7 +303,13 @@ struct CategoriesView: View {
     }
 
     private func presentChildCategory(_ parent: LedgerCategory) {
-        sheetRoute = .newCategory(parent: parent)
+        presentMenuSheet(.newCategory(parent: parent))
+    }
+
+    private func presentMenuSheet(_ route: CategorySheetRoute) {
+        CategorySheetRoute.presentAfterMenuDismissal(route) { route in
+            sheetRoute = route
+        }
     }
 
     /// 新增、改名與合併都會動到子分類那一層，父層的 FetchRequest 不會因此重新計算，

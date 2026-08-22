@@ -1420,6 +1420,37 @@ final class CategorySheetRouteTests: XCTestCase {
         )
     }
 
+    /// 選單還在收起時不能同步開表單；改名、新增子分類與合併都要等下一輪
+    /// 主執行緒再交出路由，並保留原本選到的分類。
+    func testMenuSheetPresentationWaitsUntilTheMenuCanDismiss() throws {
+        let fixture = try makeFixture()
+        let food = try fixture.makeCategory("餐飲")
+        let routes: [CategorySheetRoute] = [
+            .rename(food),
+            .newCategory(parent: food),
+            .merge(food)
+        ]
+        let presentations = expectation(description: "Menu sheet routes are presented")
+        presentations.expectedFulfillmentCount = routes.count
+        var presentedRoutes: [CategorySheetRoute] = []
+
+        for route in routes {
+            CategorySheetRoute.presentAfterMenuDismissal(route) { presentedRoute in
+                presentedRoutes.append(presentedRoute)
+                presentations.fulfill()
+            }
+        }
+
+        XCTAssertTrue(presentedRoutes.isEmpty)
+        wait(for: [presentations], timeout: 1)
+        XCTAssertEqual(presentedRoutes.map(\.id), routes.map(\.id))
+
+        guard case let .newCategory(parent) = presentedRoutes[1] else {
+            return XCTFail("Expected the child category route")
+        }
+        XCTAssertEqual(parent, food)
+    }
+
     /// 父分類跟著路由一起走，所以先開過「新增最上層分類」再開「新增子分類」時，
     /// 表單拿到的是這次選到的父分類，而不是上一次留在另一個 `@State` 裡的值。
     func testTheChildEntryPointCarriesTheParentItWasOpenedWith() throws {
