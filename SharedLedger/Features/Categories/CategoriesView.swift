@@ -586,7 +586,7 @@ private struct GroupCategoryTreeRow: View {
                             canMoveDown: siblingIndex.map { $0 < siblings.count - 1 } ?? false,
                             onSelect: actionCoordinator.select
                         )
-                        .onDisappear(performPendingAction)
+                        .onDisappear(perform: performPendingAction)
                         .presentationCompactAdaptation(.popover)
                     }
                 }
