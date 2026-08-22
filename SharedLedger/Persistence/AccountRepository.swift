@@ -91,6 +91,87 @@ struct AccountRepository {
         return transactionBalance + adjustmentTotal(for: account)
     }
 
+    /// Loads every balance with two batched fetches on a private context.
+    ///
+    /// Accessing each account's to-many relationships from the view context faults transactions
+    /// and adjustments synchronously. Opening the account screen could therefore block the main
+    /// thread while CloudKit-backed relationships were materialized. Object IDs are safe to hand
+    /// to another context; only the resulting Decimal values return to the UI.
+    func balances(for accounts: [LedgerAccount]) async -> [NSManagedObjectID: Decimal] {
+        let accountObjectIDs = accounts.map(\.objectID)
+        guard !accountObjectIDs.isEmpty else { return [:] }
+
+        let context = persistence.container.newBackgroundContext()
+        return await context.perform {
+            let backgroundAccounts: [LedgerAccount] = accountObjectIDs.compactMap { objectID in
+                try? context.existingObject(with: objectID) as? LedgerAccount
+            }
+            var balances = Dictionary(
+                uniqueKeysWithValues: backgroundAccounts.map { account in
+                    (account.objectID, (account.openingBalance as Decimal?) ?? 0)
+                }
+            )
+            let trackedAccountIDs = Set(backgroundAccounts.map(\.objectID))
+
+            do {
+                let entryRequest: NSFetchRequest<LedgerEntry> = LedgerEntry.fetchRequest()
+                entryRequest.predicate = NSPredicate(
+                    format: "sourceAccount IN %@ OR destinationAccount IN %@",
+                    backgroundAccounts,
+                    backgroundAccounts
+                )
+                entryRequest.relationshipKeyPathsForPrefetching = [
+                    "sourceAccount",
+                    "destinationAccount"
+                ]
+
+                for entry in try context.fetch(entryRequest) {
+                    guard let rawKind = entry.kind,
+                          let kind = EntryKind(rawValue: rawKind) else { continue }
+                    let amount = (entry.amount as Decimal?) ?? 0
+                    let sourceID = entry.sourceAccount?.objectID
+                    let destinationID = entry.destinationAccount?.objectID
+
+                    if let sourceID, trackedAccountIDs.contains(sourceID) {
+                        let movement = AccountBalanceMovement(
+                            kind: kind,
+                            amount: amount,
+                            isSourceAccount: true,
+                            isDestinationAccount: destinationID == sourceID
+                        )
+                        balances[sourceID, default: 0] += AccountBalanceCalculator.effect(of: movement)
+                    }
+                    if let destinationID,
+                       destinationID != sourceID,
+                       trackedAccountIDs.contains(destinationID) {
+                        let movement = AccountBalanceMovement(
+                            kind: kind,
+                            amount: amount,
+                            isSourceAccount: false,
+                            isDestinationAccount: true
+                        )
+                        balances[destinationID, default: 0] += AccountBalanceCalculator.effect(of: movement)
+                    }
+                }
+
+                let adjustmentRequest: NSFetchRequest<AccountAdjustment> = AccountAdjustment.fetchRequest()
+                adjustmentRequest.predicate = NSPredicate(
+                    format: "account IN %@",
+                    backgroundAccounts
+                )
+                adjustmentRequest.relationshipKeyPathsForPrefetching = ["account"]
+                for adjustment in try context.fetch(adjustmentRequest) {
+                    guard let accountID = adjustment.account?.objectID,
+                          trackedAccountIDs.contains(accountID) else { continue }
+                    balances[accountID, default: 0] += (adjustment.amount as Decimal?) ?? 0
+                }
+            } catch {
+                NSLog("Failed to load batched account balances: \(error.localizedDescription)")
+            }
+            return balances
+        }
+    }
+
     func totalBalance(for accounts: [LedgerAccount]) -> Decimal {
         guard !accounts.isEmpty else { return 0 }
 

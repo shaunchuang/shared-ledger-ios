@@ -12,6 +12,7 @@ struct AccountsView: View {
     @State private var errorMessage: String?
     @State private var accountBalances: [NSManagedObjectID: Decimal] = [:]
     @State private var hasLoadedBalances = false
+    @State private var balanceRefreshTask: Task<Void, Never>?
 
     init(group: LedgerGroup) {
         self.group = group
@@ -44,14 +45,6 @@ struct AccountsView: View {
     private func archiveAction(for account: LedgerAccount) -> (() -> Void)? {
         guard settingsRestriction == nil else { return nil }
         return { accountPendingArchive = account }
-    }
-
-    private func balances(for accounts: [LedgerAccount], repository: AccountRepository) -> [NSManagedObjectID: Decimal] {
-        Dictionary(
-            uniqueKeysWithValues: accounts.map { account in
-                (account.objectID, repository.currentBalance(for: account))
-            }
-        )
     }
 
     var body: some View {
@@ -187,6 +180,9 @@ struct AccountsView: View {
             guard shouldRefreshBalances(for: notification) else { return }
             refreshBalances()
         }
+        .onDisappear {
+            balanceRefreshTask?.cancel()
+        }
     }
 
     private var archiveConfirmationBinding: Binding<Bool> {
@@ -213,7 +209,13 @@ struct AccountsView: View {
     }
 
     private func refreshBalances() {
-        accountBalances = balances(for: Array(accounts), repository: accountRepository)
+        let accountSnapshot = Array(accounts)
+        balanceRefreshTask?.cancel()
+        balanceRefreshTask = Task {
+            let refreshedBalances = await accountRepository.balances(for: accountSnapshot)
+            guard !Task.isCancelled else { return }
+            accountBalances = refreshedBalances
+        }
     }
 
     private func shouldRefreshBalances(for notification: Notification) -> Bool {
