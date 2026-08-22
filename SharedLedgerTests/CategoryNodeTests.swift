@@ -250,7 +250,7 @@ final class BookDraftTests: XCTestCase {
 
 @MainActor
 final class AccountBalanceRepositoryTests: XCTestCase {
-    func testRepositoryDerivesAdjustsAndReconcilesBalance() throws {
+    func testRepositoryDerivesAdjustsAndReconcilesBalance() async throws {
         let persistence = PersistenceController(inMemory: true)
         let group = try GroupRepository(persistence: persistence).createGroup(
             from: GroupDraft(name: "家庭", ownerDisplayName: "小明")
@@ -309,12 +309,18 @@ final class AccountBalanceRepositoryTests: XCTestCase {
 
         XCTAssertEqual(repository.currentBalance(for: source), 100)
         XCTAssertEqual(repository.currentBalance(for: destination), 40)
+        var batchedBalances = await repository.balances(for: [source, destination])
+        XCTAssertEqual(batchedBalances[source.objectID], 100)
+        XCTAssertEqual(batchedBalances[destination.objectID], 40)
 
         let adjustment = try repository.adjustBalance(of: source, to: 125, note: "依帳單調整")
         XCTAssertEqual(adjustment?.amount as Decimal?, 25)
         XCTAssertEqual(adjustment?.account, source)
         XCTAssertEqual(adjustment?.note, "依帳單調整")
         XCTAssertEqual(repository.currentBalance(for: source), 125)
+        batchedBalances = await repository.balances(for: [source, destination])
+        XCTAssertEqual(batchedBalances[source.objectID], 125)
+        XCTAssertEqual(batchedBalances[destination.objectID], 40)
 
         let entries = group.entries as? Set<LedgerEntry> ?? []
         XCTAssertFalse(entries.contains { $0.kind == EntryKind.balanceAdjustment.rawValue })
