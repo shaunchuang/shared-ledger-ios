@@ -81,16 +81,45 @@ struct CategoriesRootView: View {
     }
 }
 
+/// 群組分類管理畫面上那三張表單。
+///
+/// 它們必須共用一個狀態：SwiftUI 只保證同一個畫面掛一個 `.sheet`，三個 `.sheet` 疊在
+/// 同一層時後面的會蓋掉前面的，先掛上去的「新增分類」因此按了沒反應。用單一路由狀態
+/// 驅動唯一的 `.sheet`，順便讓每次開啟都帶著當下選到的父分類，而不是另一個 `@State`
+/// 裡上一次留下來的值。
+enum CategorySheetRoute: Identifiable {
+    /// `parent` 為 `nil` 代表新增最上層分類。
+    case newCategory(parent: LedgerCategory?)
+    case rename(LedgerCategory)
+    case merge(LedgerCategory)
+
+    /// 同一個分類在不同表單、以及不同父分類底下的新增，都要是不同的 identity，
+    /// 否則 `.sheet(item:)` 會沿用上一張表單而不是換一張。
+    var id: String {
+        switch self {
+        case let .newCategory(parent):
+            guard let parent else { return "new:root" }
+            return "new:\(Self.identifier(parent))"
+        case let .rename(category):
+            return "rename:\(Self.identifier(category))"
+        case let .merge(category):
+            return "merge:\(Self.identifier(category))"
+        }
+    }
+
+    private static func identifier(_ category: LedgerCategory) -> String {
+        category.objectID.uriRepresentation().absoluteString
+    }
+}
+
 struct CategoriesView: View {
     @ObservedObject var group: LedgerGroup
 
     @FetchRequest private var rootCategories: FetchedResults<LedgerCategory>
 
-    @State private var isPresentingNewCategory = false
-    @State private var newCategoryParent: LedgerCategory?
+    /// 三張表單共用同一個狀態，因為畫面只掛得住一個 `.sheet`。
+    @State private var sheetRoute: CategorySheetRoute?
     @State private var categoryPendingArchive: LedgerCategory?
-    @State private var categoryPendingRename: LedgerCategory?
-    @State private var categoryPendingMerge: LedgerCategory?
     @State private var errorMessage: String?
     /// 排序寫在子分類上，父層的 FetchRequest 不會因此重新計算，所以用它強制重畫。
     @State private var revision = 0
@@ -145,8 +174,8 @@ struct CategoriesView: View {
                                         depth: 0,
                                         canManage: canManage,
                                         onAddChild: presentChildCategory,
-                                        onRename: { categoryPendingRename = $0 },
-                                        onMerge: { categoryPendingMerge = $0 },
+                                        onRename: { sheetRoute = .rename($0) },
+                                        onMerge: { sheetRoute = .merge($0) },
                                         onMove: move,
                                         onArchive: requestArchive
                                     )
@@ -177,33 +206,32 @@ struct CategoriesView: View {
                 .accessibilityLabel(Text(.categoryActionAddGroupCategory))
             }
         }
-        .sheet(isPresented: $isPresentingNewCategory) {
-            NavigationStack {
-                NewCategoryView(group: group, parent: newCategoryParent) {
-                    isPresentingNewCategory = false
+        .sheet(item: $sheetRoute) { route in
+            switch route {
+            case let .newCategory(parent):
+                NavigationStack {
+                    NewCategoryView(group: group, parent: parent) {
+                        dismissSheet()
+                    }
                 }
-            }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $categoryPendingRename) { category in
-            NavigationStack {
-                RenameCategoryView(category: category) {
-                    categoryPendingRename = nil
-                    revision += 1
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            case let .rename(category):
+                NavigationStack {
+                    RenameCategoryView(category: category) {
+                        dismissSheet()
+                    }
                 }
-            }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $categoryPendingMerge) { category in
-            NavigationStack {
-                MergeCategoryView(category: category) {
-                    categoryPendingMerge = nil
-                    revision += 1
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            case let .merge(category):
+                NavigationStack {
+                    MergeCategoryView(category: category) {
+                        dismissSheet()
+                    }
                 }
+                .presentationDragIndicator(.visible)
             }
-            .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
             Text(.categoryArchiveConfirmTitle),
@@ -259,13 +287,18 @@ struct CategoriesView: View {
     }
 
     private func presentRootCategory() {
-        newCategoryParent = nil
-        isPresentingNewCategory = true
+        sheetRoute = .newCategory(parent: nil)
     }
 
     private func presentChildCategory(_ parent: LedgerCategory) {
-        newCategoryParent = parent
-        isPresentingNewCategory = true
+        sheetRoute = .newCategory(parent: parent)
+    }
+
+    /// 新增、改名與合併都會動到子分類那一層，父層的 FetchRequest 不會因此重新計算，
+    /// 所以關掉表單時一併強制重畫，新增的子分類才會馬上出現在樹狀清單裡。
+    private func dismissSheet() {
+        sheetRoute = nil
+        revision += 1
     }
 
     private func requestArchive(_ category: LedgerCategory) {

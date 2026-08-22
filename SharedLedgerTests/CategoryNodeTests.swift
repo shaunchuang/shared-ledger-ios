@@ -1382,3 +1382,85 @@ final class CoreDataModelMigrationTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+final class CategorySheetRouteTests: XCTestCase {
+    /// 三張表單原本各自掛一個 `.sheet`，後面的會蓋掉前面的，「新增子分類」因此按了
+    /// 沒反應。改成單一路由之後，每個入口都要有自己的 identity，`.sheet(item:)` 才會
+    /// 換成對的那一張表單。
+    func testEveryEntryPointHasItsOwnIdentity() throws {
+        let fixture = try makeFixture()
+        let food = try fixture.makeCategory("餐飲")
+        let travel = try fixture.makeCategory("旅行")
+
+        let ids = [
+            CategorySheetRoute.newCategory(parent: nil).id,
+            CategorySheetRoute.newCategory(parent: food).id,
+            CategorySheetRoute.newCategory(parent: travel).id,
+            CategorySheetRoute.rename(food).id,
+            CategorySheetRoute.merge(food).id
+        ]
+
+        XCTAssertEqual(Set(ids).count, ids.count)
+    }
+
+    /// 同一個入口重開時 identity 必須一樣，否則 `.sheet(item:)` 會把還開著的表單
+    /// 換掉。
+    func testTheSameEntryPointKeepsItsIdentity() throws {
+        let fixture = try makeFixture()
+        let food = try fixture.makeCategory("餐飲")
+
+        XCTAssertEqual(
+            CategorySheetRoute.newCategory(parent: food).id,
+            CategorySheetRoute.newCategory(parent: food).id
+        )
+        XCTAssertEqual(
+            CategorySheetRoute.newCategory(parent: nil).id,
+            CategorySheetRoute.newCategory(parent: nil).id
+        )
+    }
+
+    /// 父分類跟著路由一起走，所以先開過「新增最上層分類」再開「新增子分類」時，
+    /// 表單拿到的是這次選到的父分類，而不是上一次留在另一個 `@State` 裡的值。
+    func testTheChildEntryPointCarriesTheParentItWasOpenedWith() throws {
+        let fixture = try makeFixture()
+        let food = try fixture.makeCategory("餐飲")
+
+        // 先開一次「新增最上層分類」，再從「餐飲」的選單開「新增子分類」。
+        var route: CategorySheetRoute?
+        route = .newCategory(parent: nil)
+        XCTAssertNotEqual(route?.id, CategorySheetRoute.newCategory(parent: food).id)
+
+        route = .newCategory(parent: food)
+        let presentedRoute = try XCTUnwrap(route)
+        guard case let .newCategory(parent) = presentedRoute else {
+            return XCTFail("Expected a newCategory route")
+        }
+
+        let child = try fixture.categories.createCategory(
+            from: CategoryDraft(name: "早餐"),
+            in: fixture.group,
+            parent: parent
+        )
+        XCTAssertEqual(child.parent, food)
+        XCTAssertEqual(fixture.categories.siblings(of: food, in: fixture.group), [child])
+    }
+
+    private func makeFixture() throws -> Fixture {
+        let persistence = PersistenceController(inMemory: true)
+        let group = try GroupRepository(persistence: persistence).createGroup(
+            from: GroupDraft(name: "家庭", ownerDisplayName: "小明", usesDefaultCategories: false)
+        )
+        return Fixture(group: group, categories: CategoryRepository(persistence: persistence))
+    }
+
+    @MainActor
+    private struct Fixture {
+        let group: LedgerGroup
+        let categories: CategoryRepository
+
+        func makeCategory(_ name: String) throws -> LedgerCategory {
+            try categories.createCategory(from: CategoryDraft(name: name), in: group, parent: nil)
+        }
+    }
+}
