@@ -107,20 +107,39 @@ enum CategorySheetRoute: Identifiable {
         }
     }
 
-    /// `Menu` 的按鈕動作會在選單還沒完全收起時執行；同一輪立刻開 sheet，
-    /// UIKit 會把它視為第二次同時呈現，導致點了改名或新增子分類卻沒有反應。
-    /// 等主執行緒的下一輪再設定路由，讓選單先完成自己的 dismiss。
-    static func presentAfterMenuDismissal(
-        _ route: CategorySheetRoute,
-        perform presentation: @escaping (CategorySheetRoute) -> Void
-    ) {
-        DispatchQueue.main.async {
-            presentation(route)
-        }
-    }
-
     private static func identifier(_ category: LedgerCategory) -> String {
         category.objectID.uriRepresentation().absoluteString
+    }
+}
+
+enum CategoryRowAction: Hashable {
+    case rename
+    case addChild
+    case move(Int)
+    case merge
+    case archive
+}
+
+/// iOS 26 的原生 `Menu` 在這個 ScrollView 裡會顯示項目，卻可能完全不送出按鈕動作。
+/// 改用 popover 後，先記住使用者選到的動作並關閉 popover；等內容真的消失才取出動作，
+/// 避免在兩個 presentation 還重疊時開 sheet 或 confirmation dialog。
+final class CategoryRowActionCoordinator: ObservableObject {
+    @Published var isPresented = false
+    private(set) var pendingAction: CategoryRowAction?
+
+    func present() {
+        pendingAction = nil
+        isPresented = true
+    }
+
+    func select(_ action: CategoryRowAction) {
+        pendingAction = action
+        isPresented = false
+    }
+
+    func takePendingAction() -> CategoryRowAction? {
+        defer { pendingAction = nil }
+        return pendingAction
     }
 }
 
@@ -185,9 +204,9 @@ struct CategoriesView: View {
                                         category: category,
                                         depth: 0,
                                         canManage: canManage,
-                                        onAddChild: presentChildCategory,
-                                        onRename: { presentMenuSheet(.rename($0)) },
-                                        onMerge: { presentMenuSheet(.merge($0)) },
+                                        onAddChild: { sheetRoute = .newCategory(parent: $0) },
+                                        onRename: { sheetRoute = .rename($0) },
+                                        onMerge: { sheetRoute = .merge($0) },
                                         onMove: move,
                                         onArchive: requestArchive
                                     )
@@ -300,16 +319,6 @@ struct CategoriesView: View {
 
     private func presentRootCategory() {
         sheetRoute = .newCategory(parent: nil)
-    }
-
-    private func presentChildCategory(_ parent: LedgerCategory) {
-        presentMenuSheet(.newCategory(parent: parent))
-    }
-
-    private func presentMenuSheet(_ route: CategorySheetRoute) {
-        CategorySheetRoute.presentAfterMenuDismissal(route) { route in
-            sheetRoute = route
-        }
     }
 
     /// 新增、改名與合併都會動到子分類那一層，父層的 FetchRequest 不會因此重新計算，
@@ -512,6 +521,7 @@ private struct GroupCategoryTreeRow: View {
     /// 子分類前面那個小圓點是跟著名稱走的層級記號，字放大時它也要放大，
     /// 否則在大字級下小到看不見。
     @ScaledMetric(relativeTo: .subheadline) private var depthMarkerScale: CGFloat = 1
+    @StateObject private var actionCoordinator = CategoryRowActionCoordinator()
 
     private var children: [LedgerCategory] {
         guard let group = category.group else { return [] }
@@ -556,49 +566,29 @@ private struct GroupCategoryTreeRow: View {
                 .accessibilityElement(children: .combine)
                 Spacer()
                 if canManage {
-                    // 一列可以做的事已經超過兩個圖示放得下的數量，收進選單也讓
+                    // 一列可以做的事已經超過兩個圖示放得下的數量，收進動作面板也讓
                     // VoiceOver 讀得到每個動作的名稱，而不是一排看不懂的圖示。
-                    Menu {
-                        Button {
-                            onRename(category)
-                        } label: {
-                            Label(.categoryActionRename, systemImage: "pencil")
-                        }
-                        Button {
-                            onAddChild(category)
-                        } label: {
-                            Label(.categoryActionAddChild, systemImage: "plus.circle")
-                        }
-                        if let index = siblingIndex {
-                            Button {
-                                onMove(category, -1)
-                            } label: {
-                                Label(.categoryActionMoveUp, systemImage: "arrow.up")
-                            }
-                            .disabled(index == 0)
-                            Button {
-                                onMove(category, 1)
-                            } label: {
-                                Label(.categoryActionMoveDown, systemImage: "arrow.down")
-                            }
-                            .disabled(index == siblings.count - 1)
-                        }
-                        Button {
-                            onMerge(category)
-                        } label: {
-                            Label(.categoryActionMerge, systemImage: "arrow.triangle.merge")
-                        }
-                        Button(role: .destructive) {
-                            onArchive(category)
-                        } label: {
-                            Label(.categoryActionArchive, systemImage: "archivebox")
-                        }
+                    Button {
+                        actionCoordinator.present()
                     } label: {
                         Image(systemName: "ellipsis")
                             .ledgerTapTarget()
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel(Text(verbatim: LedgerStringKey
                         .categoryMenuAccessibilityLabel.string(arguments: [name])))
+                    .popover(
+                        isPresented: $actionCoordinator.isPresented,
+                        attachmentAnchor: .rect(.bounds)
+                    ) {
+                        GroupCategoryActionPopover(
+                            canMoveUp: siblingIndex.map { $0 > 0 } ?? false,
+                            canMoveDown: siblingIndex.map { $0 < siblings.count - 1 } ?? false,
+                            onSelect: actionCoordinator.select
+                        )
+                        .onDisappear(perform: performPendingAction)
+                        .presentationCompactAdaptation(.popover)
+                    }
                 }
             }
             .padding(.leading, CGFloat(depth) * 18)
@@ -618,6 +608,98 @@ private struct GroupCategoryTreeRow: View {
                 )
             }
         }
+    }
+
+    private func performPendingAction() {
+        guard let action = actionCoordinator.takePendingAction() else { return }
+        switch action {
+        case .rename:
+            onRename(category)
+        case .addChild:
+            onAddChild(category)
+        case let .move(offset):
+            onMove(category, offset)
+        case .merge:
+            onMerge(category)
+        case .archive:
+            onArchive(category)
+        }
+    }
+}
+
+private struct GroupCategoryActionPopover: View {
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let onSelect: (CategoryRowAction) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            actionButton(
+                .categoryActionRename,
+                systemImage: "pencil",
+                action: .rename
+            )
+            actionButton(
+                .categoryActionAddChild,
+                systemImage: "plus.circle",
+                action: .addChild
+            )
+            actionButton(
+                .categoryActionMoveUp,
+                systemImage: "arrow.up",
+                action: .move(-1),
+                isEnabled: canMoveUp
+            )
+            actionButton(
+                .categoryActionMoveDown,
+                systemImage: "arrow.down",
+                action: .move(1),
+                isEnabled: canMoveDown
+            )
+            actionButton(
+                .categoryActionMerge,
+                systemImage: "arrow.triangle.merge",
+                action: .merge
+            )
+            Divider().padding(.vertical, 4)
+            actionButton(
+                .categoryActionArchive,
+                systemImage: "archivebox",
+                action: .archive,
+                tint: LedgerTheme.coral
+            )
+        }
+        .padding(8)
+        .frame(minWidth: 270)
+    }
+
+    private func actionButton(
+        _ title: LedgerStringKey,
+        systemImage: String,
+        action: CategoryRowAction,
+        isEnabled: Bool = true,
+        tint: Color = LedgerTheme.primary
+    ) -> some View {
+        Button {
+            onSelect(action)
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(tint)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .foregroundStyle(action == .archive ? tint : .primary)
+                Spacer(minLength: 12)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: LedgerTheme.tapTargetMinimum)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.42)
     }
 }
 
