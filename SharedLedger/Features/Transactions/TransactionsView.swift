@@ -30,34 +30,74 @@ struct TransactionsView: View {
                 ScrollView {
                     LedgerEmptyState(
                         systemImage: "person.3",
-                        title: "先建立一個群組",
-                        message: "交易記錄屬於群組，請先到「設定」的「群組管理」建立群組，再回來新增交易。"
+                        title: .transactionEmptyNoGroupTitle,
+                        message: .transactionEmptyNoGroupMessage
                     )
                     .padding(.horizontal, LedgerTheme.pagePadding)
                     .padding(.top, 24)
                 }
             }
         }
-        .navigationTitle("交易")
+        .navigationTitle(Text(.transactionTitle))
     }
 }
 
+/// Whether this device may add or change transactions in a group, and how to explain
+/// it when it may not.
+///
+/// Resolving it walks the current member identity and, for a shared group, makes a
+/// synchronous `fetchShares` call into the CloudKit mirroring metadata. The screens
+/// below therefore cache it in `@State` and refresh it when the data behind it
+/// changes, instead of recomputing it on every `body` pass.
+private struct TransactionWriteAccess {
+    /// Writes are refused until the first resolution, and nothing is explained yet:
+    /// a notice for a state nobody has checked would flash the wrong message on the
+    /// frame before `onAppear` runs.
+    static let unresolved = TransactionWriteAccess(restriction: .missingCurrentMember, isResolved: false)
+
+    let restriction: PermissionError?
+    let isResolved: Bool
+
+    init(restriction: PermissionError?, isResolved: Bool = true) {
+        self.restriction = restriction
+        self.isResolved = isResolved
+    }
+
+    var canWrite: Bool { isResolved && restriction == nil }
+    var noticeMessage: String? { isResolved ? restriction?.errorDescription : nil }
+}
+
 private struct BookTransactionsView: View {
+    /// 交易類型的快速切換。搜尋面板不再重複提供類型選擇，讓 `query.kinds` 只有
+    /// 這一個入口，畫面上就不會出現兩個彼此矛盾的類型狀態。
     private enum Filter: String, CaseIterable, Identifiable {
-        case all = "全部"
-        case expense = "支出"
-        case income = "收入"
-        case transfer = "轉帳"
+        case all
+        case expense
+        case income
+        case transfer
 
         var id: Self { self }
 
-        var kind: EntryKind? {
+        var titleKey: LedgerStringKey {
             switch self {
-            case .all: return nil
-            case .expense: return .expense
-            case .income: return .income
-            case .transfer: return .transfer
+            case .all: return .transactionKindFilterAll
+            case .expense: return .entryKindExpense
+            case .income: return .entryKindIncome
+            case .transfer: return .entryKindTransfer
             }
+        }
+
+        var kinds: Set<EntryKind> {
+            switch self {
+            case .all: return []
+            case .expense: return [.expense]
+            case .income: return [.income]
+            case .transfer: return [.transfer]
+            }
+        }
+
+        static func matching(_ kinds: Set<EntryKind>) -> Filter {
+            allCases.first { $0.kinds == kinds } ?? .all
         }
     }
 
@@ -65,9 +105,20 @@ private struct BookTransactionsView: View {
     let groups: [LedgerGroup]
     @Binding var selectedGroupID: NSManagedObjectID?
 
+    @Environment(\.managedObjectContext) private var context
+
+    /// 候選交易以群組為範圍取一次，帳本範圍與其他條件都交給搜尋服務收斂。範圍可以
+    /// 在單一帳本與跨帳本之間切換，逐帳本的 fetch 會在每次切換時重建整個請求。
+    @FetchRequest private var entries: FetchedResults<LedgerEntry>
+
     @AppStorage private var selectedBookID: String
-    @State private var filter: Filter = .all
+    @State private var query = TransactionQuery()
+    @State private var scope: ReportBookScope = .currentBook
+    @State private var selectedCustomBookIDs: Set<UUID> = []
+    @State private var result = TransactionSearchResult.empty
     @State private var isPresentingNewEntry = false
+    @State private var isPresentingFilters = false
+    @State private var writeAccess = TransactionWriteAccess.unresolved
 
     init(
         group: LedgerGroup,
@@ -81,6 +132,11 @@ private struct BookTransactionsView: View {
             wrappedValue: "",
             BookSelectionStorage.key(for: group)
         )
+        _entries = FetchRequest(
+            sortDescriptors: [NSSortDescriptor(keyPath: \LedgerEntry.date, ascending: false)],
+            predicate: NSPredicate(format: "group == %@", group),
+            animation: .default
+        )
     }
 
     private var activeBooks: [LedgerBook] {
@@ -93,46 +149,79 @@ private struct BookTransactionsView: View {
             ?? activeBooks.first
     }
 
-    /// Why adding a transaction is unavailable, or `nil` when it is allowed. The
-    /// repositories throw the same value, so the entry point and the save path can
-    /// never disagree.
-    private var writeRestriction: PermissionError? {
-        EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    /// The repositories refuse the write with the same `PermissionError` this
+    /// resolves, so the entry point and the save path can never disagree.
+    private func reloadWriteAccess() {
+        writeAccess = TransactionWriteAccess(
+            restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
+        )
+    }
+
+    private var currencyCode: String {
+        LedgerCurrency.normalizedCode(group.currencyCode)
+    }
+
+    private var kindFilter: Binding<Filter> {
+        Binding(
+            get: { Filter.matching(query.kinds) },
+            set: { query.kinds = $0.kinds }
+        )
     }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            if let selectedBook {
-                TransactionListView(
-                    book: selectedBook,
-                    kind: filter.kind,
-                    writeRestriction: writeRestriction
+            if selectedBook != nil || scope != .currentBook {
+                TransactionResultListView(
+                    result: result,
+                    currencyCode: currencyCode,
+                    isFiltered: !query.isEmpty,
+                    showsBookName: scope != .currentBook,
+                    hasSearchableBooks: !result.includedBookIDs.isEmpty,
+                    writeAccess: writeAccess
                 ) {
                     isPresentingNewEntry = true
                 }
-                .id(selectedBook.objectID)
             } else {
                 ScrollView {
                     LedgerEmptyState(
                         systemImage: "book.closed",
-                        title: "正在準備主要帳本",
-                        message: "完成資料準備後，就能在這裡新增交易。"
+                        title: .transactionEmptyPreparingBookTitle,
+                        message: .transactionEmptyPreparingBookMessage
                     )
                     .padding(.horizontal, LedgerTheme.pagePadding)
                     .padding(.top, 24)
                 }
             }
         }
+        .searchable(
+            text: $query.keyword,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: Text(.transactionSearchPrompt)
+        )
         .toolbar {
-            if selectedBook != nil, writeRestriction == nil {
+            ToolbarItem {
                 Button {
-                    isPresentingNewEntry = true
+                    isPresentingFilters = true
                 } label: {
-                    Image(systemName: "plus")
-                        .fontWeight(.bold)
+                    Image(
+                        systemName: query.hasActiveFilters
+                            ? "line.3.horizontal.decrease.circle.fill"
+                            : "line.3.horizontal.decrease.circle"
+                    )
                 }
-                .accessibilityLabel("新增交易")
+                .accessibilityLabel(Text(verbatim: filterAccessibilityLabel))
+            }
+            if selectedBook != nil, writeAccess.canWrite {
+                ToolbarItem {
+                    Button {
+                        isPresentingNewEntry = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .fontWeight(.bold)
+                    }
+                    .accessibilityLabel(Text(.transactionActionAdd))
+                }
             }
         }
         .sheet(isPresented: $isPresentingNewEntry) {
@@ -146,10 +235,76 @@ private struct BookTransactionsView: View {
                 .presentationDragIndicator(.visible)
             }
         }
-        .onAppear(perform: normalizeSelectedBook)
+        .sheet(isPresented: $isPresentingFilters) {
+            NavigationStack {
+                TransactionFilterView(
+                    group: group,
+                    query: $query,
+                    scope: $scope,
+                    selectedBookIDs: $selectedCustomBookIDs,
+                    currentBookName: selectedBook?.name
+                        ?? LedgerStringKey.transactionScopeNoBookSelected.string()
+                )
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .onAppear {
+            normalizeSelectedBook()
+            reloadWriteAccess()
+            reloadResult()
+        }
         .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
+            reloadResult()
         }
+        .onChange(of: query) { _, _ in reloadResult() }
+        .onChange(of: scope) { _, _ in reloadResult() }
+        .onChange(of: selectedCustomBookIDs) { _, _ in reloadResult() }
+        .onChange(of: selectedBookID) { _, _ in reloadResult() }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            if ContextChangeObserver.touches(notification, .groupPermissions) {
+                reloadWriteAccess()
+            }
+            // 作廢狀態來自稽核事件，而編輯既不改變交易筆數也不改變 fetch 結果的
+            // 成員，兩者都不會讓 `entries` 自己重新發佈，所以要跟著變更重算。
+            if ContextChangeObserver.touches(notification, .auditLog, .transactionSearch) {
+                reloadResult()
+            }
+        }
+    }
+
+    /// 結果是快取的，不是 computed property：每次計算都要再查一次群組的作廢稽核
+    /// 事件，做成 computed property 等於每次 render 都重跑一次完整搜尋。
+    private func reloadResult() {
+        result = TransactionSearchService().results(
+            candidates: Array(entries),
+            in: group,
+            query: query,
+            scope: scope,
+            currentBook: selectedBook,
+            selectedBookIDs: selectedCustomBookIDs
+        )
+    }
+
+    /// 已套用的條件數量要唸出來，否則 VoiceOver 使用者只知道有一個「篩選」按鈕，
+    /// 不知道目前的結果已經被收斂過。
+    private var filterAccessibilityLabel: String {
+        guard query.hasActiveFilters else {
+            return LedgerStringKey.transactionActionFilter.string()
+        }
+        return LedgerStringKey.transactionActionFilterActive.string(
+            arguments: [Int64(query.activeFilterCount)]
+        )
+    }
+
+    private var groupName: String {
+        group.name ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
     }
 
     private var header: some View {
@@ -161,54 +316,136 @@ private struct BookTransactionsView: View {
                             Button {
                                 selectedGroupID = candidate.objectID
                             } label: {
+                                let name = candidate.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
                                 if candidate.objectID == group.objectID {
-                                    Label(candidate.name ?? "未命名群組", systemImage: "checkmark")
+                                    Label {
+                                        Text(verbatim: name)
+                                    } icon: {
+                                        Image(systemName: "checkmark")
+                                    }
                                 } else {
-                                    Text(candidate.name ?? "未命名群組")
+                                    Text(verbatim: name)
                                 }
                             }
                         }
                     } label: {
-                        selectorLabel(group.name ?? "未命名群組", systemImage: "person.3.fill")
+                        selectorLabel(groupName, systemImage: "person.3.fill")
                     }
-                    .accessibilityLabel("切換群組")
+                    .accessibilityLabel(Text(.transactionGroupPickerAccessibilityLabel))
+                    .accessibilityValue(Text(verbatim: groupName))
                 } else {
-                    Label(group.name ?? "未命名群組", systemImage: "person.3.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    Label {
+                        Text(verbatim: groupName)
+                    } icon: {
+                        Image(systemName: "person.3.fill")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 8)
 
                 if let selectedBook {
+                    let selectedBookName = selectedBook.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
                     Menu {
                         ForEach(activeBooks, id: \.objectID) { book in
                             Button {
                                 select(book)
                             } label: {
+                                let name = book.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
                                 if book == selectedBook {
-                                    Label(book.name ?? "未命名帳本", systemImage: "checkmark")
+                                    Label {
+                                        Text(verbatim: name)
+                                    } icon: {
+                                        Image(systemName: "checkmark")
+                                    }
                                 } else {
-                                    Text(book.name ?? "未命名帳本")
+                                    Text(verbatim: name)
                                 }
                             }
                         }
                     } label: {
-                        selectorLabel(selectedBook.name ?? "未命名帳本", systemImage: "book.closed.fill")
+                        selectorLabel(selectedBookName, systemImage: "book.closed.fill")
                     }
-                    .accessibilityLabel("切換目前帳本")
+                    .accessibilityLabel(Text(.transactionBookPickerAccessibilityLabel))
+                    .accessibilityValue(Text(verbatim: selectedBookName))
                 }
             }
 
-            Picker("交易類型", selection: $filter) {
+            Picker(selection: kindFilter) {
                 ForEach(Filter.allCases) { item in
-                    Text(item.rawValue).tag(item)
+                    Text(item.titleKey).tag(item)
                 }
+            } label: {
+                Text(.transactionKindFilterTitle)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel(Text(.transactionKindFilterTitle))
+
+            scopeSummary
         }
         .padding(.horizontal, LedgerTheme.pagePadding)
         .padding(.top, 12)
+    }
+
+    /// 每個搜尋結果都必須說得出自己的範圍與筆數，使用者才知道現在看到的是全部
+    /// 交易，還是被條件收斂過的一部分。
+    private var scopeSummary: some View {
+        HStack(spacing: 8) {
+            Label {
+                Text(verbatim: scopeLabel)
+            } icon: {
+                Image(systemName: "book.closed.fill")
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            if query.isEmpty {
+                Text(verbatim: LedgerStringKey.transactionResultCount.string(
+                    arguments: [Int64(result.matchCount)]
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            } else {
+                Text(verbatim: LedgerStringKey.transactionResultMatchCount.string(
+                    arguments: [Int64(result.matchCount), Int64(result.scopedCount)]
+                ))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(LedgerTheme.primaryStrong)
+
+                Button {
+                    query = TransactionQuery()
+                } label: {
+                    Text(.transactionResultClear)
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.borderless)
+            }
+        }
+        // 範圍與筆數合起來才是一句話；「清除」保留成自己的按鈕，否則 VoiceOver
+        // 使用者會讀得到這個狀態，卻沒有辦法動它。
+        .accessibilityElement(children: .contain)
+    }
+
+    private var scopeLabel: String {
+        switch scope {
+        case .allActiveBooks:
+            return LedgerStringKey.transactionScopeAllBooks.string(
+                arguments: [Int64(result.includedBookIDs.count)]
+            )
+        case .currentBook:
+            return selectedBook?.name ?? LedgerStringKey.transactionScopeNoBookSelected.string()
+        case .selectedBookIDs:
+            return LedgerStringKey.transactionScopeSelectedBooks.string(
+                arguments: [Int64(result.includedBookIDs.count)]
+            )
+        }
     }
 
     private func selectorLabel(_ title: String, systemImage: String) -> some View {
@@ -238,68 +475,59 @@ private struct BookTransactionsView: View {
     }
 }
 
-private struct TransactionListView: View {
-    @FetchRequest private var entries: FetchedResults<LedgerEntry>
-    let writeRestriction: PermissionError?
+/// 依月份分組的搜尋結果。純呈現：結果由呼叫端快取並在資料變更時重算，這裡不再
+/// 自行查詢，才不會讓每次 render 都重跑一次搜尋。
+private struct TransactionResultListView: View {
+    let result: TransactionSearchResult
+    let currencyCode: String
+    /// 有沒有套用關鍵字或篩選。空結果的說法完全不同：一個是「還沒有交易」，
+    /// 另一個是「有交易，但沒有一筆符合條件」。
+    let isFiltered: Bool
+    let showsBookName: Bool
+    let hasSearchableBooks: Bool
+    let writeAccess: TransactionWriteAccess
     let onAddFirst: () -> Void
 
-    init(
-        book: LedgerBook,
-        kind: EntryKind?,
-        writeRestriction: PermissionError?,
-        onAddFirst: @escaping () -> Void
-    ) {
-        self.writeRestriction = writeRestriction
-        self.onAddFirst = onAddFirst
-        let predicate: NSPredicate
-        if let kind {
-            predicate = NSPredicate(format: "book == %@ AND kind == %@", book, kind.rawValue)
-        } else {
-            predicate = NSPredicate(format: "book == %@", book)
-        }
-        _entries = FetchRequest(
-            sortDescriptors: [NSSortDescriptor(keyPath: \LedgerEntry.date, ascending: false)],
-            predicate: predicate,
-            animation: .default
-        )
-    }
-
-    private var visibleEntries: [LedgerEntry] {
-        let repository = EntryRepository()
-        return entries.filter { !repository.isVoided($0) }
-    }
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// 三欄合計在最大字級改成直排，分隔線也要跟著換方向。
+    @ScaledMetric(relativeTo: .subheadline) private var totalsDividerHeight: CGFloat = 30
 
     private var addAction: (() -> Void)? {
-        guard writeRestriction == nil else { return nil }
+        guard writeAccess.canWrite, !isFiltered else { return nil }
         return onAddFirst
     }
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
-                if let message = writeRestriction?.errorDescription {
+            LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
+                if let message = writeAccess.noticeMessage {
                     LedgerNotice(message: message)
                 }
 
-                if visibleEntries.isEmpty {
-                    LedgerEmptyState(
-                        systemImage: "receipt",
-                        title: "沒有有效交易",
-                        message: writeRestriction == nil
-                            ? "新增共同收支後，就能在這裡查看、編輯與核對交易。"
-                            : "目前還沒有可檢視的交易。",
-                        actionTitle: writeRestriction == nil ? "新增交易" : nil,
-                        action: addAction
-                    )
-                } else {
-                    ForEach(visibleEntries, id: \.objectID) { entry in
-                        NavigationLink {
-                            TransactionDetailView(entry: entry)
-                        } label: {
-                            EntryRow(entry: entry)
-                        }
-                        .buttonStyle(.plain)
+                if result.hasMatches {
+                    if isFiltered {
+                        matchTotals
                     }
+                    ForEach(result.sections) { section in
+                        Section {
+                            ForEach(section.entries, id: \.objectID) { entry in
+                                NavigationLink {
+                                    TransactionDetailView(entry: entry)
+                                } label: {
+                                    EntryRow(
+                                        entry: entry,
+                                        showsBookName: showsBookName,
+                                        isVoided: entry.id.map(result.voidedEntryIDs.contains) == true
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        } header: {
+                            monthHeader(section)
+                        }
+                    }
+                } else {
+                    emptyState
                 }
             }
             .padding(.horizontal, LedgerTheme.pagePadding)
@@ -307,10 +535,96 @@ private struct TransactionListView: View {
             .padding(.bottom, 28)
         }
     }
+
+    private var matchTotals: some View {
+        LedgerCard {
+            LedgerAdaptiveStack(horizontalSpacing: 16, verticalSpacing: 12) {
+                totalColumn(title: .entryKindIncome, amount: result.income, tint: LedgerTheme.primary)
+                // 直排時分隔線是橫線，撐一個固定高度只會多出一段空白。
+                Divider().frame(height: isStacked ? nil : totalsDividerHeight)
+                totalColumn(title: .entryKindExpense, amount: result.expense, tint: LedgerTheme.coral)
+                Divider().frame(height: isStacked ? nil : totalsDividerHeight)
+                totalColumn(title: .transactionTotalsNet, amount: result.net, tint: .primary)
+            }
+        }
+    }
+
+    private var isStacked: Bool { dynamicTypeSize.isAccessibilitySize }
+
+    private func totalColumn(title: LedgerStringKey, amount: Decimal, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(verbatim: LedgerCurrency.format(amount, currencyCode: currencyCode))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(tint)
+                .lineLimit(isStacked ? 2 : 1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func monthHeader(_ section: TransactionSearchSection) -> some View {
+        HStack {
+            // 標題是搜尋服務用 `Date.FormatStyle` 依目前 locale 排出來的年月，不是文案。
+            Text(verbatim: section.title)
+                .font(.subheadline.weight(.bold))
+            Spacer()
+            Text(verbatim: LedgerCurrency.format(section.net, currencyCode: currencyCode))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 7)
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
+        .background(LedgerTheme.surface.opacity(0.94))
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if !hasSearchableBooks {
+            LedgerEmptyState(
+                systemImage: "book.closed",
+                title: .transactionEmptyNoBookSelectedTitle,
+                message: .transactionEmptyNoBookSelectedMessage
+            )
+        } else if isFiltered {
+            LedgerEmptyState(
+                systemImage: "magnifyingglass",
+                title: .transactionEmptyNoMatchTitle,
+                message: Text(verbatim: noMatchMessage)
+            )
+        } else {
+            LedgerEmptyState(
+                systemImage: "receipt",
+                title: .transactionEmptyNoneTitle,
+                message: writeAccess.canWrite
+                    ? LedgerStringKey.transactionEmptyNoneMessageWritable
+                    : LedgerStringKey.transactionEmptyNoneMessageReadOnly,
+                actionTitle: addAction == nil ? nil : LedgerStringKey.transactionActionAdd,
+                action: addAction
+            )
+        }
+    }
+
+    private var noMatchMessage: String {
+        guard result.scopedCount > 0 else {
+            return LedgerStringKey.transactionEmptyNoMatchMessageEmpty.string()
+        }
+        return LedgerStringKey.transactionEmptyNoMatchMessageScoped.string(
+            arguments: [Int64(result.scopedCount)]
+        )
+    }
 }
 
 private struct EntryRow: View {
     @ObservedObject var entry: LedgerEntry
+    /// 跨帳本搜尋時每一筆都要標示來源帳本；單一帳本範圍下重複顯示只是雜訊。
+    var showsBookName = false
+    var isVoided = false
 
     private var kind: EntryKind {
         EntryKind(rawValue: entry.kind ?? "") ?? .expense
@@ -329,18 +643,23 @@ private struct EntryRow: View {
     private var subtitle: String {
         var parts: [String] = []
         if let date = entry.date {
-            parts.append(date.formatted(date: .abbreviated, time: .omitted))
+            parts.append(LedgerFormatters.day(date))
         }
         if kind == .transfer, let from = entry.sourceAccount?.name, let to = entry.destinationAccount?.name {
-            parts.append("\(from) → \(to)")
+            parts.append(
+                LedgerStringKey.transactionRowTransferRoute.string(arguments: [from, to])
+            )
         } else if let account = entry.sourceAccount?.name {
             parts.append(account)
+        }
+        if showsBookName, let book = entry.book?.name, !book.isEmpty {
+            parts.append(book)
         }
         return parts.joined(separator: " · ")
     }
 
     private var amountText: String {
-        formattedAmount(
+        LedgerCurrency.formatSigned(
             (entry.amount as Decimal?) ?? 0,
             kind: kind,
             currencyCode: LedgerCurrency.normalizedCode(entry.group?.currencyCode)
@@ -360,39 +679,70 @@ private struct EntryRow: View {
         LedgerCard {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: kind.systemImage, tint: kind.tint)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                    if !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                LedgerAdaptiveStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            // 標題是分類、備註或交易種類，三者都是資料而不是文案。
+                            Text(verbatim: title)
+                                .font(.subheadline.weight(.semibold))
+                                .strikethrough(isVoided)
+                            if isVoided {
+                                Text(.transactionRowVoided)
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(.secondary.opacity(0.15), in: Capsule())
+                            }
+                        }
+                        if !subtitle.isEmpty {
+                            Text(verbatim: subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HStack(spacing: 6) {
+                        Text(verbatim: amountText)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(isVoided ? .secondary : amountColor)
+                            .strikethrough(isVoided)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
                     }
                 }
-                Spacer()
-                Text(amountText)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(amountColor)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
             }
         }
+        .opacity(isVoided ? 0.75 : 1)
+        // 一列就是一筆交易：分開唸成標題、日期、金額三個元素，使用者要滑三次才知道
+        // 自己停在哪一筆。
+        .accessibilityElement(children: .combine)
     }
 }
 
-private struct TransactionDetailView: View {
+/// 一筆交易的完整內容。
+///
+/// 不是 `private`：iCloud 同步頁列出的資料衝突要能直接點進這裡，讓使用者用平常的
+/// 編輯與作廢流程處理，而不是另外做一套只在衝突時出現的修復畫面。
+struct TransactionDetailView: View {
     @ObservedObject var entry: LedgerEntry
+
+    @Environment(\.managedObjectContext) private var context
 
     @State private var isEditing = false
     @State private var showVoidConfirmation = false
     @State private var errorMessage: String?
+    /// Both of these reach outside the entry to resolve — `isVoided` fetches the
+    /// group's void audits, and the write access makes a synchronous `fetchShares`
+    /// call — and `body` reads each of them several times per pass. They are resolved
+    /// once per change instead of once per read.
+    @State private var isVoided = false
+    @State private var writeAccess = TransactionWriteAccess.unresolved
 
     private var repository: EntryRepository { EntryRepository() }
-
-    private var isVoided: Bool {
-        repository.isVoided(entry)
-    }
 
     private var kind: EntryKind {
         EntryKind(rawValue: entry.kind ?? "") ?? .expense
@@ -403,7 +753,7 @@ private struct TransactionDetailView: View {
     }
 
     private var payments: [EntryPayment] {
-        (entry.payments as? Set<EntryPayment> ?? [])
+        entry.livePayments
             .sorted { lhs, rhs in
                 if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
                 return (lhs.member?.displayName ?? "") < (rhs.member?.displayName ?? "")
@@ -411,14 +761,20 @@ private struct TransactionDetailView: View {
     }
 
     private var splits: [EntrySplit] {
-        (entry.splits as? Set<EntrySplit> ?? [])
+        entry.liveSplits
             .sorted { ($0.member?.displayName ?? "") < ($1.member?.displayName ?? "") }
     }
 
-    /// Why editing or voiding this entry is unavailable, or `nil` when allowed.
-    private var writeRestriction: PermissionError? {
-        guard let group = entry.group else { return .missingCurrentMember }
-        return EffectivePermissionRepository().transactionWriteRestriction(in: group)
+    private func reloadStatus() {
+        guard let group = entry.group else {
+            isVoided = false
+            writeAccess = .unresolved
+            return
+        }
+        isVoided = repository.isVoided(entry)
+        writeAccess = TransactionWriteAccess(
+            restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
+        )
     }
 
     private var originalSnapshot: TransactionAuditPayload.Snapshot? {
@@ -438,53 +794,71 @@ private struct TransactionDetailView: View {
         List {
             if isVoided {
                 Section {
-                    Label("此交易已作廢，保留於稽核歷史中。", systemImage: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+                    Label {
+                        Text(.transactionDetailVoidedNotice)
+                    } icon: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .foregroundStyle(.secondary)
                 }
             }
 
-            Section("交易") {
-                detailRow("類型", value: kind.displayName)
+            Section {
+                detailRow(.transactionDetailFieldKind, value: kind.displayName)
                 detailRow(
-                    "金額",
-                    value: formattedAmount(detailAmount, kind: kind, currencyCode: currencyCode)
+                    .transactionDetailFieldAmount,
+                    value: LedgerCurrency.formatSigned(
+                        detailAmount,
+                        kind: kind,
+                        currencyCode: currencyCode
+                    )
                 )
                 if let date = entry.date {
-                    detailRow("日期", value: date.formatted(date: .long, time: .omitted))
+                    detailRow(.transactionDetailFieldDate, value: LedgerFormatters.longDay(date))
                 }
-                detailRow("帳本", value: entry.book?.name ?? "未命名帳本")
+                detailRow(
+                    .transactionDetailFieldBook,
+                    value: entry.book?.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
+                )
                 if let category = entry.category?.name, !category.isEmpty {
-                    detailRow("分類", value: category)
+                    detailRow(.transactionDetailFieldCategory, value: category)
                 }
                 if kind == .transfer {
-                    detailRow("轉出帳戶", value: entry.sourceAccount?.name ?? "-")
-                    detailRow("轉入帳戶", value: entry.destinationAccount?.name ?? "-")
+                    detailRow(.transactionDetailFieldSourceAccount, value: accountName(entry.sourceAccount))
+                    detailRow(
+                        .transactionDetailFieldDestinationAccount,
+                        value: accountName(entry.destinationAccount)
+                    )
                 } else {
-                    detailRow("帳戶", value: entry.sourceAccount?.name ?? "-")
+                    detailRow(.transactionDetailFieldAccount, value: accountName(entry.sourceAccount))
                 }
                 if let note = entry.note, !note.isEmpty {
-                    detailRow("備註", value: note)
+                    detailRow(.transactionDetailFieldNote, value: note)
                 }
+            } header: {
+                Text(.transactionDetailSectionTransaction)
             }
 
             if kind != .transfer {
-                Section("付款人") {
+                Section {
                     ForEach(payments, id: \.objectID) { payment in
                         detailRow(
-                            payment.member?.displayName ?? "未命名成員",
+                            memberName(payment.member),
                             value: LedgerCurrency.format(
                                 (payment.amount as Decimal?) ?? 0,
                                 currencyCode: currencyCode
                             )
                         )
                     }
+                } header: {
+                    Text(.transactionDetailSectionPayers)
                 }
 
-                Section("分攤 · \(splitModeName)") {
+                Section {
                     ForEach(splits, id: \.objectID) { split in
                         VStack(alignment: .leading, spacing: 4) {
                             detailRow(
-                                split.member?.displayName ?? "未命名成員",
+                                memberName(split.member),
                                 value: LedgerCurrency.format(
                                     (split.amount as Decimal?) ?? 0,
                                     currencyCode: currencyCode
@@ -492,41 +866,65 @@ private struct TransactionDetailView: View {
                             )
                             if let input = split.inputValue as Decimal?,
                                splitMode != .equal {
-                                Text(splitMode == .percentage
-                                     ? "原始輸入：\(NSDecimalNumber(decimal: input).stringValue)%"
-                                     : "原始輸入：\(LedgerCurrency.format(input, currencyCode: currencyCode))")
+                                Text(verbatim: originalInputText(input))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        .accessibilityElement(children: .combine)
                     }
+                } header: {
+                    Text(verbatim: LedgerStringKey.transactionDetailSectionSplits.string(
+                        arguments: [splitModeName]
+                    ))
                 }
             }
 
             if !isVoided {
-                if let message = writeRestriction?.errorDescription {
+                if let message = writeAccess.noticeMessage {
                     Section {
-                        Label(message, systemImage: "lock")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Label {
+                            // 權限說明來自資料層的 `PermissionError`，那一層還沒遷移。
+                            Text(verbatim: message)
+                        } icon: {
+                            Image(systemName: "lock")
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     }
-                } else {
+                } else if writeAccess.canWrite {
                     Section {
-                        Button("作廢交易", role: .destructive) {
+                        Button(role: .destructive) {
                             showVoidConfirmation = true
+                        } label: {
+                            Text(.transactionDetailActionVoid)
                         }
                     } footer: {
-                        Text("作廢不會刪除歷史紀錄；系統會保存交易當下的付款與分攤快照。")
+                        Text(.transactionDetailVoidFooter)
                     }
                 }
             }
         }
-        .navigationTitle("交易詳情")
+        .navigationTitle(Text(.transactionDetailTitle))
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: reloadStatus)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard ContextChangeObserver.touches(notification, .auditLog, .groupPermissions) else {
+                return
+            }
+            reloadStatus()
+        }
         .toolbar {
-            if !isVoided, entry.book?.archivedAt == nil, writeRestriction == nil {
-                Button("編輯") {
+            if !isVoided, entry.book?.archivedAt == nil, writeAccess.canWrite {
+                Button {
                     isEditing = true
+                } label: {
+                    Text(.commonActionEdit)
                 }
             }
         }
@@ -542,19 +940,26 @@ private struct TransactionDetailView: View {
             }
         }
         .confirmationDialog(
-            "確定要作廢這筆交易？",
+            Text(.transactionDetailVoidConfirmTitle),
             isPresented: $showVoidConfirmation,
             titleVisibility: .visible
         ) {
-            Button("作廢交易", role: .destructive, action: voidEntry)
-            Button("取消", role: .cancel) {}
+            Button(role: .destructive, action: voidEntry) {
+                Text(.transactionDetailActionVoid)
+            }
+            Button(role: .cancel) {} label: {
+                Text(.commonActionCancel)
+            }
         } message: {
-            Text("作廢後不能再編輯，但完整交易快照仍會保留在稽核紀錄。")
+            Text(.transactionDetailVoidConfirmMessage)
         }
-        .alert("無法處理交易", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.transactionDetailErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            // 錯誤內容來自資料層，那一層還沒遷移到 catalog。
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -562,13 +967,7 @@ private struct TransactionDetailView: View {
         SplitMode(rawValue: entry.splitMode ?? "") ?? .equal
     }
 
-    private var splitModeName: String {
-        switch splitMode {
-        case .equal: return "平均"
-        case .percentage: return "比例"
-        case .fixedAmount: return "指定金額"
-        }
-    }
+    private var splitModeName: String { splitMode.displayName }
 
     private var errorBinding: Binding<Bool> {
         Binding(
@@ -577,44 +976,54 @@ private struct TransactionDetailView: View {
         )
     }
 
+    private func detailRow(_ title: LedgerStringKey, value: String) -> some View {
+        detailRow(Text(title), value: value)
+    }
+
+    /// 標題是成員名稱這類資料時用這一個；欄位名稱一律走上面的鍵。
     private func detailRow(_ title: String, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
+        detailRow(Text(verbatim: title), value: value)
+    }
+
+    private func detailRow(_ title: Text, value: String) -> some View {
+        LedgerAdaptiveStack(horizontalSpacing: 16, verticalSpacing: 2, rowAlignment: .firstTextBaseline) {
+            title
                 .foregroundStyle(.secondary)
-            Spacer(minLength: 16)
-            Text(value)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(verbatim: value)
                 .multilineTextAlignment(.trailing)
         }
+        // 欄位名稱與值分開唸，使用者要滑兩次才聽得懂一行；合成一個元素才是一句話。
+        .accessibilityElement(children: .combine)
+    }
+
+    private func accountName(_ account: LedgerAccount?) -> String {
+        guard let account else { return "—" }
+        return account.name ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string()
+    }
+
+    private func memberName(_ member: Member?) -> String {
+        member?.displayName ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
+    }
+
+    private func originalInputText(_ input: Decimal) -> String {
+        if splitMode == .percentage {
+            return LedgerStringKey.transactionDetailSplitOriginalPercentage.string(
+                arguments: [NSDecimalNumber(decimal: input).stringValue]
+            )
+        }
+        return LedgerStringKey.transactionDetailSplitOriginalAmount.string(
+            arguments: [LedgerCurrency.format(input, currencyCode: currencyCode)]
+        )
     }
 
     private func voidEntry() {
         do {
             try repository.voidEntry(entry)
+            reloadStatus()
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-}
-
-private func formattedAmount(_ amount: Decimal, kind: EntryKind, currencyCode: String) -> String {
-    let absoluteAmount = amount < 0 ? -amount : amount
-    switch kind {
-    case .income:
-        return LedgerCurrency.format(
-            absoluteAmount,
-            currencyCode: currencyCode,
-            showPositiveSign: true
-        )
-    case .expense:
-        return LedgerCurrency.format(-absoluteAmount, currencyCode: currencyCode)
-    case .transfer:
-        return LedgerCurrency.format(absoluteAmount, currencyCode: currencyCode)
-    case .balanceAdjustment:
-        return LedgerCurrency.format(
-            amount,
-            currencyCode: currencyCode,
-            showPositiveSign: true
-        )
     }
 }
 

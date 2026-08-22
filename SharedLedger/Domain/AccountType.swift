@@ -8,14 +8,16 @@ enum AccountType: String, CaseIterable, Identifiable, Codable, Sendable {
 
     var id: Self { self }
 
-    var displayName: String {
+    var displayNameKey: LedgerStringKey {
         switch self {
-        case .cash: return "現金"
-        case .bank: return "銀行帳戶"
-        case .creditCard: return "信用卡"
-        case .other: return "其他"
+        case .cash: return .accountTypeCash
+        case .bank: return .accountTypeBank
+        case .creditCard: return .accountTypeCreditCard
+        case .other: return .accountTypeOther
         }
     }
+
+    var displayName: String { displayNameKey.string() }
 
     var systemImage: String {
         switch self {

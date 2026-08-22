@@ -54,6 +54,26 @@ struct EffectivePermission: Equatable {
     var isReadOnly: Bool { role == .viewer }
 }
 
+/// What the caller is about to do, so a restriction can be derived from an
+/// `EffectivePermission` that has already been resolved.
+///
+/// Resolving a permission makes a synchronous `fetchShares` call for a shared group,
+/// so a screen that needs both the role and the reason an action is unavailable must
+/// be able to pay for that once rather than per question it asks.
+enum PermissionRequirement {
+    case transactionWrite
+    case ledgerSettings
+    case memberManagement
+
+    func isSatisfied(by permission: EffectivePermission) -> Bool {
+        switch self {
+        case .transactionWrite: return permission.canEditTransactions
+        case .ledgerSettings: return permission.canManageLedgerSettings
+        case .memberManagement: return permission.canManageMembers
+        }
+    }
+}
+
 enum PermissionError: LocalizedError, Equatable {
     /// The current user has a role, but that role does not allow this action.
     case insufficientRole(MemberRole)
@@ -70,15 +90,15 @@ enum PermissionError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case let .insufficientRole(role):
-            return "目前的群組角色是「\(role.displayName)」，沒有執行這項操作的權限。"
+            return LedgerStringKey.errorPermissionRole.string(arguments: [role.displayName])
         case .cloudReadOnly:
-            return "你在這個 iCloud 共享中的權限是唯讀，無法新增或修改共享資料。"
+            return LedgerStringKey.errorPermissionReadOnlyShare.string()
         case .cloudPermissionUnknown:
-            return "尚未取得你在這個 iCloud 共享中的權限，暫時無法寫入。請連上網路等待共享同步完成後再試。"
+            return LedgerStringKey.errorPermissionAwaitingShare.string()
         case .cloudParticipantMismatch:
-            return "這個 App 成員對應到另一位 iCloud 共享參與者，為避免誤用他人身分寫入，已停止這項操作。"
+            return LedgerStringKey.errorPermissionMismatchedParticipant.string()
         case .missingCurrentMember:
-            return "尚未確認你在這個群組中的成員身分，無法執行這項操作。"
+            return LedgerStringKey.errorPermissionMissingCurrentMember.string()
         }
     }
 }
@@ -98,9 +118,25 @@ struct CloudPermissionCache {
         self.defaults = defaults
     }
 
+    private static let keyPrefix = "cloudWritePermission."
+
     private func key(for group: LedgerGroup) -> String? {
         guard let id = group.id else { return nil }
-        return "cloudWritePermission.\(id.uuidString)"
+        return Self.keyPrefix + id.uuidString
+    }
+
+    /// 這台裝置目前記著多少個群組的權限。刪除本機個人資料的畫面要說出數量，
+    /// 不能只說「有一些」。
+    var storedGroupCount: Int {
+        storedKeys.count
+    }
+
+    func clearAll() {
+        storedKeys.forEach(defaults.removeObject(forKey:))
+    }
+
+    private var storedKeys: [String] {
+        defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(Self.keyPrefix) }
     }
 
     func lastKnownWritePermission(for group: LedgerGroup) -> Bool? {
@@ -135,6 +171,13 @@ struct EffectivePermissionRepository {
         self.persistence = persistence
         self.cache = cache ?? persistence.cloudPermissionCache
         self.shareResolver = shareResolver
+    }
+
+    /// Drops the cached CloudKit write permission for a group that is going away.
+    /// The cache is keyed by group id in `UserDefaults`, so without this a deleted
+    /// group leaves an entry behind for an id nothing can look up again.
+    func forgetCachedPermission(for group: LedgerGroup) {
+        cache.clear(for: group)
     }
 
     func permission(in group: LedgerGroup) -> EffectivePermission {
@@ -203,23 +246,25 @@ struct EffectivePermissionRepository {
     /// reach a form that fails on save; the `require…` calls throw the same value, so
     /// the UI and the repositories can never disagree.
     func transactionWriteRestriction(in group: LedgerGroup) -> PermissionError? {
-        restriction(in: group) { $0.canEditTransactions }
+        restriction(.transactionWrite, for: permission(in: group))
     }
 
     func ledgerSettingsRestriction(in group: LedgerGroup) -> PermissionError? {
-        restriction(in: group) { $0.canManageLedgerSettings }
+        restriction(.ledgerSettings, for: permission(in: group))
     }
 
     func memberManagementRestriction(in group: LedgerGroup) -> PermissionError? {
-        restriction(in: group) { $0.canManageMembers }
+        restriction(.memberManagement, for: permission(in: group))
     }
 
-    private func restriction(
-        in group: LedgerGroup,
-        _ isAllowed: (EffectivePermission) -> Bool
+    /// Why a requirement is unmet by an already-resolved permission, or `nil` when it
+    /// is met. Callers that need several answers about the same group resolve the
+    /// permission once and ask here, instead of re-resolving it per question.
+    func restriction(
+        _ requirement: PermissionRequirement,
+        for permission: EffectivePermission
     ) -> PermissionError? {
-        let permission = permission(in: group)
-        guard !isAllowed(permission) else { return nil }
+        guard !requirement.isSatisfied(by: permission) else { return nil }
 
         switch permission.source {
         case .missingIdentity:

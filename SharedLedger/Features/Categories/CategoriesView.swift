@@ -35,14 +35,14 @@ struct CategoriesRootView: View {
                     ScrollView {
                         LedgerEmptyState(
                             systemImage: "square.grid.2x2",
-                            title: "先建立一個群組",
-                            message: "請先到「設定」的「群組管理」建立群組，再回來管理共用分類。"
+                            title: .categoryGroupEmptyTitle,
+                            message: .categoryGroupEmptyMessage
                         )
                         .padding(.horizontal, LedgerTheme.pagePadding)
                         .padding(.top, 24)
                     }
                 }
-                .navigationTitle("分類")
+                .navigationTitle(Text(.categoryTitle))
             }
         }
     }
@@ -53,18 +53,62 @@ struct CategoriesRootView: View {
                 Button {
                     selectedGroupID = candidate.objectID
                 } label: {
+                    let name = candidate.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
                     if candidate == selectedGroup {
-                        Label(candidate.name ?? "未命名群組", systemImage: "checkmark")
+                        Label {
+                            Text(verbatim: name)
+                        } icon: {
+                            Image(systemName: "checkmark")
+                        }
                     } else {
-                        Text(candidate.name ?? "未命名群組")
+                        Text(verbatim: name)
                     }
                 }
             }
         } label: {
-            Label(selectedGroup.name ?? "未命名群組", systemImage: "person.3.fill")
-                .labelStyle(.titleAndIcon)
+            Label {
+                Text(verbatim: selectedGroup.name
+                    ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string())
+            } icon: {
+                Image(systemName: "person.3.fill")
+            }
+            .labelStyle(.titleAndIcon)
         }
-        .accessibilityLabel("切換分類群組")
+        .accessibilityLabel(Text(.categoryGroupPickerAccessibilityLabel))
+        .accessibilityValue(Text(verbatim: selectedGroup.name
+            ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()))
+    }
+}
+
+/// 群組分類管理畫面上那三張表單。
+///
+/// 它們必須共用一個狀態：SwiftUI 只保證同一個畫面掛一個 `.sheet`，三個 `.sheet` 疊在
+/// 同一層時後面的會蓋掉前面的，先掛上去的「新增分類」因此按了沒反應。用單一路由狀態
+/// 驅動唯一的 `.sheet`，順便讓每次開啟都帶著當下選到的父分類，而不是另一個 `@State`
+/// 裡上一次留下來的值。
+enum CategorySheetRoute: Identifiable {
+    /// `parent` 為 `nil` 代表新增最上層分類。
+    case newCategory(parent: LedgerCategory?)
+    case rename(LedgerCategory)
+    case merge(LedgerCategory)
+
+    /// 同一個分類在不同表單、以及不同父分類底下的新增，都要是不同的 identity，
+    /// 否則 `.sheet(item:)` 會沿用上一張表單而不是換一張。
+    var id: String {
+        switch self {
+        case let .newCategory(parent):
+            guard let parent else { return "new:root" }
+            return "new:\(Self.identifier(parent))"
+        case let .rename(category):
+            return "rename:\(Self.identifier(category))"
+        case let .merge(category):
+            return "merge:\(Self.identifier(category))"
+        }
+    }
+
+    private static func identifier(_ category: LedgerCategory) -> String {
+        category.objectID.uriRepresentation().absoluteString
     }
 }
 
@@ -73,10 +117,12 @@ struct CategoriesView: View {
 
     @FetchRequest private var rootCategories: FetchedResults<LedgerCategory>
 
-    @State private var isPresentingNewCategory = false
-    @State private var newCategoryParent: LedgerCategory?
+    /// 三張表單共用同一個狀態，因為畫面只掛得住一個 `.sheet`。
+    @State private var sheetRoute: CategorySheetRoute?
     @State private var categoryPendingArchive: LedgerCategory?
     @State private var errorMessage: String?
+    /// 排序寫在子分類上，父層的 FetchRequest 不會因此重新計算，所以用它強制重畫。
+    @State private var revision = 0
 
     init(group: LedgerGroup) {
         self.group = group
@@ -105,11 +151,20 @@ struct CategoriesView: View {
                     if rootCategories.isEmpty {
                         LedgerEmptyState(
                             systemImage: "square.grid.2x2",
-                            title: "還沒有群組分類",
-                            message: "建立一次即可讓群組內的多本帳本共用，再由各帳本選擇要使用的分類。",
-                            actionTitle: canManage ? "新增分類" : nil,
+                            title: .categoryEmptyTitle,
+                            message: .categoryEmptyMessage,
+                            actionTitle: canManage ? LedgerStringKey.categoryNewActionAdd : nil,
                             action: canManage ? presentRootCategory : nil
                         )
+
+                        if canManage {
+                            Button(action: installDefaults) {
+                                Label(.categoryActionInstallDefaults, systemImage: "square.grid.2x2.fill")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(LedgerTheme.primary)
+                        }
                     } else {
                         LedgerCard {
                             VStack(alignment: .leading, spacing: 0) {
@@ -119,14 +174,18 @@ struct CategoriesView: View {
                                         depth: 0,
                                         canManage: canManage,
                                         onAddChild: presentChildCategory,
+                                        onRename: { sheetRoute = .rename($0) },
+                                        onMerge: { sheetRoute = .merge($0) },
+                                        onMove: move,
                                         onArchive: requestArchive
                                     )
                                 }
                             }
+                            .id(revision)
                         }
                     }
 
-                    Text("分類名稱與階層由整個群組共用；帳本設定只控制是否啟用，不會複製分類。")
+                    Text(.categoryFooter)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,7 +195,7 @@ struct CategoriesView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("分類")
+        .navigationTitle(Text(.categoryTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if canManage {
@@ -144,39 +203,73 @@ struct CategoriesView: View {
                     Image(systemName: "plus")
                         .fontWeight(.bold)
                 }
-                .accessibilityLabel("新增群組分類")
+                .accessibilityLabel(Text(.categoryActionAddGroupCategory))
             }
         }
-        .sheet(isPresented: $isPresentingNewCategory) {
-            NavigationStack {
-                NewCategoryView(group: group, parent: newCategoryParent) {
-                    isPresentingNewCategory = false
+        .sheet(item: $sheetRoute) { route in
+            switch route {
+            case let .newCategory(parent):
+                NavigationStack {
+                    NewCategoryView(group: group, parent: parent) {
+                        dismissSheet()
+                    }
                 }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            case let .rename(category):
+                NavigationStack {
+                    RenameCategoryView(category: category) {
+                        dismissSheet()
+                    }
+                }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            case let .merge(category):
+                NavigationStack {
+                    MergeCategoryView(category: category) {
+                        dismissSheet()
+                    }
+                }
+                .presentationDragIndicator(.visible)
             }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
-            "封存分類？",
+            Text(.categoryArchiveConfirmTitle),
             isPresented: archiveConfirmationBinding,
             titleVisibility: .visible,
             presenting: categoryPendingArchive
         ) { category in
-            Button("封存「\(category.name ?? "未命名分類")」", role: .destructive) {
+            Button(role: .destructive) {
                 categoryPendingArchive = nil
                 archive(category)
+            } label: {
+                Text(verbatim: LedgerStringKey.categoryArchiveConfirmAction.string(
+                    arguments: [categoryName(category)]
+                ))
             }
-            Button("取消", role: .cancel) {
+            Button(role: .cancel) {
                 categoryPendingArchive = nil
+            } label: {
+                Text(.commonActionCancel)
             }
-        } message: { _ in
-            Text("封存後會從所有帳本的新交易選單隱藏，但既有交易與歷史報表仍會保留。")
+        } message: { category in
+            // 影響說明由 `CategoryRepository` 產生，那一層還沒遷移；它是這句話的參數，
+            // 不是自己接在後面的另一句。
+            Text(verbatim: LedgerStringKey.categoryArchiveConfirmMessage.string(
+                arguments: [CategoryRepository().impact(of: category).summary]
+            ))
         }
-        .alert("無法更新分類", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.categoryErrorUpdateTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
+    }
+
+    private func categoryName(_ category: LedgerCategory) -> String {
+        category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
     }
 
     private var archiveConfirmationBinding: Binding<Bool> {
@@ -194,13 +287,18 @@ struct CategoriesView: View {
     }
 
     private func presentRootCategory() {
-        newCategoryParent = nil
-        isPresentingNewCategory = true
+        sheetRoute = .newCategory(parent: nil)
     }
 
     private func presentChildCategory(_ parent: LedgerCategory) {
-        newCategoryParent = parent
-        isPresentingNewCategory = true
+        sheetRoute = .newCategory(parent: parent)
+    }
+
+    /// 新增、改名與合併都會動到子分類那一層，父層的 FetchRequest 不會因此重新計算，
+    /// 所以關掉表單時一併強制重畫，新增的子分類才會馬上出現在樹狀清單裡。
+    private func dismissSheet() {
+        sheetRoute = nil
+        revision += 1
     }
 
     private func requestArchive(_ category: LedgerCategory) {
@@ -210,6 +308,33 @@ struct CategoriesView: View {
     private func archive(_ category: LedgerCategory) {
         do {
             try CategoryRepository().archiveCategory(category)
+            revision += 1
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func installDefaults() {
+        do {
+            try CategoryRepository().installDefaultCategories(in: group)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 只在同一層之間搬動。跨層搬動等於改變父子關係，那是合併要處理的事。
+    private func move(_ category: LedgerCategory, by offset: Int) {
+        guard let group = category.group else { return }
+        let repository = CategoryRepository()
+        var siblings = repository.siblings(of: category.parent, in: group)
+        guard let index = siblings.firstIndex(of: category),
+              siblings.indices.contains(index + offset)
+        else { return }
+
+        siblings.swapAt(index, index + offset)
+        do {
+            try repository.reorderCategories(siblings, parent: category.parent, in: group)
+            revision += 1
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -222,6 +347,7 @@ struct BookCategoriesView: View {
     @FetchRequest private var rootCategories: FetchedResults<LedgerCategory>
 
     @State private var errorMessage: String?
+    @State private var isPresentingNewCategory = false
     @State private var revision = 0
 
     init(book: LedgerBook) {
@@ -242,6 +368,14 @@ struct BookCategoriesView: View {
 
     private var canManage: Bool { manageRestriction == nil }
 
+    /// FetchRequest 負責讓畫面跟著資料變動重畫，順序則交給帳本自己的設定。
+    private var orderedRootCategories: [LedgerCategory] {
+        let fetched = Set(rootCategories.map(\.objectID))
+        return CategoryRepository()
+            .manageableSiblings(of: nil, in: book)
+            .filter { fetched.contains($0.objectID) }
+    }
+
     var body: some View {
         ZStack {
             LedgerBackground()
@@ -254,22 +388,23 @@ struct BookCategoriesView: View {
                     if rootCategories.isEmpty {
                         LedgerEmptyState(
                             systemImage: "square.grid.2x2",
-                            title: "群組還沒有分類",
-                            message: "請先到群組分類建立共用分類，再回來選擇這本帳本要使用的項目。",
+                            title: .categoryBookEmptyTitle,
+                            message: .categoryBookEmptyMessage,
                             actionTitle: nil,
                             action: nil
                         )
                     } else {
                         LedgerCard {
                             VStack(alignment: .leading, spacing: 0) {
-                                ForEach(Array(rootCategories), id: \.objectID) { category in
+                                ForEach(orderedRootCategories, id: \.objectID) { category in
                                     BookCategoryToggleRow(
                                         category: category,
                                         book: book,
                                         depth: 0,
                                         canManage: canManage,
                                         onError: { errorMessage = $0 },
-                                        onUpdated: { revision += 1 }
+                                        onUpdated: { revision += 1 },
+                                        onMove: move
                                     )
                                 }
                             }
@@ -277,7 +412,7 @@ struct BookCategoriesView: View {
                         }
                     }
 
-                    Text("停用只會從這本帳本的新交易選單隱藏分類，既有交易與其他帳本不受影響。")
+                    Text(.categoryBookFooter)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -287,12 +422,37 @@ struct BookCategoriesView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("帳本可用分類")
+        .navigationTitle(Text(.categoryBookTitle))
         .navigationBarTitleDisplayMode(.inline)
-        .alert("無法更新帳本分類", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .toolbar {
+            if canManage, book.group != nil {
+                Button {
+                    isPresentingNewCategory = true
+                } label: {
+                    Image(systemName: "plus")
+                        .fontWeight(.bold)
+                }
+                .accessibilityLabel(Text(.categoryNewActionAdd))
+            }
+        }
+        .sheet(isPresented: $isPresentingNewCategory) {
+            if let group = book.group {
+                NavigationStack {
+                    NewCategoryView(group: group, book: book, parent: nil) {
+                        isPresentingNewCategory = false
+                        revision += 1
+                    }
+                }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            }
+        }
+        .alert(Text(.categoryBookErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 
@@ -302,6 +462,23 @@ struct BookCategoriesView: View {
             set: { if !$0 { errorMessage = nil } }
         )
     }
+
+    /// 只搬動這本帳本的顯示順序，群組目錄與其他帳本不受影響。
+    private func move(_ category: LedgerCategory, by offset: Int) {
+        let repository = CategoryRepository()
+        var siblings = repository.enabledSiblings(of: category.parent, in: book)
+        guard let index = siblings.firstIndex(of: category),
+              siblings.indices.contains(index + offset)
+        else { return }
+
+        siblings.swapAt(index, index + offset)
+        do {
+            try repository.reorderCategories(siblings, parent: category.parent, in: book)
+            revision += 1
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 private struct GroupCategoryTreeRow: View {
@@ -309,11 +486,31 @@ private struct GroupCategoryTreeRow: View {
     let depth: Int
     let canManage: Bool
     let onAddChild: (LedgerCategory) -> Void
+    let onRename: (LedgerCategory) -> Void
+    let onMerge: (LedgerCategory) -> Void
+    let onMove: (LedgerCategory, Int) -> Void
     let onArchive: (LedgerCategory) -> Void
 
+    /// 子分類前面那個小圓點是跟著名稱走的層級記號，字放大時它也要放大，
+    /// 否則在大字級下小到看不見。
+    @ScaledMetric(relativeTo: .subheadline) private var depthMarkerScale: CGFloat = 1
+
     private var children: [LedgerCategory] {
-        let set = category.children as? Set<LedgerCategory> ?? []
-        return set.filter { $0.archivedAt == nil }.sorted { $0.sortOrder < $1.sortOrder }
+        guard let group = category.group else { return [] }
+        return CategoryRepository().siblings(of: category, in: group)
+    }
+
+    private var siblings: [LedgerCategory] {
+        guard let group = category.group else { return [] }
+        return CategoryRepository().siblings(of: category.parent, in: group)
+    }
+
+    private var siblingIndex: Int? {
+        siblings.firstIndex(of: category)
+    }
+
+    private var name: String {
+        category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
     }
 
     private var enabledBookCount: Int {
@@ -325,35 +522,65 @@ private struct GroupCategoryTreeRow: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "circle.fill")
-                    .font(.system(size: 5))
+                    .font(.system(size: 5 * depthMarkerScale))
                     .foregroundStyle(.tertiary)
                     .opacity(depth > 0 ? 1 : 0)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(category.name ?? "未命名分類")
+                    Text(verbatim: name)
                         .font(.subheadline.weight(depth == 0 ? .semibold : .regular))
-                    Text("\(enabledBookCount) 本帳本使用")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(verbatim: LedgerStringKey.categoryRowEnabledBooks.string(
+                        arguments: [Int64(enabledBookCount)]
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
+                .accessibilityElement(children: .combine)
                 Spacer()
                 if canManage {
-                    Button {
-                        onAddChild(category)
+                    // 一列可以做的事已經超過兩個圖示放得下的數量，收進選單也讓
+                    // VoiceOver 讀得到每個動作的名稱，而不是一排看不懂的圖示。
+                    Menu {
+                        Button {
+                            onRename(category)
+                        } label: {
+                            Label(.categoryActionRename, systemImage: "pencil")
+                        }
+                        Button {
+                            onAddChild(category)
+                        } label: {
+                            Label(.categoryActionAddChild, systemImage: "plus.circle")
+                        }
+                        if let index = siblingIndex {
+                            Button {
+                                onMove(category, -1)
+                            } label: {
+                                Label(.categoryActionMoveUp, systemImage: "arrow.up")
+                            }
+                            .disabled(index == 0)
+                            Button {
+                                onMove(category, 1)
+                            } label: {
+                                Label(.categoryActionMoveDown, systemImage: "arrow.down")
+                            }
+                            .disabled(index == siblings.count - 1)
+                        }
+                        Button {
+                            onMerge(category)
+                        } label: {
+                            Label(.categoryActionMerge, systemImage: "arrow.triangle.merge")
+                        }
+                        Button(role: .destructive) {
+                            onArchive(category)
+                        } label: {
+                            Label(.categoryActionArchive, systemImage: "archivebox")
+                        }
                     } label: {
-                        Image(systemName: "plus.circle")
+                        Image(systemName: "ellipsis")
+                            .ledgerTapTarget()
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(LedgerTheme.primary)
-                    .accessibilityLabel("新增子分類")
-
-                    Button(role: .destructive) {
-                        onArchive(category)
-                    } label: {
-                        Image(systemName: "archivebox")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("封存分類")
+                    .accessibilityLabel(Text(verbatim: LedgerStringKey
+                        .categoryMenuAccessibilityLabel.string(arguments: [name])))
                 }
             }
             .padding(.leading, CGFloat(depth) * 18)
@@ -366,9 +593,204 @@ private struct GroupCategoryTreeRow: View {
                     depth: depth + 1,
                     canManage: canManage,
                     onAddChild: onAddChild,
+                    onRename: onRename,
+                    onMerge: onMerge,
+                    onMove: onMove,
                     onArchive: onArchive
                 )
             }
+        }
+    }
+}
+
+private struct RenameCategoryView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @ObservedObject var category: LedgerCategory
+    let onSaved: () -> Void
+
+    @State private var draft: CategoryDraft
+    @State private var errorMessage: String?
+
+    init(category: LedgerCategory, onSaved: @escaping () -> Void) {
+        self.category = category
+        self.onSaved = onSaved
+        _draft = State(initialValue: CategoryDraft(name: category.name ?? ""))
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("", text: $draft.name, prompt: Text(.categoryRenameNamePlaceholder))
+                    .accessibilityLabel(Text(.categoryRenameNamePlaceholder))
+            } header: {
+                Text(.categoryRenameSectionName)
+            } footer: {
+                Text(verbatim: LedgerStringKey.categoryRenameFooter.string(
+                    arguments: [CategoryRepository().impact(of: category).summary]
+                ))
+            }
+        }
+        .navigationTitle(Text(.categoryRenameTitle))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: save) {
+                    Text(.commonActionSave)
+                }
+                .disabled(!draft.canCreate)
+            }
+        }
+        .alert(Text(.commonErrorRenameFailed), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
+        } message: {
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
+        }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )
+    }
+
+    private func save() {
+        do {
+            try CategoryRepository().renameCategory(category, using: draft)
+            onSaved()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct MergeCategoryView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @ObservedObject var category: LedgerCategory
+    let onMerged: () -> Void
+
+    @State private var selectedTargetID: NSManagedObjectID?
+    @State private var errorMessage: String?
+
+    private var targets: [LedgerCategory] {
+        CategoryRepository().mergeTargets(for: category)
+    }
+
+    private var selectedTarget: LedgerCategory? {
+        targets.first { $0.objectID == selectedTargetID }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                // 影響說明由 `CategoryRepository` 產生，那一層還沒遷移。
+                Text(verbatim: CategoryRepository().impact(of: category).summary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text(verbatim: LedgerStringKey.categoryMergeHeader.string(
+                    arguments: [category.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()]
+                ))
+            }
+
+            Section {
+                if targets.isEmpty {
+                    Text(.categoryMergeTargetsEmpty)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(targets, id: \.objectID) { target in
+                        Button {
+                            selectedTargetID = target.objectID
+                        } label: {
+                            HStack {
+                                Text(verbatim: path(of: target))
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if target.objectID == selectedTargetID {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(LedgerTheme.primary)
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(
+                            target.objectID == selectedTargetID
+                                ? [.isButton, .isSelected]
+                                : .isButton
+                        )
+                    }
+                }
+            } footer: {
+                Text(.categoryMergeFooter)
+            }
+        }
+        .navigationTitle(Text(.categoryMergeTitle))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: merge) {
+                    Text(.categoryMergeTitle)
+                }
+                .disabled(selectedTarget == nil)
+            }
+        }
+        .alert(Text(.categoryMergeErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
+        } message: {
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
+        }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )
+    }
+
+    /// 同名的子分類分屬不同父分類時，只顯示名稱會讓人選錯合併目標。
+    private func path(of category: LedgerCategory) -> String {
+        var names: [String] = []
+        var current: LedgerCategory? = category
+        var visited = Set<NSManagedObjectID>()
+        while let value = current, visited.insert(value.objectID).inserted {
+            names.insert(
+                value.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string(),
+                at: 0
+            )
+            current = value.parent
+        }
+        return names.joined(separator: " › ")
+    }
+
+    private func merge() {
+        guard let target = selectedTarget else { return }
+        do {
+            try CategoryRepository().mergeCategory(category, into: target)
+            onMerged()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }
@@ -380,26 +802,59 @@ private struct BookCategoryToggleRow: View {
     let canManage: Bool
     let onError: (String) -> Void
     let onUpdated: () -> Void
+    let onMove: (LedgerCategory, Int) -> Void
 
+    /// 子分類依這本帳本的顯示順序排列，未啟用的排在最後。
     private var children: [LedgerCategory] {
-        let set = category.children as? Set<LedgerCategory> ?? []
-        return set.filter { $0.archivedAt == nil }.sorted { $0.sortOrder < $1.sortOrder }
+        CategoryRepository().manageableSiblings(of: category, in: book)
+    }
+
+    private var name: String {
+        category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
     }
 
     private var isEnabled: Bool {
         CategoryRepository().isCategoryAvailable(category, in: book)
     }
 
+    private var orderableSiblings: [LedgerCategory] {
+        CategoryRepository().enabledSiblings(of: category.parent, in: book)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Toggle(isOn: Binding(
-                get: { isEnabled },
-                set: updateAvailability
-            )) {
-                Text(category.name ?? "未命名分類")
-                    .font(.subheadline.weight(depth == 0 ? .semibold : .regular))
+            HStack(spacing: 10) {
+                Toggle(isOn: Binding(
+                    get: { isEnabled },
+                    set: updateAvailability
+                )) {
+                    Text(verbatim: name)
+                        .font(.subheadline.weight(depth == 0 ? .semibold : .regular))
+                }
+                .disabled(!canManage)
+
+                if canManage, isEnabled, let index = orderableSiblings.firstIndex(of: category) {
+                    Menu {
+                        Button {
+                            onMove(category, -1)
+                        } label: {
+                            Label(.categoryActionMoveUp, systemImage: "arrow.up")
+                        }
+                        .disabled(index == 0)
+                        Button {
+                            onMove(category, 1)
+                        } label: {
+                            Label(.categoryActionMoveDown, systemImage: "arrow.down")
+                        }
+                        .disabled(index == orderableSiblings.count - 1)
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .ledgerTapTarget()
+                    }
+                    .accessibilityLabel(Text(verbatim: LedgerStringKey
+                        .categoryBookReorderAccessibilityLabel.string(arguments: [name])))
+                }
             }
-            .disabled(!canManage)
             .padding(.leading, CGFloat(depth) * 18)
             .padding(.vertical, 6)
 
@@ -411,7 +866,8 @@ private struct BookCategoryToggleRow: View {
                     depth: depth + 1,
                     canManage: canManage,
                     onError: onError,
-                    onUpdated: onUpdated
+                    onUpdated: onUpdated,
+                    onMove: onMove
                 )
             }
         }

@@ -3,6 +3,17 @@ import Foundation
 
 @MainActor
 struct CategoryRepository {
+    /// `BookCategoryAssignment.sortOrder` 的哨兵值：這本帳本沒有自己排過這一層，
+    /// 順序沿用群組目錄。
+    ///
+    /// 沒有這個值的話，assignment 建立當下的順序就會被永久釘住，之後在群組分類管理
+    /// 調整的順序永遠不會出現在交易的分類選單裡。
+    ///
+    /// `nonisolated`：這是不可變的常數，背景 context 的 `perform` closure（例如
+    /// `repairLegacyCategoryAssignments(in:)`）也要拿它寫 `sortOrder`，不該為了讀一個
+    /// 數字被迫跳回 main actor。
+    nonisolated static let followsGroupOrder: Int32 = -1
+
     private let persistence: PersistenceController
 
     init(persistence: PersistenceController = .shared) {
@@ -30,19 +41,51 @@ struct CategoryRepository {
             }
     }
 
+    /// 這本帳本目前可以選用的分類，依帳本自己的顯示順序由上而下、父分類在子分類之前。
+    ///
+    /// 順序只在同一層之間比較：帳本排過的那一層照 `BookCategoryAssignment.sortOrder`，
+    /// 沒排過的沿用群組目錄，所以同一個分類可以在不同帳本排在不同位置。
     func availableCategories(in book: LedgerBook, includeArchived: Bool = false) -> [LedgerCategory] {
         guard let group = book.group else { return [] }
-        var seen = Set<NSManagedObjectID>()
-        return assignments(in: book)
-            .compactMap(\.category)
-            .filter { category in
-                guard category.group == group,
-                      includeArchived || isCategoryAvailable(category, in: book),
-                      !seen.contains(category.objectID)
-                else { return false }
-                seen.insert(category.objectID)
-                return true
+        var result: [LedgerCategory] = []
+        var visited = Set<NSManagedObjectID>()
+
+        func visit(_ parent: LedgerCategory?) {
+            for category in siblings(of: parent, in: group, includeArchived: includeArchived, orderedIn: book) {
+                let isIncluded = includeArchived
+                    ? assignment(for: category, in: book) != nil
+                    : isCategoryAvailable(category, in: book)
+                guard isIncluded, visited.insert(category.objectID).inserted else { continue }
+                result.append(category)
+                visit(category)
             }
+        }
+
+        visit(nil)
+        return result
+    }
+
+    /// 群組分類管理畫面看到的同層分類。
+    func siblings(of parent: LedgerCategory?, in group: LedgerGroup) -> [LedgerCategory] {
+        siblings(of: parent, in: group, includeArchived: false, orderedIn: nil)
+    }
+
+    /// 帳本裡已啟用、可以互相調整顯示順序的同層分類。
+    ///
+    /// 沒有啟用的分類不參與排序：它在這本帳本沒有 assignment 可以記錄位置，硬排也存不
+    /// 下來。
+    func enabledSiblings(of parent: LedgerCategory?, in book: LedgerBook) -> [LedgerCategory] {
+        guard let group = book.group else { return [] }
+        return siblings(of: parent, in: group, includeArchived: false, orderedIn: book)
+            .filter { assignment(for: $0, in: book)?.isEnabled == true }
+    }
+
+    /// 帳本分類設定畫面的同層順序：已啟用的照這本帳本的順序在前，未啟用的照群組順序在後。
+    func manageableSiblings(of parent: LedgerCategory?, in book: LedgerBook) -> [LedgerCategory] {
+        guard let group = book.group else { return [] }
+        let enabled = enabledSiblings(of: parent, in: book)
+        let enabledIDs = Set(enabled.map(\.objectID))
+        return enabled + siblings(of: parent, in: group).filter { !enabledIDs.contains($0.objectID) }
     }
 
     func assignment(for category: LedgerCategory, in book: LedgerBook) -> BookCategoryAssignment? {
@@ -116,30 +159,8 @@ struct CategoryRepository {
         guard category.group == group else { throw CategoryError.crossGroupCategory }
         guard category.archivedAt == nil else { throw CategoryError.archivedCategory }
 
-        let affectedCategories = enabled ? ancestorsIncludingSelf(of: category) : descendantsIncludingSelf(of: category)
-        let context = persistence.container.viewContext
+        guard applyAvailability(enabled, for: category, in: book) else { return }
         let store = persistence.store(for: book)
-        var changed = false
-
-        for affectedCategory in affectedCategories {
-            if let existing = assignment(for: affectedCategory, in: book) {
-                if existing.isEnabled != enabled {
-                    existing.isEnabled = enabled
-                    changed = true
-                }
-            } else if enabled {
-                insertAssignment(
-                    for: affectedCategory,
-                    in: book,
-                    sortOrder: Int32(assignments(in: book, includeDisabled: true).count),
-                    context: context,
-                    store: store
-                )
-                changed = true
-            }
-        }
-
-        guard changed else { return }
         group.updatedAt = Date()
         insertAudit(
             action: enabled ? "category.enabled" : "category.disabled",
@@ -148,6 +169,203 @@ struct CategoryRepository {
             store: store
         )
         try saveOrRollback()
+    }
+
+    /// 群組層級改名；名稱由整個群組共用，所有帳本會同時看到新名稱。
+    func renameCategory(_ category: LedgerCategory, using draft: CategoryDraft) throws {
+        guard let group = category.group else { throw CategoryError.missingGroup }
+        guard draft.canCreate else { throw CategoryError.invalidDraft }
+        guard category.archivedAt == nil else { throw CategoryError.archivedCategory }
+        let oldName = category.name ?? "未命名分類"
+        guard oldName != draft.trimmedName else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
+
+        category.name = draft.trimmedName
+        group.updatedAt = Date()
+        insertAudit(
+            action: "category.renamed",
+            summary: "將群組分類「\(oldName)」重新命名為「\(draft.trimmedName)」",
+            in: group,
+            store: persistence.store(for: category)
+        )
+        try saveOrRollback()
+    }
+
+    /// 調整群組分類目錄裡同一層的順序，所有帳本共用這個順序作為預設。
+    func reorderCategories(
+        _ orderedCategories: [LedgerCategory],
+        parent: LedgerCategory?,
+        in group: LedgerGroup
+    ) throws {
+        let currentSiblings = siblings(of: parent, in: group)
+        guard Set(currentSiblings.map(\.objectID)) == Set(orderedCategories.map(\.objectID)) else {
+            throw CategoryError.invalidOrder
+        }
+        let hasChanges = orderedCategories.enumerated().contains { index, category in
+            category.sortOrder != Int32(index)
+        }
+        guard hasChanges else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
+
+        for (index, category) in orderedCategories.enumerated() {
+            category.sortOrder = Int32(index)
+        }
+        group.updatedAt = Date()
+        insertAudit(
+            action: "category.reordered",
+            summary: "調整群組分類「\(parent?.name ?? "最上層")」底下的順序",
+            in: group,
+            store: persistence.store(for: group)
+        )
+        try saveOrRollback()
+    }
+
+    /// 只調整這本帳本的顯示順序，不動群組目錄，也不影響其他帳本。
+    func reorderCategories(
+        _ orderedCategories: [LedgerCategory],
+        parent: LedgerCategory?,
+        in book: LedgerBook
+    ) throws {
+        guard let group = book.group else { throw CategoryError.missingGroup }
+        guard book.archivedAt == nil else { throw CategoryError.archivedBook }
+        let currentSiblings = enabledSiblings(of: parent, in: book)
+        guard Set(currentSiblings.map(\.objectID)) == Set(orderedCategories.map(\.objectID)) else {
+            throw CategoryError.invalidOrder
+        }
+        let assignments = orderedCategories.map { assignment(for: $0, in: book) }
+        guard !assignments.contains(where: { $0 == nil }) else { throw CategoryError.invalidOrder }
+        let hasChanges = assignments.enumerated().contains { index, assignment in
+            assignment?.sortOrder != Int32(index)
+        }
+        guard hasChanges else { return }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
+
+        for (index, assignment) in assignments.enumerated() {
+            assignment?.sortOrder = Int32(index)
+        }
+        group.updatedAt = Date()
+        insertAudit(
+            action: "category.book.reordered",
+            summary: "調整帳本「\(book.name ?? "未命名帳本")」的分類顯示順序",
+            in: group,
+            store: persistence.store(for: book)
+        )
+        try saveOrRollback()
+    }
+
+    /// 把 `source` 合併進 `target`：歷史交易與子分類都改掛到目標，來源本身封存。
+    ///
+    /// 來源是封存而不是刪除。交易與分攤都指向分類物件，刪除一個可能還在別台裝置上被
+    /// 引用的共享物件，換來的是同步之後指向空分類的歷史；封存則保證任何時間點的歷史
+    /// 都還讀得到名稱。
+    func mergeCategory(_ source: LedgerCategory, into target: LedgerCategory) throws {
+        guard let group = source.group else { throw CategoryError.missingGroup }
+        guard target.group == group else { throw CategoryError.crossGroupCategory }
+        guard source != target else { throw CategoryError.invalidMergeTarget }
+        guard source.archivedAt == nil, target.archivedAt == nil else {
+            throw CategoryError.archivedCategory
+        }
+        // 目標在來源底下時，來源封存後整條路徑都不可用，搬過去的交易會被關進一個
+        // 選不到的分類裡。
+        guard !isDescendant(target, of: source) else { throw CategoryError.invalidMergeTarget }
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
+
+        let movedChildren = (source.children as? Set<LedgerCategory> ?? []).sorted(by: categorySort)
+        let movedEntries = source.entries as? Set<LedgerEntry> ?? []
+        var nextSortOrder = Int32(siblings(of: target, in: group).count)
+        for child in movedChildren {
+            child.parent = target
+            child.sortOrder = nextSortOrder
+            nextSortOrder += 1
+        }
+        for entry in movedEntries {
+            entry.category = target
+        }
+
+        // 來源啟用過的帳本，目標也要跟著啟用，否則搬過去的交易之後會因為分類不可用而
+        // 無法再編輯。
+        let sourceAssignments = source.bookAssignments as? Set<BookCategoryAssignment> ?? []
+        for assignment in sourceAssignments {
+            guard assignment.isEnabled,
+                  let book = assignment.book,
+                  book.archivedAt == nil
+            else { continue }
+            _ = applyAvailability(true, for: target, in: book)
+        }
+        sourceAssignments.forEach { $0.isEnabled = false }
+
+        let now = Date()
+        let sourceName = source.name ?? "未命名分類"
+        source.archivedAt = now
+        group.updatedAt = now
+        insertAudit(
+            action: "category.merged",
+            summary: "將分類「\(sourceName)」合併到「\(target.name ?? "未命名分類")」，"
+                + "搬移 \(movedEntries.count) 筆交易與 \(movedChildren.count) 個子分類",
+            in: group,
+            store: persistence.store(for: source)
+        )
+        try saveOrRollback()
+    }
+
+    /// 套用內建分類目錄；已存在的同名分類會沿用，不重複建立。
+    @discardableResult
+    func installDefaultCategories(
+        in group: LedgerGroup,
+        catalog: [CategoryNode] = DefaultCategoryCatalog.categories
+    ) throws -> Int {
+        try EffectivePermissionRepository(persistence: persistence)
+            .requireLedgerSettingsManagement(in: group)
+
+        let books = BookRepository(persistence: persistence).books(in: group)
+        let created = insertDefaultCategories(in: group, books: books, catalog: catalog)
+        guard created > 0 else { return 0 }
+
+        group.updatedAt = Date()
+        insertAudit(
+            action: "category.defaults.installed",
+            summary: "套用內建分類，新增 \(created) 個群組分類",
+            in: group,
+            store: persistence.store(for: group)
+        )
+        try saveOrRollback()
+        return created
+    }
+
+    /// 建立群組時使用：插入內建分類但不存檔，讓呼叫端把整個群組一次寫進去。
+    ///
+    /// 這裡不檢查權限。呼叫端是「正在建立群組的人」，群組還沒存檔，也還沒有成員身分
+    /// 對應可以判斷角色；權限檢查留給對外的 `installDefaultCategories(in:catalog:)`。
+    @discardableResult
+    func insertDefaultCategories(
+        in group: LedgerGroup,
+        books: [LedgerBook],
+        catalog: [CategoryNode] = DefaultCategoryCatalog.categories
+    ) -> Int {
+        insertCatalog(catalog, parent: nil, in: group, enabledBooks: books)
+    }
+
+    /// 改名、封存或合併之前要告訴使用者的影響範圍。
+    func impact(of category: LedgerCategory) -> CategoryImpact {
+        let assignments = category.bookAssignments as? Set<BookCategoryAssignment> ?? []
+        let children = category.children as? Set<LedgerCategory> ?? []
+        return CategoryImpact(
+            entryCount: (category.entries as? Set<LedgerEntry> ?? []).count,
+            bookCount: assignments.filter { $0.isEnabled && $0.book?.archivedAt == nil }.count,
+            childCount: children.filter { $0.archivedAt == nil }.count
+        )
+    }
+
+    /// 可以作為合併目標的分類：同群組、未封存、不是自己也不在自己底下。
+    func mergeTargets(for category: LedgerCategory) -> [LedgerCategory] {
+        guard let group = category.group else { return [] }
+        return categories(in: group).filter { candidate in
+            candidate != category && !isDescendant(candidate, of: category)
+        }
     }
 
     func archiveCategory(_ category: LedgerCategory) throws {
@@ -252,7 +470,7 @@ struct CategoryRepository {
                     assignment.id = UUID()
                     assignment.createdAt = Date()
                     assignment.isEnabled = targetBook.archivedAt == nil && category.archivedAt == nil
-                    assignment.sortOrder = category.sortOrder
+                    assignment.sortOrder = CategoryRepository.followsGroupOrder
                     assignment.book = targetBook
                     assignment.category = category
                 }
@@ -293,37 +511,90 @@ struct CategoryRepository {
             booksToEnable = enabledBooks
         }
 
+        let category = insertCategory(
+            named: draft.trimmedName,
+            parent: parent,
+            in: group,
+            enabledBooks: booksToEnable
+        )
+
+        group.updatedAt = Date()
+        insertAudit(
+            action: "category.created",
+            summary: "建立群組分類「\(draft.trimmedName)」",
+            in: group,
+            store: persistence.store(for: group)
+        )
+        try saveOrRollback()
+        return category
+    }
+
+    private func insertCategory(
+        named name: String,
+        parent: LedgerCategory?,
+        in group: LedgerGroup,
+        enabledBooks: [LedgerBook]
+    ) -> LedgerCategory {
         let context = persistence.container.viewContext
         let store = persistence.store(for: group)
         let category = LedgerCategory(context: context)
         context.assign(category, to: store)
         category.id = UUID()
-        category.name = draft.trimmedName
+        category.name = name
         category.sortOrder = Int32(siblingCount(of: parent, in: group))
         category.group = group
         category.parent = parent
         category.book = nil
 
-        for book in booksToEnable {
+        for book in enabledBooks {
             insertAssignment(
                 for: category,
                 in: book,
-                sortOrder: Int32(assignments(in: book, includeDisabled: true).count),
+                sortOrder: Self.followsGroupOrder,
                 context: context,
                 store: store
             )
         }
-
-        let now = Date()
-        group.updatedAt = now
-        insertAudit(
-            action: "category.created",
-            summary: "建立群組分類「\(draft.trimmedName)」",
-            in: group,
-            store: store
-        )
-        try saveOrRollback()
         return category
+    }
+
+    /// 逐層套用目錄；同名的既有分類直接沿用，重複套用不會長出第二份同名樹。
+    private func insertCatalog(
+        _ nodes: [CategoryNode],
+        parent: LedgerCategory?,
+        in group: LedgerGroup,
+        enabledBooks: [LedgerBook]
+    ) -> Int {
+        var created = 0
+        var existingByName = Dictionary(
+            siblings(of: parent, in: group).map { ($0.name ?? "", $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        for node in nodes {
+            let category: LedgerCategory
+            if let existing = existingByName[node.name] {
+                category = existing
+            } else {
+                category = insertCategory(
+                    named: node.name,
+                    parent: parent,
+                    in: group,
+                    enabledBooks: enabledBooks
+                )
+                existingByName[node.name] = category
+                created += 1
+            }
+
+            guard !node.children.isEmpty else { continue }
+            created += insertCatalog(
+                node.children,
+                parent: category,
+                in: group,
+                enabledBooks: enabledBooks.filter { isCategoryAvailable(category, in: $0) }
+            )
+        }
+        return created
     }
 
     private func insertAssignment(
@@ -341,6 +612,86 @@ struct CategoryRepository {
         assignment.sortOrder = sortOrder
         assignment.book = book
         assignment.category = category
+    }
+
+    /// 啟用時往上補齊祖先，停用時往下帶走子孫；回傳是否真的有東西改變。
+    ///
+    /// 不負責存檔或稽核，讓「啟用一個分類」與「合併時順手啟用目標」共用同一套串接規則。
+    @discardableResult
+    private func applyAvailability(
+        _ enabled: Bool,
+        for category: LedgerCategory,
+        in book: LedgerBook
+    ) -> Bool {
+        let affectedCategories = enabled
+            ? ancestorsIncludingSelf(of: category)
+            : descendantsIncludingSelf(of: category)
+        let context = persistence.container.viewContext
+        let store = persistence.store(for: book)
+        var changed = false
+
+        for affectedCategory in affectedCategories {
+            if let existing = assignment(for: affectedCategory, in: book) {
+                if existing.isEnabled != enabled {
+                    existing.isEnabled = enabled
+                    changed = true
+                }
+            } else if enabled {
+                insertAssignment(
+                    for: affectedCategory,
+                    in: book,
+                    sortOrder: Self.followsGroupOrder,
+                    context: context,
+                    store: store
+                )
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    private func siblings(
+        of parent: LedgerCategory?,
+        in group: LedgerGroup,
+        includeArchived: Bool,
+        orderedIn book: LedgerBook?
+    ) -> [LedgerCategory] {
+        let candidates: [LedgerCategory]
+        if let parent {
+            candidates = Array(parent.children as? Set<LedgerCategory> ?? [])
+        } else {
+            candidates = (group.categories as? Set<LedgerCategory> ?? [])
+                .filter { $0.parent == nil }
+        }
+
+        return candidates
+            .filter { $0.group == group && (includeArchived || $0.archivedAt == nil) }
+            .sorted { lhs, rhs in
+                guard let book else { return categorySort(lhs, rhs) }
+                let lhsOrder = bookOrder(of: lhs, in: book)
+                let rhsOrder = bookOrder(of: rhs, in: book)
+                if lhsOrder == rhsOrder { return categorySort(lhs, rhs) }
+                return lhsOrder < rhsOrder
+            }
+    }
+
+    /// 帳本自己排過的分類排在前面並照它的順序；其餘沿用群組順序排在後面，
+    /// 所以新啟用的分類會落在這一層的最後，而不是插進使用者排好的位置中間。
+    private func bookOrder(of category: LedgerCategory, in book: LedgerBook) -> (Int, Int32) {
+        guard let sortOrder = assignment(for: category, in: book)?.sortOrder,
+              sortOrder != Self.followsGroupOrder
+        else { return (1, category.sortOrder) }
+        return (0, sortOrder)
+    }
+
+    private func isDescendant(_ candidate: LedgerCategory, of ancestor: LedgerCategory) -> Bool {
+        var current = candidate.parent
+        var visited = Set<NSManagedObjectID>()
+        while let value = current, visited.insert(value.objectID).inserted {
+            if value == ancestor { return true }
+            current = value.parent
+        }
+        return false
     }
 
     private func ancestorsIncludingSelf(of category: LedgerCategory) -> [LedgerCategory] {
@@ -387,7 +738,7 @@ struct CategoryRepository {
         audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
             .currentMember(in: group)?
             .displayName
-            ?? "目前使用者"
+            ?? LedgerStringKey.defaultMemberCurrentUser.string()
         audit.createdAt = Date()
         audit.summary = summary
         audit.group = group
@@ -403,6 +754,41 @@ struct CategoryRepository {
         }
     }
 
+    /// 改名、封存或合併之前要說明的影響範圍。
+    struct CategoryImpact: Equatable, Sendable {
+        let entryCount: Int
+        let bookCount: Int
+        let childCount: Int
+
+        var isEmpty: Bool { entryCount == 0 && bookCount == 0 && childCount == 0 }
+
+        /// 影響範圍會直接接在封存、改名與合併的說明後面，所以它必須自己就是一句完整
+        /// 的話。三段各自帶自己的複數規則，串接交給 `ListFormatter`：中文用頓號、
+        /// 英文用逗號與 and，不是同一種寫法。
+        var summary: String {
+            var parts: [String] = []
+            if bookCount > 0 {
+                parts.append(
+                    LedgerStringKey.categoryImpactBooks.string(arguments: [Int64(bookCount)])
+                )
+            }
+            if childCount > 0 {
+                parts.append(
+                    LedgerStringKey.categoryImpactChildren.string(arguments: [Int64(childCount)])
+                )
+            }
+            if entryCount > 0 {
+                parts.append(
+                    LedgerStringKey.categoryImpactEntries.string(arguments: [Int64(entryCount)])
+                )
+            }
+            guard !parts.isEmpty else { return LedgerStringKey.categoryImpactNone.string() }
+            return LedgerStringKey.categoryImpactSummary.string(
+                arguments: [ListFormatter.localizedString(byJoining: parts)]
+            )
+        }
+    }
+
     enum CategoryError: LocalizedError {
         case invalidDraft
         case missingGroup
@@ -413,30 +799,36 @@ struct CategoryRepository {
         case crossGroupCategory
         case crossGroupParent
         case hasActiveChildren
+        case invalidMergeTarget
+        case invalidOrder
         case inconsistentLegacyGroup
 
         var errorDescription: String? {
             switch self {
             case .invalidDraft:
-                return "請輸入分類名稱。"
+                return LedgerStringKey.errorCategoryMissingName.string()
             case .missingGroup:
-                return "找不到分類或帳本所屬的群組。"
+                return LedgerStringKey.errorCategoryMissingGroup.string()
             case .archivedBook:
-                return "已封存的帳本不能修改可用分類。"
+                return LedgerStringKey.errorCategoryArchivedBook.string()
             case .archivedCategory:
-                return "已封存的分類不能重新啟用。"
+                return LedgerStringKey.errorCategoryArchived.string()
             case .archivedParent:
-                return "已封存的分類不能新增子分類。"
+                return LedgerStringKey.errorCategoryArchivedParent.string()
             case .crossGroupBook:
-                return "分類只能啟用於同一群組的帳本。"
+                return LedgerStringKey.errorCategoryCrossGroupBook.string()
             case .crossGroupCategory:
-                return "分類與帳本必須屬於同一個群組。"
+                return LedgerStringKey.errorCategoryCrossGroupCategory.string()
             case .crossGroupParent:
-                return "子分類與父分類必須屬於同一個群組。"
+                return LedgerStringKey.errorCategoryCrossGroupParent.string()
             case .hasActiveChildren:
-                return "請先封存所有子分類，再封存這個分類。"
+                return LedgerStringKey.errorCategoryActiveChildren.string()
+            case .invalidMergeTarget:
+                return LedgerStringKey.errorCategoryInvalidMergeTarget.string()
+            case .invalidOrder:
+                return LedgerStringKey.errorCategoryIncompleteOrder.string()
             case .inconsistentLegacyGroup:
-                return "既有分類的群組與帳本資料不一致，無法自動遷移。"
+                return LedgerStringKey.errorCategoryInconsistentMigration.string()
             }
         }
     }

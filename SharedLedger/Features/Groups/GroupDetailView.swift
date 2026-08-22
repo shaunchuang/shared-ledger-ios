@@ -2,34 +2,95 @@ import CoreData
 import Foundation
 import SwiftUI
 
+/// Everything the group management screen shows that is expensive to work out, held
+/// together so it is resolved once and reused across the whole `body` pass.
+///
+/// Each of these questions used to be a computed property, and `body` asked most of
+/// them several times per pass: the role alone was read by four sections, and the
+/// member-management restriction by one more per member group. Every one of those
+/// reads resolves the current member with a Core Data fetch and, for a shared group,
+/// makes a synchronous `fetchShares` call into the CloudKit mirroring metadata — a
+/// call that blocks the main thread for as long as a sync is holding the store. With
+/// `body` re-running on every merged CloudKit change, opening the screen during a
+/// sync froze the app.
+private struct GroupManagementAccess {
+    /// Nothing is known before the first resolution, so every management affordance
+    /// stays hidden and no restriction is explained. Showing a notice for a state
+    /// nobody has checked would flash the wrong reason on the frame before `onAppear`.
+    static var unresolved: GroupManagementAccess { GroupManagementAccess() }
+
+    /// The App role after the CloudKit participant permission has been applied, so
+    /// the management UI matches what the repositories will actually allow.
+    var role: MemberRole?
+    /// Identified by object ID rather than by the object, so a member deleted between
+    /// two resolutions is simply not matched by any row instead of being faulted.
+    var currentMemberID: NSManagedObjectID?
+    /// Why member management is unavailable, or `nil` when it is allowed.
+    var memberManagementRestriction: PermissionError?
+    var participantStatuses: [NSManagedObjectID: CloudParticipantStatus] = [:]
+    /// Only the Apple Account holding the group in its private store can present the
+    /// system sharing controller.
+    var holdsShareLocally = false
+    var isResolved = false
+
+    var canManageMembers: Bool { isResolved && memberManagementRestriction == nil }
+    var canManageGroupSettings: Bool { role?.canManageLedgerSettings == true }
+
+    /// After an ownership transfer the Apple Account that created the share is an
+    /// administrator rather than the App owner — it still has to be able to manage the
+    /// participant list, because nobody else can.
+    var canInviteMembers: Bool { holdsShareLocally && role?.canManageMembers == true }
+
+    /// `nil` unless this device holds the owner seat, because nobody else can hand it
+    /// over.
+    var ownerMemberID: NSManagedObjectID? { role == .owner ? currentMemberID : nil }
+
+    var managementNotice: String? {
+        isResolved ? memberManagementRestriction?.errorDescription : nil
+    }
+}
+
 struct GroupDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var context
 
     @ObservedObject var group: LedgerGroup
     let onInvite: (LedgerGroup) -> Void
+    /// Copying the link is a separate affordance from the system sharing controller
+    /// because that controller only offers the channels iOS knows about. The people
+    /// this app is shared with are reached through whatever messenger they already
+    /// use, and pasting a link is the one route that works for all of them.
+    let onCopyInviteLink: (LedgerGroup) -> Void
 
     @AppStorage private var selectedBookID: String
     @State private var errorMessage: String?
     @State private var pendingAction: PendingMemberAction?
     @State private var isRenamingGroup = false
+    @State private var access = GroupManagementAccess.unresolved
+    /// Summing it fetches every entry that moves money through the group's accounts,
+    /// so it is resolved when that data changes rather than on every `body` pass.
+    @State private var totalAccountBalance: Decimal = 0
 
-    init(group: LedgerGroup, onInvite: @escaping (LedgerGroup) -> Void) {
+    init(
+        group: LedgerGroup,
+        onInvite: @escaping (LedgerGroup) -> Void,
+        onCopyInviteLink: @escaping (LedgerGroup) -> Void
+    ) {
         self.group = group
         self.onInvite = onInvite
+        self.onCopyInviteLink = onCopyInviteLink
         _selectedBookID = AppStorage(
             wrappedValue: "",
             BookSelectionStorage.key(for: group)
         )
     }
 
+    /// Resolved from the cached identity by scanning the group's already-faulted
+    /// members, so reading it costs nothing beyond the relationship itself.
     private var currentMember: Member? {
-        CurrentMemberIdentityRepository().currentMember(in: group)
-    }
-
-    /// The App role after the CloudKit participant permission has been applied, so
-    /// the management UI matches what the repositories will actually allow.
-    private var currentRole: MemberRole? {
-        EffectivePermissionRepository().permission(in: group).role
+        guard let currentMemberID = access.currentMemberID else { return nil }
+        let members = group.members as? Set<Member> ?? []
+        return members.first { $0.objectID == currentMemberID }
     }
 
     private var activeMembers: [Member] {
@@ -51,21 +112,6 @@ struct GroupDetailView: View {
             member.archivedAt != nil
                 || member.invitationStatus == InvitationStatus.revoked.rawValue
         })
-    }
-
-    /// Why member management is unavailable, or `nil` when it is allowed.
-    private var memberManagementRestriction: PermissionError? {
-        EffectivePermissionRepository().memberManagementRestriction(in: group)
-    }
-
-    /// Resolved once per render rather than per row, because each lookup reads the
-    /// group's share metadata.
-    private var participantStatuses: [NSManagedObjectID: CloudParticipantStatus] {
-        GroupRepository().cloudParticipantStatuses(in: group)
-    }
-
-    private var canManageMembers: Bool {
-        memberManagementRestriction == nil
     }
 
     /// The most notable participant-mapping problem across the group's members, in
@@ -94,15 +140,15 @@ struct GroupDetailView: View {
     }
 
     /// Whether the row offers ownership transfer, and why it is unavailable when the
-    /// member could hold the seat but the CloudKit mapping is not ready. `currentOwner`
-    /// is `nil` unless this device holds the owner seat, because nobody else can hand
-    /// it over.
+    /// member could hold the seat but the CloudKit mapping is not ready. `ownerID` is
+    /// `nil` unless this device holds the owner seat, because nobody else can hand it
+    /// over.
     private func ownershipTransferOption(
         for member: Member,
         status: CloudParticipantStatus,
-        currentOwner: Member?
+        ownerID: NSManagedObjectID?
     ) -> OwnershipTransferOption? {
-        guard let currentOwner, member != currentOwner else { return nil }
+        guard let ownerID, member.objectID != ownerID else { return nil }
         let repository = GroupRepository()
         guard repository.isOwnershipTransferCandidate(member, in: group) else { return nil }
         guard let restriction = repository.ownershipTransferRestriction(
@@ -113,24 +159,10 @@ struct GroupDetailView: View {
 
         switch restriction {
         case .ownershipTransferRequiresWritableParticipant:
-            return .blocked(reason: "需要可編輯的 iCloud 權限才能移轉")
+            return .blocked(reason: .groupOwnershipTransferBlockedWritable)
         default:
-            return .blocked(reason: "需要完成 iCloud 對應才能移轉")
+            return .blocked(reason: .groupOwnershipTransferBlockedMapping)
         }
-    }
-
-    private var canManageGroupSettings: Bool {
-        currentRole?.canManageLedgerSettings == true
-    }
-
-    /// Only the Apple Account holding the group in its private store can present the
-    /// system sharing controller, and after an ownership transfer that account is an
-    /// administrator rather than the App owner — it still has to be able to manage the
-    /// participant list, because nobody else can.
-    private var canInviteMembers: Bool {
-        let persistence = PersistenceController.shared
-        return persistence.store(for: group) === persistence.privateStore
-            && currentRole?.canManageMembers == true
     }
 
     private var activeBooks: [LedgerBook] {
@@ -146,10 +178,6 @@ struct GroupDetailView: View {
     private var accounts: [LedgerAccount] {
         let set = group.accounts as? Set<LedgerAccount> ?? []
         return Array(set)
-    }
-
-    private var totalAccountBalance: Decimal {
-        AccountRepository().totalBalance(for: accounts)
     }
 
     private var currencyCode: String {
@@ -173,11 +201,29 @@ struct GroupDetailView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle(group.name ?? "群組")
+        .navigationTitle(Text(verbatim: group.name
+            ?? LedgerStringKey.groupDetailTitleFallback.string()))
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear(perform: normalizeSelectedBook)
+        .onAppear {
+            normalizeSelectedBook()
+            reloadAccess()
+            reloadAccountBalance()
+        }
         .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            if ContextChangeObserver.touches(notification, .groupPermissions) {
+                reloadAccess()
+            }
+            if ContextChangeObserver.touches(notification, .accountBalances) {
+                reloadAccountBalance()
+            }
         }
         .sheet(isPresented: $isRenamingGroup) {
             NavigationStack {
@@ -186,15 +232,18 @@ struct GroupDetailView: View {
                 }
             }
         }
-        .alert("無法完成群組操作", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.groupDetailErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            // 錯誤內容來自 repository，那一層還沒遷移到 catalog。
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
         .alert(item: $pendingAction) { action in
             Alert(
-                title: Text(action.title),
-                message: Text(action.message),
+                title: Text(action.titleKey),
+                message: Text(verbatim: action.message),
                 primaryButton: primaryAlertButton(for: action),
                 secondaryButton: .cancel()
             )
@@ -202,22 +251,21 @@ struct GroupDetailView: View {
     }
 
     private var memberSection: some View {
-        let statuses = participantStatuses
-        // Resolved once per render alongside the statuses: both read the group's share
-        // metadata, and every row needs to know whether this device holds the seat it
-        // would be handing over.
-        let currentOwner = currentRole == .owner ? currentMember : nil
+        let statuses = access.participantStatuses
+        // Every row needs to know whether this device holds the seat it would be
+        // handing over.
+        let ownerID = access.ownerMemberID
         return VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "成員")
+            LedgerSectionHeader(title: .groupDetailSectionMembers)
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
-                    memberRows(activeMembers, statuses: statuses, currentOwner: currentOwner)
+                    memberRows(activeMembers, statuses: statuses, ownerID: ownerID)
                     if !pendingMembers.isEmpty {
                         if !activeMembers.isEmpty { Divider().padding(.leading, 72) }
-                        memberRows(pendingMembers, statuses: statuses, currentOwner: currentOwner)
+                        memberRows(pendingMembers, statuses: statuses, ownerID: ownerID)
                     }
                     if activeMembers.isEmpty && pendingMembers.isEmpty {
-                        Text("目前沒有有效成員。")
+                        Text(.groupDetailMembersEmpty)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -226,7 +274,7 @@ struct GroupDetailView: View {
                 }
             }
 
-            if let message = memberManagementRestriction?.errorDescription {
+            if let message = access.managementNotice {
                 LedgerNotice(message: message)
             }
 
@@ -235,13 +283,17 @@ struct GroupDetailView: View {
             }
 
             if !inactiveMembers.isEmpty {
-                DisclosureGroup("已離開或已撤回（\(inactiveMembers.count)）") {
+                DisclosureGroup {
                     LedgerCard(padding: 0) {
                         VStack(spacing: 0) {
-                            memberRows(inactiveMembers, statuses: statuses, currentOwner: currentOwner)
+                            memberRows(inactiveMembers, statuses: statuses, ownerID: ownerID)
                         }
                     }
                     .padding(.top, 8)
+                } label: {
+                    Text(verbatim: LedgerStringKey.groupDetailMembersInactive.string(
+                        arguments: [Int64(inactiveMembers.count)]
+                    ))
                 }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -253,18 +305,18 @@ struct GroupDetailView: View {
     private func memberRows(
         _ members: [Member],
         statuses: [NSManagedObjectID: CloudParticipantStatus],
-        currentOwner: Member?
+        ownerID: NSManagedObjectID?
     ) -> some View {
         ForEach(Array(members.enumerated()), id: \.element.objectID) { index, member in
             MemberRow(
                 member: member,
                 participantStatus: statuses[member.objectID] ?? .notShared,
-                isCurrentUser: member == currentMember,
-                canManage: canManageMembers,
+                isCurrentUser: member.objectID == access.currentMemberID,
+                canManage: access.canManageMembers,
                 ownershipTransfer: ownershipTransferOption(
                     for: member,
                     status: statuses[member.objectID] ?? .notShared,
-                    currentOwner: currentOwner
+                    ownerID: ownerID
                 ),
                 onResend: { resendInvitation(member) },
                 onRevoke: {
@@ -285,16 +337,17 @@ struct GroupDetailView: View {
 
     private var groupSettingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "群組設定")
+            LedgerSectionHeader(title: .groupDetailSectionSettings)
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
-                    if canManageGroupSettings {
+                    if access.canManageGroupSettings {
                         Button {
                             isRenamingGroup = true
                         } label: {
                             LedgerNavRow(
-                                title: "群組名稱",
-                                detail: group.name ?? "未命名群組",
+                                title: .groupFieldName,
+                                detail: group.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string(),
                                 icon: "pencil",
                                 tint: LedgerTheme.primary
                             )
@@ -307,8 +360,8 @@ struct GroupDetailView: View {
                         AccountsView(group: group)
                     } label: {
                         LedgerNavRow(
-                            title: "帳戶",
-                            detail: "所有帳本共用的現金、銀行與信用卡",
+                            title: .groupDetailRowAccountsTitle,
+                            detail: .groupDetailRowAccountsDetail,
                             icon: "creditcard.fill",
                             tint: .blue
                         )
@@ -319,8 +372,8 @@ struct GroupDetailView: View {
                         CategoriesView(group: group)
                     } label: {
                         LedgerNavRow(
-                            title: "分類管理",
-                            detail: "所有帳本共用的分類目錄",
+                            title: .groupDetailRowCategoriesTitle,
+                            detail: .groupDetailRowCategoriesDetail,
                             icon: "square.grid.2x2.fill",
                             tint: LedgerTheme.amber
                         )
@@ -333,7 +386,7 @@ struct GroupDetailView: View {
 
     private var currentBookSettingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "目前帳本設定")
+            LedgerSectionHeader(title: .groupDetailSectionBookSettings)
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
                     if let selectedBook {
@@ -341,15 +394,20 @@ struct GroupDetailView: View {
                             BookCategoriesView(book: selectedBook)
                         } label: {
                             LedgerNavRow(
-                                title: "使用的分類",
-                                detail: "選擇\(selectedBook.name ?? "目前帳本")可使用的群組分類",
+                                title: .groupDetailRowBookCategoriesTitle,
+                                detail: LedgerStringKey.groupDetailRowBookCategoriesDetail.string(
+                                    arguments: [
+                                        selectedBook.name
+                                            ?? LedgerStringKey.bookLabelCurrent.string()
+                                    ]
+                                ),
                                 icon: "square.grid.2x2.fill",
                                 tint: LedgerTheme.amber
                             )
                         }
                         .buttonStyle(.plain)
                     } else {
-                        Text("正在準備主要帳本…")
+                        Text(.groupDetailBookSettingsPreparing)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -362,17 +420,25 @@ struct GroupDetailView: View {
 
     @ViewBuilder
     private var sharingSection: some View {
-        if canInviteMembers {
+        if access.canInviteMembers {
             VStack(spacing: 10) {
                 Button {
                     onInvite(group)
                 } label: {
-                    Label("邀請／管理 iCloud 共享", systemImage: "person.badge.plus")
+                    Label(.groupDetailActionShare, systemImage: "person.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(LedgerPrimaryButtonStyle())
 
-                Text("App 內的成員狀態不會自動變更 iCloud 存取權。移除成員後，請同時在 iCloud 共享畫面確認其存取權已移除。")
+                Button {
+                    onCopyInviteLink(group)
+                } label: {
+                    Label(.groupDetailActionCopyInviteLink, systemImage: "link")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Text(.groupDetailShareFooter)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -386,12 +452,12 @@ struct GroupDetailView: View {
             Button(role: .destructive) {
                 pendingAction = PendingMemberAction(kind: .leaveGroup, member: currentMember)
             } label: {
-                Label("退出群組", systemImage: "rectangle.portrait.and.arrow.right")
+                Label(.groupDetailActionLeave, systemImage: "rectangle.portrait.and.arrow.right")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-        } else if currentRole == .owner {
-            Text("群組擁有者不能直接退出。請先從成員清單將擁有權移轉給另一位已完成 iCloud 對應的成員，移轉後你會成為管理員並可以退出。iCloud 共享本身仍由建立共享的 Apple Account 管理。")
+        } else if access.role == .owner {
+            Text(.groupDetailOwnerCannotLeave)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -400,7 +466,7 @@ struct GroupDetailView: View {
 
     private var bookSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "目前帳本")
+            LedgerSectionHeader(title: .bookLabelCurrent)
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
                     if let selectedBook {
@@ -409,10 +475,16 @@ struct GroupDetailView: View {
                                 Button {
                                     select(book)
                                 } label: {
+                                    let name = book.name
+                                        ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
                                     if book == selectedBook {
-                                        Label(book.name ?? "未命名帳本", systemImage: "checkmark")
+                                        Label {
+                                            Text(verbatim: name)
+                                        } icon: {
+                                            Image(systemName: "checkmark")
+                                        }
                                     } else {
-                                        Text(book.name ?? "未命名帳本")
+                                        Text(verbatim: name)
                                     }
                                 }
                             }
@@ -420,10 +492,13 @@ struct GroupDetailView: View {
                             HStack(spacing: 14) {
                                 LedgerIconBadge(systemImage: "book.closed.fill", tint: LedgerTheme.primary)
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(selectedBook.name ?? "未命名帳本")
+                                    Text(verbatim: selectedBook.name
+                                        ?? LedgerStringKey.commonPlaceholderUnnamedBook.string())
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.primary)
-                                    Text(selectedBook.isDefault ? "目前帳本 · 預設" : "目前帳本")
+                                    Text(selectedBook.isDefault
+                                        ? LedgerStringKey.bookLabelCurrentAndDefault
+                                        : LedgerStringKey.bookLabelCurrent)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -437,7 +512,7 @@ struct GroupDetailView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("切換目前帳本")
+                        .accessibilityLabel(Text(.transactionBookPickerAccessibilityLabel))
                     }
 
                     Divider().padding(.leading, 68)
@@ -445,8 +520,8 @@ struct GroupDetailView: View {
                         BooksView(group: group, selectedBookID: $selectedBookID)
                     } label: {
                         LedgerNavRow(
-                            title: "管理帳本",
-                            detail: "新增、排序、設定預設與封存",
+                            title: .bookManageTitle,
+                            detail: .bookManageDetail,
                             icon: "books.vertical.fill",
                             tint: LedgerTheme.primary
                         )
@@ -463,7 +538,7 @@ struct GroupDetailView: View {
                 HStack {
                     LedgerMark(size: 54)
                     Spacer()
-                    Text("共享中")
+                    Text(.groupDetailBadgeShared)
                         .font(.caption.weight(.bold))
                         .foregroundStyle(LedgerTheme.primaryStrong)
                         .padding(.horizontal, 11)
@@ -471,16 +546,10 @@ struct GroupDetailView: View {
                         .background(LedgerTheme.mint.opacity(0.22), in: Capsule())
                 }
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(group.name ?? "未命名群組")
+                    Text(verbatim: group.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string())
                         .font(.title2.weight(.bold))
-                    var memberSummary: String {
-                        var parts = ["\(activeMembers.count) 位成員"]
-                        if !pendingMembers.isEmpty {
-                            parts.append("\(pendingMembers.count) 位待邀請")
-                        }
-                        return parts.joined(separator: " · ")
-                    }
-                    Text("\(memberSummary) · \(currencyCode) · 共同餘額 \(ledgerGroupAmount(totalAccountBalance, currencyCode: currencyCode))")
+                    Text(verbatim: summaryText)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -488,11 +557,59 @@ struct GroupDetailView: View {
         }
     }
 
+    /// 成員數、貨幣與共同餘額組成的一句話。
+    ///
+    /// 三段各自是一個參數而不是在這裡串起來：語序在不同語言會變，中間的分隔點也不是
+    /// 每種語言都這樣寫。
+    private var summaryText: String {
+        var parts = [
+            LedgerStringKey.groupCardMemberCount.string(arguments: [Int64(activeMembers.count)])
+        ]
+        if !pendingMembers.isEmpty {
+            parts.append(
+                LedgerStringKey.groupCardPendingCount.string(
+                    arguments: [Int64(pendingMembers.count)]
+                )
+            )
+        }
+        return LedgerStringKey.groupDetailSummary.string(arguments: [
+            parts.joined(separator: " · "),
+            currencyCode,
+            LedgerCurrency.format(totalAccountBalance, currencyCode: currencyCode)
+        ])
+    }
+
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )
+    }
+
+    /// The repositories refuse the same actions with the same `PermissionError` this
+    /// resolves, so the management UI and the write paths can never disagree.
+    ///
+    /// The permission is resolved once and every question is answered from it, because
+    /// each resolution makes a synchronous `fetchShares` call for a shared group.
+    private func reloadAccess() {
+        let persistence = PersistenceController.shared
+        let permissions = EffectivePermissionRepository(persistence: persistence)
+        let permission = permissions.permission(in: group)
+        access = GroupManagementAccess(
+            role: permission.role,
+            currentMemberID: CurrentMemberIdentityRepository(persistence: persistence)
+                .currentMember(in: group)?
+                .objectID,
+            memberManagementRestriction: permissions.restriction(.memberManagement, for: permission),
+            participantStatuses: GroupRepository(persistence: persistence)
+                .cloudParticipantStatuses(in: group),
+            holdsShareLocally: persistence.store(for: group) === persistence.privateStore,
+            isResolved: true
+        )
+    }
+
+    private func reloadAccountBalance() {
+        totalAccountBalance = AccountRepository().totalBalance(for: accounts)
     }
 
     private func members(matching predicate: (Member) -> Bool) -> [Member] {
@@ -505,7 +622,7 @@ struct GroupDetailView: View {
     private func resendInvitation(_ member: Member) {
         do {
             try GroupRepository().resendInvitation(member, in: group)
-            if canInviteMembers {
+            if access.canInviteMembers {
                 onInvite(group)
             }
         } catch {
@@ -514,7 +631,7 @@ struct GroupDetailView: View {
     }
 
     private func primaryAlertButton(for action: PendingMemberAction) -> Alert.Button {
-        let label = Text(action.confirmTitle)
+        let label = Text(action.confirmTitleKey)
         let confirm = { performConfirmedAction(action) }
         return action.isDestructive
             ? .destructive(label, action: confirm)
@@ -559,7 +676,7 @@ struct GroupDetailView: View {
 /// action simply not being there.
 private enum OwnershipTransferOption {
     case available
-    case blocked(reason: String)
+    case blocked(reason: LedgerStringKey)
 }
 
 private struct PendingMemberAction: Identifiable {
@@ -574,34 +691,36 @@ private struct PendingMemberAction: Identifiable {
     let kind: Kind
     let member: Member
 
-    var title: String {
+    var titleKey: LedgerStringKey {
         switch kind {
-        case .revokeInvitation: "撤回邀請？"
-        case .removeMember: "移除成員？"
-        case .leaveGroup: "退出群組？"
-        case .transferOwnership: "移轉群組擁有權？"
+        case .revokeInvitation: .memberConfirmRevokeTitle
+        case .removeMember: .memberConfirmRemoveTitle
+        case .leaveGroup: .memberConfirmLeaveTitle
+        case .transferOwnership: .memberConfirmTransferOwnershipTitle
         }
     }
 
+    /// 退出群組講的是自己，不帶名字；其餘三種都在講被操作的那個人。
     var message: String {
+        let name = member.displayName ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
         switch kind {
         case .revokeInvitation:
-            "將撤回「\(member.displayName ?? "未命名成員")」的 App 邀請狀態。已產生的 iCloud 分享仍需在系統共享畫面確認存取權。"
+            return LedgerStringKey.memberConfirmRevokeMessage.string(arguments: [name])
         case .removeMember:
-            "「\(member.displayName ?? "未命名成員")」會停止成為有效 App 成員，但歷史付款與分攤仍會保留。請另外確認 iCloud 共享存取權已移除。"
+            return LedgerStringKey.memberConfirmRemoveMessage.string(arguments: [name])
         case .leaveGroup:
-            "退出後會保留你既有的付款與分攤歷史。重新加入必須由管理者重新邀請。"
+            return LedgerStringKey.memberConfirmLeaveMessage.string()
         case .transferOwnership:
-            "「\(member.displayName ?? "未命名成員")」會成為新的群組擁有者，你會改為管理員。iCloud 共享名單仍由建立共享的 Apple Account 管理，不會一併移轉。"
+            return LedgerStringKey.memberConfirmTransferOwnershipMessage.string(arguments: [name])
         }
     }
 
-    var confirmTitle: String {
+    var confirmTitleKey: LedgerStringKey {
         switch kind {
-        case .revokeInvitation: "撤回"
-        case .removeMember: "移除"
-        case .leaveGroup: "退出"
-        case .transferOwnership: "移轉"
+        case .revokeInvitation: .memberConfirmRevokeAction
+        case .removeMember: .memberConfirmRemoveAction
+        case .leaveGroup: .memberConfirmLeaveAction
+        case .transferOwnership: .memberConfirmTransferOwnershipAction
         }
     }
 
@@ -610,10 +729,6 @@ private struct PendingMemberAction: Identifiable {
     var isDestructive: Bool {
         kind != .transferOwnership
     }
-}
-
-private func ledgerGroupAmount(_ amount: Decimal, currencyCode: String) -> String {
-    LedgerCurrency.format(amount, currencyCode: currencyCode)
 }
 
 private struct MemberRow: View {
@@ -628,11 +743,12 @@ private struct MemberRow: View {
     let onTransferOwnership: () -> Void
 
     private var name: String {
-        member.displayName ?? "未命名成員"
+        member.displayName ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
     }
 
     private var roleName: String {
-        member.role.flatMap(MemberRole.init(rawValue:))?.displayName ?? "成員"
+        member.role.flatMap(MemberRole.init(rawValue:))?.displayName
+            ?? MemberRole.member.displayName
     }
 
     private var isPending: Bool {
@@ -652,17 +768,24 @@ private struct MemberRow: View {
             LedgerAvatar(name: name, size: 42)
                 .opacity(isInactive ? 0.55 : 1)
             VStack(alignment: .leading, spacing: 3) {
-                Text(name)
+                Text(verbatim: name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(isInactive ? .secondary : .primary)
-                Text(roleName)
+                Text(verbatim: roleName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let participantBadge = participantStatus.badgeText {
-                    Label(participantBadge, systemImage: participantIcon)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(participantTint)
-                        .accessibilityLabel("iCloud 共享對應：\(participantBadge)")
+                    Label {
+                        // 徽章文字來自 `CloudParticipantStatus`，那一層還沒遷移。
+                        Text(verbatim: participantBadge)
+                    } icon: {
+                        Image(systemName: participantIcon)
+                    }
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(participantTint)
+                    .accessibilityLabel(Text(verbatim: LedgerStringKey
+                        .memberParticipantAccessibilityLabel
+                        .string(arguments: [participantBadge])))
                 }
             }
             Spacer()
@@ -704,19 +827,19 @@ private struct MemberRow: View {
     @ViewBuilder
     private var statusBadge: some View {
         if isPending {
-            Text("待邀請")
+            Text(.memberBadgePending)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(LedgerTheme.amber)
         } else if isRevoked {
-            Text("已撤回")
+            Text(.memberBadgeRevoked)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         } else if isInactive {
-            Text("已離開")
+            Text(.memberBadgeInactive)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         } else if isCurrentUser {
-            Text("你")
+            Text(.memberBadgeCurrentUser)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
@@ -728,12 +851,12 @@ private struct MemberRow: View {
         Menu {
             if isPending || isRevoked || isInactive {
                 Button(action: onResend) {
-                    Label("重新邀請", systemImage: "paperplane")
+                    Label(.memberActionResend, systemImage: "paperplane")
                 }
             }
             if isPending {
                 Button(role: .destructive, action: onRevoke) {
-                    Label("撤回邀請", systemImage: "xmark.circle")
+                    Label(.memberActionRevoke, systemImage: "xmark.circle")
                 }
             }
             if !isCurrentUser,
@@ -741,19 +864,23 @@ private struct MemberRow: View {
                member.invitationStatus == InvitationStatus.accepted.rawValue,
                role != .owner {
                 Button(role: .destructive, action: onRemove) {
-                    Label("移除成員", systemImage: "person.badge.minus")
+                    Label(.memberActionRemove, systemImage: "person.badge.minus")
                 }
             }
             if let ownershipTransfer {
                 switch ownershipTransfer {
                 case .available:
                     Button(action: onTransferOwnership) {
-                        Label("移轉群組擁有權", systemImage: "person.crop.circle.badge.checkmark")
+                        Label(
+                            .memberActionTransferOwnership,
+                            systemImage: "person.crop.circle.badge.checkmark"
+                        )
                     }
                 case let .blocked(reason):
                     Button {} label: {
                         Label(reason, systemImage: "person.crop.circle.badge.exclamationmark")
                     }
+                    .accessibilityLabel(Text(reason))
                     .disabled(true)
                 }
             }
@@ -762,7 +889,8 @@ private struct MemberRow: View {
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }
-        .accessibilityLabel("管理\(name)")
+        .accessibilityLabel(Text(verbatim: LedgerStringKey.memberMenuAccessibilityLabel
+            .string(arguments: [name])))
     }
 }
 
@@ -782,28 +910,37 @@ private struct RenameGroupView: View {
 
     var body: some View {
         Form {
-            Section("群組名稱") {
-                TextField("群組名稱", text: $name)
+            Section {
+                TextField("", text: $name, prompt: Text(.groupFieldName))
+                    .accessibilityLabel(Text(.groupFieldName))
+            } header: {
+                Text(.groupFieldName)
             }
         }
-        .navigationTitle("重新命名群組")
+        .navigationTitle(Text(.groupRenameTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("儲存", action: save)
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button(action: save) {
+                    Text(.commonActionSave)
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .alert("無法重新命名", isPresented: Binding(
+        .alert(Text(.commonErrorRenameFailed), isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )) {
-            Button("好", role: .cancel) {}
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 

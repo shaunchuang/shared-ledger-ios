@@ -41,13 +41,17 @@ Apple Developer Team 屬於 signing 設定，不可在不知道完整 Team ID �
 
 ## 模組方向
 
-- `App`：生命週期、依賴組裝及根導航。
+- `App`：生命週期、依賴組裝及根導航。這一層只放 `SharedLedgerApp`、`AppDelegate`、`SceneDelegate` 與 `RootTabView`，不承載任何功能畫面。
 - `DesignSystem`：色彩、卡片、按鈕、徽章、頭像與共用視覺元件。
 - `Domain`：不依賴 UI 的型別、草稿與規則。
-- `Persistence`：Core Data stack、repository、migration 與 CloudKit。
-- `Features`：依群組、帳本、帳戶、分類、交易、總覽與設定拆分的 SwiftUI 畫面。
+- `Persistence`：Core Data stack、repository、唯讀查詢 service、migration 與 CloudKit。
+- `Features`：依群組、帳本、帳戶、分類、交易、結算、總覽與設定拆分的 SwiftUI 畫面。
 
 View 不直接包含同步、結算或複雜帳務計算；可測試的領域規則應位於 Domain／service，持久化操作由 repository 負責。
+
+檔案配置規則：一個檔案的主要型別必須與檔名相同，其他型別只有在屬於同一個概念時才共用檔案。跨概念的型別（例如結算之於分攤、貨幣之於群組草稿）要各自成檔，避免用檔名找不到程式碼。
+
+金額換算的單一權威是 `LedgerCurrency`：精度、四捨五入、最小單位整數換算（`minorUnits` / `amount(fromMinorUnits:)`）與顯示格式（`format` / `formatSigned`）都在這裡。分攤、結算、repository 與畫面一律呼叫它，不得各自複製一份換算或格式化邏輯——同一筆金額在不同裝置或不同畫面上必須得到完全一致的結果。
 
 ## 資料模型與帳務規則
 
@@ -109,6 +113,8 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 - 多人付款使用交易直屬的 `EntryPayment`，每筆包含付款成員、付款金額及穩定順序。legacy `LedgerEntry.payer` 暫時保留作 migration 輸入與單一付款相容欄位；新交易的帳務真實來源是 payments。
 - 分攤與付款驗證集中在 Domain service，由新增、編輯、匯入與同步修復共用；View 不自行決定尾差或合法性。
 - 尾差使用交易貨幣的 fraction digits 與穩定排序分配，確保相同輸入在不同裝置產生完全一致的 split，避免 CloudKit 同步衝突。
+- V9 讓每一次交易寫入帶一個 `LedgerEntry.revisionID`，並把同一個識別碼寫進該次產生的每一筆 `EntryPayment.entryRevisionID` 與 `EntrySplit.entryRevisionID`。CloudKit 以 record 為單位合併，兩台裝置同時編輯同一筆交易時，交易 record 只會留下一版，但兩版的付款與分攤 record 都會留著；讀取端一律經過 `LedgerEntry.livePayments`／`liveSplits`，只採用與交易目前 `revisionID` 相符的明細，因此勝出的永遠是完整的一次寫入，不會出現「A 的金額配 B 的分攤」。
+- 落選的明細不即時刪除：CloudKit 不保證交易與其明細照同一順序匯入，提前刪除會把還在路上的那一版處決掉，而刪除同樣會同步出去。交易滿 `EntryRepository.supersededChildRetention`（24 小時）沒有變動後，背景修復才清除；使用者也可以在 iCloud 同步頁主動清除。
 
 ### Model version 與 migration 順序
 
@@ -122,8 +128,9 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | V6 | 在 `LedgerGroup` 新增非 optional ISO 4217 `currencyCode` | 以 lightweight migration 和 schema 預設 `TWD` 回填既有群組；新群組由建立者選擇或採裝置地區預設 |
 | V7 | 新增 `EntryPayment`、`LedgerEntry.splitMode`、`EntrySplit.inputValue` 與 `Member.archivedAt` | 以 lightweight migration 建立欄位與 entity；啟動及 remote change 後，將仍只有 legacy `payer` 的既有交易冪等轉成一筆全額付款，不改寫既有 split amount |
 | V8 | 在 shared `Member` 新增 optional `cloudParticipantID`，保存該成員對應的 `CKShare.Participant.participantID` | 以 lightweight migration 新增單一 optional String 欄位；既有成員維持 `nil`，下次在有效 CKShare 上認領或加入時才綁定 participant。此欄位是 share-local 識別碼，不取代 private-only 的 `LocalMemberIdentity` |
+| V9 | 新增 `LedgerEntry.revisionID` 與 `EntryPayment`／`EntrySplit` 的 `entryRevisionID`，標記每一筆明細屬於哪一次交易寫入 | 以 lightweight migration 新增三個 optional UUID 欄位；既有交易與明細都維持 `nil`，不做回填。`nil == nil` 代表舊明細仍屬於交易目前這一版，因此升級不改變任何既有金額、分攤或結算結果 |
 
-V1→V2→V3→V4→V5→V6→V7→V8 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。V8 只在 `Member` 加一個 optional String，因此 lightweight migration 可自動推得；升級後的既有成員 `cloudParticipantID` 為 `nil`，不做任何猜測式回填，必須等到該成員在真實 CKShare 上完成認領或加入，才由 `GroupRepository` 綁定當下已接受的 participant ID。`SharedLedgerTests/CloudParticipantModelMigrationTests` 驗證 V7→V8 可推導 mapping、V8 除該欄位外沒有其他 schema 漂移、既有 V7 store 升級後資料保留且 `cloudParticipantID` 為 `nil`，以及 `LocalMemberIdentity` 仍只屬於 private configuration。
+V1→V2→V3→V4→V5→V6→V7→V8→V9 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。V8 只在 `Member` 加一個 optional String，因此 lightweight migration 可自動推得；升級後的既有成員 `cloudParticipantID` 為 `nil`，不做任何猜測式回填，必須等到該成員在真實 CKShare 上完成認領或加入，才由 `GroupRepository` 綁定當下已接受的 participant ID。`SharedLedgerTests/CloudParticipantModelMigrationTests` 驗證 V7→V8 可推導 mapping、V8 除該欄位外沒有其他 schema 漂移、既有 V7 store 升級後資料保留且 `cloudParticipantID` 為 `nil`，以及 `LocalMemberIdentity` 仍只屬於 private configuration。 V9 同樣只加 optional 欄位，`SharedLedgerTests/EntryRevisionModelMigrationTests` 驗證 V8→V9 可推導 mapping、除這三個欄位外沒有其他漂移、既有 store 升級後 revision 為 `nil` 且原有明細仍算數。
 
 V4 資料修復對每個既有分類採以下規則：
 
@@ -143,6 +150,7 @@ V4 資料修復對每個既有分類採以下規則：
 - 背景工作只傳遞 `NSManagedObjectID`，並在目標 context 重新取得物件。
 - `NSPersistentHistoryTrackingKey` 與 remote change notifications 必須保持啟用。
 - Merge policy、衝突決策與稽核記錄必須一致，不可只依畫面最後顯示結果推測同步成功。
+- 衝突策略分兩層：欄位層沿用 `NSMergeByPropertyObjectTrumpMergePolicy`，本機剛寫入的值勝過 store 裡的舊值；物件層由交易 revision 決定，一筆交易的付款與分攤永遠整組採用或整組捨棄，不逐筆合併。無法判定的情況（明細還沒到齊、合計與金額對不起來）一律不進結算，並由 `EntryConflictScanner` 列在 iCloud 同步頁，讓使用者知道哪一筆需要重新編輯。
 
 `PersistenceController.prepareShare` 應在 closure 外先讀取分享標題並標記 `@MainActor`，不可在 `@Sendable` closure 捕捉 `LedgerGroup`。
 
@@ -160,6 +168,8 @@ MVP 的 CloudKit share 邊界是整個 `LedgerGroup`：加入群組即能同步�
 
 App 必須呈現未登入 iCloud、暫時不可用、同步中、同步成功、離線及同步失敗等狀態。沒有 iCloud 帳號時仍允許本機記帳，但停用共享邀請並說明原因。邀請畫面維持 private、read-write CloudKit Sharing；已存在的群組 share 必須重用，不可為同一個 root group 建立第二份 share。分享控制器的儲存與同步錯誤必須顯示給使用者，不可只在 Release 中停用的 assertion 回報。
 
+除了系統分享控制器，群組詳情另外提供「複製邀請連結」，把 `CKShare.url` 放進剪貼簿，讓擁有者能用系統分享表單沒有列出的通訊軟體把連結送出去。它走的是同一個 `prepareShare(for:)`，因此一樣重用既有 share，不會為同一個群組建立第二份。`CKShare.url` 只有在 share 存到伺服器之後才有值，取不到時必須明講連結尚未就緒，不可以複製空值再假裝成功。這個做法安全的前提是 `availablePermissions` 不含 `.allowPublic`，`publicPermission` 因此維持 `.none`：連結被轉傳出去，未受邀者也無法加入。要放寬公開權限之前，必須先重新檢視這個入口。
+
 Debug／Release 產生的 Info.plist 都必須包含 `CKSharingSupported = YES`，讓系統能把邀請連結交回 App。TestFlight 與 App Store 使用 CloudKit Production environment；每次 model version 新增 record type 或欄位後，必須先在 Development 驗證，再將 schema 部署到 Production。
 
 ### CloudKit schema 部署
@@ -168,9 +178,12 @@ CloudKit 的 Production 環境不允許在執行期新增 record type 或欄位�
 
 每次修改 `SharedLedger.xcdatamodeld` 後，發佈前必須：
 
-1. 以 Debug 組態加上啟動參數 `-initialize-cloudkit-schema` 執行 App（Scheme → Run → Arguments Passed On Launch），`PersistenceController` 會呼叫 `initializeCloudKitSchema(options:)` 把目前模型寫入 Development schema。此模式只載入 private store（`initializeCloudKitSchema` 不支援 `.shared` scope），完成後移除該參數再正常執行。
-2. 到 [CloudKit Console](https://icloud.developer.apple.com/) → 容器 `iCloud.com.shaunchuang.SharedLedger` → Development 環境確認 `CD_<Entity>` record types 齊全，再執行「Deploy Schema Changes…」部署到 Production。
-3. 部署完成後再送 TestFlight／App Store 建置版本。
+1. 先確認要執行的裝置或模擬器已登入 Apple 帳號並開啟 iCloud：`initializeCloudKitSchema(options:)` 需要 mirroring delegate 初始化成功，沒有帳號時 delegate 會以 `CKAccountStatusNoAccount` 失敗，schema 一個字都寫不進去。
+2. 以 Debug 組態加上啟動參數 `-initialize-cloudkit-schema` 執行 App（Scheme → Run → Arguments Passed On Launch），`PersistenceController` 會先檢查 iCloud 帳號狀態，可用才呼叫 `initializeCloudKitSchema(options:)` 把目前模型寫入 Development schema。此模式只載入 private store（`initializeCloudKitSchema` 不支援 `.shared` scope），因此 App 會在印完結果後**自行結束**，不會進入畫面；請移除該參數再正常執行。結果（已寫入、已略過或失敗原因）會以 `[CloudKit schema]` 前綴輸出到主控台；帳號不可用時只會略過並印出說明，不會讓 App 停在 assertion。
+
+  維護模式跑完會看到 `com.apple.coredata.cloudkit.activity.export.<UUID>` 的 `BGSystemTaskSchedulerErrorDomain Code=3` 錯誤，以及 `NSCloudKitMirroringDelegate ... reason: 'UserPurgedZone'`。前者是 `NSPersistentCloudKitContainer` 用系統私有排程器安排匯出活動時印的，那個 identifier 不由 App 註冊，模擬器上必定失敗，屬於無害噪音；後者是 `initializeCloudKitSchema` 建立再清掉 dummy record 的正常結果，mirroring delegate 會重置同步狀態並在下次正常執行時重新匯出本機資料。兩者都不需要（也無法）在 App 端修正。
+3. 到 [CloudKit Console](https://icloud.developer.apple.com/) → 容器 `iCloud.com.shaunchuang.SharedLedger` → Development 環境確認 `CD_<Entity>` record types 齊全，再執行「Deploy Schema Changes…」部署到 Production。
+4. 部署完成後再送 TestFlight／App Store 建置版本。
 
 參考：Apple 文件 [Deploying an iCloud Container's Schema](https://developer.apple.com/documentation/cloudkit/deploying-an-icloud-container-s-schema) 與 [`initializeCloudKitSchema(options:)`](https://developer.apple.com/documentation/coredata/nspersistentcloudkitcontainer/initializecloudkitschema(options:))。
 
@@ -178,13 +191,24 @@ CloudKit 的 Production 環境不允許在執行期新增 record type 或欄位�
 
 V8 沒有新增 record type，只在既有 `CD_Member` 上新增一個欄位 `CD_cloudParticipantID`（String, optional）。Production schema 同樣不允許執行期新增欄位，因此仍必須先部署再送版。
 
-1. 以 Debug 組態、啟動參數 `-initialize-cloudkit-schema` 執行一次 App，把 V8 寫入 Development schema，完成後移除該參數。
+1. 在已登入 iCloud 的裝置或模擬器上，以 Debug 組態、啟動參數 `-initialize-cloudkit-schema` 執行一次 App，把 V8 寫入 Development schema，完成後移除該參數。
 2. CloudKit Console → `iCloud.com.shaunchuang.SharedLedger` → Development → Schema → Record Types → `CD_Member`，確認欄位 `CD_cloudParticipantID` 存在且型別為 String。
 3. 若之後要用 participant ID 做查詢，於 Development 為該欄位加上 Queryable index；只讀取既有物件欄位則不需要。索引變更同樣要一起部署。
 4. 執行「Deploy Schema Changes…」把 Development 部署到 Production，並在 Production 環境重新確認 `CD_Member.CD_cloudParticipantID` 已存在。
 5. 部署完成後才建立 TestFlight／App Store 建置版本。
 
 未先完成步驟 1–4 就送出含 V8 的版本時，Production 的 mirroring delegate 會以 `CKError "Invalid Arguments" (12/2006)` 失敗，同步與共享邀請全部停擺；已升級到 V8 的裝置本機資料仍可用，但無法同步。
+
+#### V9 部署檢查表（未完成前不得送出含 V9 的建置版本）
+
+V9 一樣沒有新增 record type，只在三個既有 record type 上各加一個欄位：`CD_LedgerEntry.CD_revisionID`、`CD_EntryPayment.CD_entryRevisionID`、`CD_EntrySplit.CD_entryRevisionID`（皆為 UUID／String, optional）。
+
+1. 在已登入 iCloud 的裝置或模擬器上，以 Debug 組態、啟動參數 `-initialize-cloudkit-schema` 執行一次 App，把 V9 寫入 Development schema，完成後移除該參數。
+2. CloudKit Console → `iCloud.com.shaunchuang.SharedLedger` → Development → Schema → Record Types，確認上述三個欄位都存在。
+3. 執行「Deploy Schema Changes…」部署到 Production，並在 Production 重新確認三個欄位。
+4. 部署完成後才建立 TestFlight／App Store 建置版本。
+
+未部署就送版時，Production 的 mirroring delegate 會以 `CKError "Invalid Arguments" (12/2006)` 失敗。特別注意混合版本的情況：尚未更新的舊版裝置不認得 revision 欄位，它覆寫交易 record 時可能把 `revisionID` 清成 `nil`，此時只有同樣沒有 revision 的明細算數，行為退回 V9 之前的樣子——會少算，但不會把兩次編輯的明細混著算。
 
 ## 聯絡人與隱私
 

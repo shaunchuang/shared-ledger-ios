@@ -1,5 +1,6 @@
 import CoreData
 import SwiftUI
+import UIKit
 
 struct GroupsView: View {
     @FetchRequest(
@@ -7,14 +8,20 @@ struct GroupsView: View {
         animation: .default
     ) private var groups: FetchedResults<LedgerGroup>
 
+    @Environment(\.managedObjectContext) private var context
+
     @State private var isCreatingGroup = false
     @State private var sharePayload: CloudSharePayload?
     @State private var sharingError: String?
     @State private var isPreparingShare = false
+    @State private var didCopyInviteLink = false
+    /// Groups this device has been removed from. Deciding that per group runs a fetch
+    /// against the private `LocalMemberIdentity` store, so it is resolved when the
+    /// groups or their members change instead of on every `body` pass.
+    @State private var removedGroupIDs: Set<NSManagedObjectID> = []
 
     private var visibleGroups: [LedgerGroup] {
-        let identities = CurrentMemberIdentityRepository()
-        return groups.filter { !identities.hasInactiveIdentity(in: $0) }
+        groups.filter { !removedGroupIDs.contains($0.objectID) }
     }
 
     var body: some View {
@@ -28,7 +35,11 @@ struct GroupsView: View {
                         groupSummary
                         ForEach(visibleGroups, id: \.objectID) { group in
                             NavigationLink {
-                                GroupDetailView(group: group, onInvite: prepareShare)
+                                GroupDetailView(
+                                    group: group,
+                                    onInvite: prepareShare,
+                                    onCopyInviteLink: copyInviteLink
+                                )
                             } label: {
                                 GroupCard(group: group)
                             }
@@ -40,7 +51,17 @@ struct GroupsView: View {
                 .padding(.bottom, 28)
             }
         }
-        .navigationTitle("群組")
+        .navigationTitle(Text(.groupTitle))
+        .onAppear(perform: reloadRemovedGroups)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
+            reloadRemovedGroups()
+        }
         .toolbar {
             Button {
                 isCreatingGroup = true
@@ -48,7 +69,7 @@ struct GroupsView: View {
                 Image(systemName: "plus")
                     .fontWeight(.bold)
             }
-            .accessibilityLabel("建立群組")
+            .accessibilityLabel(Text(.groupActionCreate))
         }
         .sheet(isPresented: $isCreatingGroup) {
             NavigationStack {
@@ -63,10 +84,20 @@ struct GroupsView: View {
                 sharingError = message
             }
         }
-        .alert("無法建立邀請", isPresented: sharingErrorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.groupErrorShareTitle), isPresented: sharingErrorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(sharingError ?? "請確認 iCloud 狀態後再試。")
+            // CloudKit 的錯誤說明由系統提供，只有預設訊息是自己的文案。
+            Text(verbatim: sharingError ?? LedgerStringKey.groupErrorShareMessage.string())
+        }
+        .alert(Text(.groupCopyInviteLinkConfirmTitle), isPresented: $didCopyInviteLink) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
+        } message: {
+            Text(.groupCopyInviteLinkConfirmMessage)
         }
     }
 
@@ -75,9 +106,9 @@ struct GroupsView: View {
             HStack(spacing: 13) {
                 LedgerMark(size: 48)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("一起記帳")
+                    Text(.groupEmptyHeroTitle)
                         .font(.headline)
-                    Text("共享每一筆，也共享安心")
+                    Text(.groupEmptyHeroSubtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -86,9 +117,9 @@ struct GroupsView: View {
 
             LedgerEmptyState(
                 systemImage: "person.3.fill",
-                title: "建立第一個群組",
-                message: "適合家庭、伴侶、室友或旅行。邀請成員後，大家都能看到同一份帳本。",
-                actionTitle: "建立群組"
+                title: .groupEmptyTitle,
+                message: .groupEmptyMessage,
+                actionTitle: .groupActionCreate
             ) {
                 isCreatingGroup = true
             }
@@ -98,16 +129,27 @@ struct GroupsView: View {
     private var groupSummary: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("你的共享空間")
+                Text(.groupSummaryTitle)
                     .font(.title3.weight(.bold))
-                Text("共 \(visibleGroups.count) 個群組")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Text(verbatim: LedgerStringKey.groupSummaryCount.string(
+                    arguments: [Int64(visibleGroups.count)]
+                ))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             }
             Spacer()
             LedgerIconBadge(systemImage: "person.3.fill")
         }
         .padding(.bottom, 2)
+    }
+
+    private func reloadRemovedGroups() {
+        let identities = CurrentMemberIdentityRepository()
+        removedGroupIDs = Set(
+            groups
+                .filter { identities.hasInactiveIdentity(in: $0) }
+                .map(\.objectID)
+        )
     }
 
     private var sharingErrorBinding: Binding<Bool> {
@@ -133,8 +175,39 @@ struct GroupsView: View {
                     container: container,
                     store: persistence.store(for: group),
                     group: group,
-                    title: group.name ?? "Shared Ledger 群組"
+                    title: group.name ?? LedgerStringKey.groupShareDefaultTitle.string()
                 )
+            } catch {
+                sharingError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Puts the share's invitation URL on the pasteboard so the owner can send it
+    /// through a messenger the system share sheet does not list.
+    ///
+    /// This goes through `prepareShare` like the sharing controller does, because a
+    /// group that has never been shared has no URL to copy: `CKShare.url` is only
+    /// populated once the share exists on the server. Reusing that path also keeps the
+    /// "one share per group" rule — it returns the existing share when there is one.
+    @MainActor
+    private func copyInviteLink(_ group: LedgerGroup) {
+        guard !isPreparingShare else { return }
+        isPreparingShare = true
+
+        Task { @MainActor in
+            defer { isPreparingShare = false }
+
+            do {
+                let (share, _) = try await PersistenceController.shared.prepareShare(for: group)
+                guard let url = share.url else {
+                    // The share exists locally but CloudKit has not handed back a URL
+                    // yet. Saying so beats copying nothing and looking like it worked.
+                    sharingError = LedgerStringKey.groupErrorShareLinkUnavailable.string()
+                    return
+                }
+                UIPasteboard.general.url = url
+                didCopyInviteLink = true
             } catch {
                 sharingError = error.localizedDescription
             }
@@ -168,52 +241,73 @@ struct MemberIdentitySelectionView: View {
     var body: some View {
         Form {
             Section {
-                Text("為了讓付款人、分攤與權限正確，請確認你在「\(group.name ?? "共享群組")」中的成員身分。你的目前使用者對應只保存在私人 iCloud；系統另外保存這個 share 專用的 participant 識別，用來核對共享權限。")
+                Text(verbatim: LedgerStringKey.memberIdentityIntro.string(arguments: [groupName]))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
             if inactiveIdentity {
                 Section {
-                    Text("你已離開或被移出這個群組。請由群組管理者重新啟用原本的成員身分並重新邀請，不能直接建立另一個新成員繞過移除狀態。")
+                    Text(.memberIdentityInactive)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             } else {
                 if !pendingMembers.isEmpty {
-                    Section("選擇邀請你的名稱") {
+                    Section {
                         ForEach(pendingMembers, id: \.objectID) { member in
+                            let name = member.displayName
+                                ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
                             Button {
                                 claim(member)
                             } label: {
                                 HStack {
-                                    Text(member.displayName ?? "未命名成員")
+                                    Text(verbatim: name)
                                         .foregroundStyle(.primary)
                                     Spacer()
                                     Image(systemName: "checkmark.circle")
                                         .foregroundStyle(LedgerTheme.primary)
+                                        .accessibilityHidden(true)
                                 }
                             }
+                            .accessibilityLabel(Text(verbatim: name))
                         }
+                    } header: {
+                        Text(.memberIdentitySectionPending)
                     }
                 }
 
-                Section("找不到你的名稱？") {
-                    TextField("你的顯示名稱", text: $displayName)
-                    Button("以新成員加入") {
+                Section {
+                    TextField(
+                        "",
+                        text: $displayName,
+                        prompt: Text(.memberIdentityDisplayNamePlaceholder)
+                    )
+                    .accessibilityLabel(Text(.memberIdentityDisplayNamePlaceholder))
+                    Button {
                         joinAsNewMember()
+                    } label: {
+                        Text(.memberIdentityActionJoinAsNew)
                     }
                     .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                } header: {
+                    Text(.memberIdentitySectionNotListed)
                 }
             }
         }
-        .navigationTitle("確認成員身分")
+        .navigationTitle(Text(.memberIdentityTitle))
         .navigationBarTitleDisplayMode(.inline)
-        .alert("無法確認身分", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.memberIdentityErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
+    }
+
+    private var groupName: String {
+        group.name ?? LedgerStringKey.memberIdentityGroupFallback.string()
     }
 
     private var errorBinding: Binding<Bool> {
@@ -248,6 +342,11 @@ struct MemberIdentitySelectionView: View {
 private struct GroupCard: View {
     @ObservedObject var group: LedgerGroup
 
+    /// 圖示底板是純裝飾，跟著字級等比放大但設上限：再大下去只會把旁邊的群組名稱擠掉。
+    @ScaledMetric(relativeTo: .headline) private var typeScale: CGFloat = 1
+
+    private var badgeScale: CGFloat { LedgerTheme.decorativeScale(typeScale) }
+
     private var members: [Member] {
         Array(group.members as? Set<Member> ?? [])
     }
@@ -270,26 +369,36 @@ private struct GroupCard: View {
         LedgerCard {
             HStack(spacing: 15) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: 18 * badgeScale)
                         .fill(LedgerTheme.mint.opacity(0.20))
                     Image(systemName: "person.3.fill")
-                        .font(.system(size: 21, weight: .semibold))
+                        .font(.system(size: 21 * badgeScale, weight: .semibold))
                         .foregroundStyle(LedgerTheme.primary)
                 }
-                .frame(width: 54, height: 54)
+                .frame(width: 54 * badgeScale, height: 54 * badgeScale)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(group.name ?? "未命名群組")
+                    Text(verbatim: group.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string())
                         .font(.headline)
                         .foregroundStyle(.primary)
                     HStack(spacing: 8) {
-                        Label("\(activeCount) 位成員", systemImage: "person.2")
-                        Text("·")
-                        Text(LedgerCurrency.normalizedCode(group.currencyCode))
+                        Label {
+                            Text(verbatim: LedgerStringKey.groupCardMemberCount.string(
+                                arguments: [Int64(activeCount)]
+                            ))
+                        } icon: {
+                            Image(systemName: "person.2")
+                        }
+                        // 分隔點是版面符號，不是文案。
+                        Text(verbatim: "·")
+                        Text(verbatim: LedgerCurrency.normalizedCode(group.currencyCode))
                         if pendingCount > 0 {
-                            Text("·")
-                            Text("\(pendingCount) 位待邀請")
-                                .foregroundStyle(LedgerTheme.amber)
+                            Text(verbatim: "·")
+                            Text(verbatim: LedgerStringKey.groupCardPendingCount.string(
+                                arguments: [Int64(pendingCount)]
+                            ))
+                            .foregroundStyle(LedgerTheme.amber)
                         }
                     }
                     .font(.caption)
@@ -299,8 +408,11 @@ private struct GroupCard: View {
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
         }
+        // 一張卡片就是一個群組：名稱、成員數與貨幣分開唸只會讓人不知道停在哪一個。
+        .accessibilityElement(children: .combine)
     }
 }
 

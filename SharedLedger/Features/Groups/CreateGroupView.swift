@@ -15,9 +15,9 @@ struct CreateGroupView: View {
                 HStack(spacing: 14) {
                     LedgerMark(size: 54)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("建立共享空間")
+                        Text(.groupCreateHeroTitle)
                             .font(.headline)
-                        Text("先命名群組，再邀請一起記帳的人。")
+                        Text(.groupCreateHeroSubtitle)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -29,28 +29,44 @@ struct CreateGroupView: View {
             Section {
                 HStack(spacing: 13) {
                     LedgerIconBadge(systemImage: "person.3.fill")
-                    TextField("例如：台南旅行", text: $draft.name)
-                        .textInputAutocapitalization(.words)
+                    TextField(
+                        "",
+                        text: $draft.name,
+                        prompt: Text(.groupCreateNamePlaceholder)
+                    )
+                    .textInputAutocapitalization(.words)
+                    .accessibilityLabel(Text(.groupFieldName))
                 }
                 HStack(spacing: 13) {
                     LedgerIconBadge(systemImage: "person.crop.circle.fill", tint: .blue)
-                    TextField("你的顯示名稱", text: $draft.ownerDisplayName)
+                    TextField(
+                        "",
+                        text: $draft.ownerDisplayName,
+                        prompt: Text(.memberIdentityDisplayNamePlaceholder)
+                    )
+                    .accessibilityLabel(Text(.memberIdentityDisplayNamePlaceholder))
                 }
                 Picker(selection: $draft.currencyCode) {
                     ForEach(LedgerCurrency.supportedCodes, id: \.self) { code in
-                        Text(LedgerCurrency.displayName(for: code))
+                        Text(verbatim: LedgerCurrency.displayName(for: code))
                             .tag(code)
                     }
                 } label: {
                     HStack(spacing: 13) {
                         LedgerIconBadge(systemImage: "banknote.fill", tint: LedgerTheme.amber)
-                        Text("群組貨幣")
+                        Text(.groupCreateFieldCurrency)
+                    }
+                }
+                Toggle(isOn: $draft.usesDefaultCategories) {
+                    HStack(spacing: 13) {
+                        LedgerIconBadge(systemImage: "square.grid.2x2.fill", tint: LedgerTheme.amber)
+                        Text(.groupCreateFieldDefaultCategories)
                     }
                 }
             } header: {
-                Text("群組資料")
+                Text(.groupCreateSectionDetails)
             } footer: {
-                Text("帳戶、交易與分攤都使用這個貨幣；MVP 不進行跨幣別換算。")
+                Text(.groupCreateDetailsFooter)
             }
             .listRowBackground(LedgerTheme.surface)
 
@@ -59,9 +75,9 @@ struct CreateGroupView: View {
                     HStack(spacing: 13) {
                         LedgerIconBadge(systemImage: "person.crop.circle.badge.questionmark", tint: LedgerTheme.amber)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("尚未選擇成員")
+                            Text(.groupCreateInviteesEmptyTitle)
                                 .font(.subheadline.weight(.medium))
-                            Text("也可以先建立，之後再邀請")
+                            Text(.groupCreateInviteesEmptyDetail)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -70,10 +86,10 @@ struct CreateGroupView: View {
                     ForEach(draft.invitees) { invitee in
                         HStack(spacing: 13) {
                             LedgerAvatar(name: invitee.displayName, size: 40)
-                            Text(invitee.displayName)
+                            Text(verbatim: invitee.displayName)
                                 .font(.subheadline.weight(.medium))
                             Spacer()
-                            Text("待邀請")
+                            Text(.memberBadgePending)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(LedgerTheme.amber)
                         }
@@ -86,29 +102,31 @@ struct CreateGroupView: View {
                 Button {
                     isShowingContacts = true
                 } label: {
-                    Label("從聯絡人加入", systemImage: "person.crop.circle.badge.plus")
+                    Label(.groupCreateActionAddContacts, systemImage: "person.crop.circle.badge.plus")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(LedgerTheme.primary)
                 }
             } header: {
-                Text("邀請成員")
+                Text(.groupCreateSectionInvitees)
             } footer: {
-                Text("只會讀取你在系統選擇器中主動選取的聯絡人。")
+                Text(.groupCreateInviteesFooter)
             }
             .listRowBackground(LedgerTheme.surface)
         }
         .scrollContentBackground(.hidden)
         .background(LedgerBackground())
-        .navigationTitle("建立群組")
+        .navigationTitle(Text(.groupCreateTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
         }
         .safeAreaInset(edge: .bottom) {
             Button(action: createGroup) {
-                Label("建立並邀請", systemImage: "arrow.right")
+                Label(.groupCreateActionSubmit, systemImage: "arrow.right")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(LedgerPrimaryButtonStyle())
@@ -123,10 +141,13 @@ struct CreateGroupView: View {
                 draft.addInvitees(contacts)
             }
         )
-        .alert("無法建立群組", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.groupCreateErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            // 驗證訊息來自 repository，那一層還沒遷移到 catalog。
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 

@@ -1,5 +1,6 @@
-import CoreData
 import CloudKit
+import CoreData
+import Foundation
 
 final class PersistenceController {
     /// The app target hosts the unit tests, so this is also constructed when the
@@ -13,7 +14,9 @@ final class PersistenceController {
     private static var isRunningTests: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
-    private static let cloudKitContainerIdentifier = "iCloud.com.shaunchuang.SharedLedger"
+    /// 這個 App 的 CloudKit 容器。同步狀態監看也要問同一個容器的帳號狀態，
+    /// 所以識別碼在這裡只保留一份。
+    static let cloudKitContainerIdentifier = "iCloud.com.shaunchuang.SharedLedger"
 
     typealias ShareFetcher = (
         [NSManagedObjectID]
@@ -52,6 +55,132 @@ final class PersistenceController {
         #else
         false
         #endif
+    }
+
+    /// `-initialize-cloudkit-schema` 的前置檢查結果。
+    ///
+    /// `initializeCloudKitSchema(options:)` 需要 mirroring delegate 先初始化成功，
+    /// 而 delegate 沒有 iCloud 帳號就無法初始化。少了這個檢查時，未登入 iCloud 的
+    /// 裝置或模擬器只會拿到一層層包起來的
+    /// `CKAccountStatusNoAccount` Core Data 錯誤，看起來像 App 壞掉，實際上只是還沒登入。
+    enum SchemaInitializationReadiness: Equatable {
+        case ready
+        /// 不具備寫入 schema 的條件，附上可以照著做的說明。
+        case blocked(String)
+    }
+
+    /// 把 iCloud 帳號狀態轉成可讀的前置檢查結果；`nil` 代表查詢逾時或失敗。
+    static func schemaInitializationReadiness(
+        for status: CKAccountStatus?
+    ) -> SchemaInitializationReadiness {
+        let undetermined = "目前無法確認 iCloud 帳號狀態，請確認網路與 iCloud 服務狀態後再重新執行。"
+        guard let status else { return .blocked(undetermined) }
+
+        switch status {
+        case .available:
+            return .ready
+        case .noAccount:
+            return .blocked(
+                """
+                此裝置尚未登入 iCloud，無法寫入 CloudKit Development schema。
+                請先在「設定 → 登入 iPhone」（模擬器為 Settings → Sign in to your iPhone）登入 \
+                Apple 帳號並開啟 iCloud Drive，再以 -initialize-cloudkit-schema 重新執行一次。
+                """
+            )
+        case .restricted:
+            return .blocked(
+                "這個 Apple 帳號的 iCloud 功能受到限制（家長控制或裝置管理設定），無法寫入 CloudKit Development schema。"
+            )
+        case .couldNotDetermine, .temporarilyUnavailable:
+            return .blocked(undetermined)
+        @unknown default:
+            return .blocked(
+                "iCloud 帳號狀態為未知值，已略過 CloudKit schema 初始化。"
+            )
+        }
+    }
+
+    /// 只在 `-initialize-cloudkit-schema` 這個開發者維護模式下呼叫。
+    ///
+    /// 先確認 iCloud 帳號可用再寫入 schema，並且不論成功或失敗都只輸出說明、不停在
+    /// `assertionFailure`：這條路徑沒有使用者要保護，把 App 停在斷言只會讓「還沒登入
+    /// iCloud」這種環境問題看起來像程式崩潰。寫入是否真的完成，仍要照
+    /// `Docs/ARCHITECTURE.md` 的步驟到 CloudKit Console 確認後才能部署到 Production。
+    /// - Returns: schema 是否真的寫入了。
+    private static func initializeCloudKitSchemaIfPossible(
+        on container: NSPersistentCloudKitContainer
+    ) -> Bool {
+        if case let .blocked(reason) = schemaInitializationReadiness(for: currentAccountStatus()) {
+            report(schema: "已略過 CloudKit schema 初始化。\n\(reason)")
+            return false
+        }
+
+        do {
+            try container.initializeCloudKitSchema(options: [])
+            report(
+                schema: """
+                CloudKit Development schema 已寫入。
+                接著到 CloudKit Console 確認 CD_ 開頭的 record types 與欄位齊全，再執行 Deploy Schema Changes…；
+                完成後請移除 -initialize-cloudkit-schema 啟動參數再正常執行 App。
+                """
+            )
+            return true
+        } catch {
+            report(
+                schema: """
+                CloudKit schema 初始化失敗。
+                \(error)
+                """
+            )
+            return false
+        }
+    }
+
+    /// 結束 `-initialize-cloudkit-schema` 這次維護執行。
+    ///
+    /// 這個模式不是「App 的另一種啟動方式」，而是一次性的維護動作，跑完就該停：
+    ///
+    /// - 只載入了 private store，`sharedStore` 是指向 private store 的替身。任何把
+    ///   物件 assign 到 shared store 的路徑（接受共享邀請、共享群組的寫入）在這個
+    ///   狀態下都會寫錯 store。
+    /// - `initializeCloudKitSchema` 會建立再刪掉一輪 dummy record，mirroring delegate
+    ///   因此收到 `UserPurgedZone` 並重置同步狀態，接著把整個本機 store 重新匯出一次。
+    ///   繼續留在前景只是讓這次重置的匯出活動一直排程（主控台上就是那串
+    ///   `com.apple.coredata.cloudkit.activity.export` 的 BGSystemTaskScheduler 錯誤），
+    ///   而畫面上的資料狀態並不代表正常執行的樣子。
+    ///
+    /// 所以這裡直接結束行程，讓開發者照主控台指示移除啟動參數後再正常執行。
+    ///
+    /// exit code 就代表「schema 有沒有寫進去」：略過與失敗都是沒寫進去，回 `EXIT_SUCCESS`
+    /// 會讓包著這一步的腳本以為可以往下部署了。
+    private static func endSchemaInitializationRun(schemaWritten: Bool) -> Never {
+        guard schemaWritten else {
+            report(schema: "維護模式執行結束：schema 未寫入，請依上方說明處理後重跑一次。")
+            exit(EXIT_FAILURE)
+        }
+        report(
+            schema: "維護模式執行結束（此模式只載入 private store，不適合繼續操作 App）。"
+        )
+        exit(EXIT_SUCCESS)
+    }
+
+    /// 同步取得 iCloud 帳號狀態。這是啟動時的一次性維護檢查，`initializeCloudKitSchema`
+    /// 本身也是同步阻塞呼叫，所以在這裡等待不會比原本多擋住什麼；逾時或查詢失敗回傳 `nil`。
+    private static func currentAccountStatus(timeout: TimeInterval = 15) -> CKAccountStatus? {
+        let semaphore = DispatchSemaphore(value: 0)
+        var resolved: CKAccountStatus?
+        CKContainer(identifier: cloudKitContainerIdentifier).accountStatus { status, error in
+            if error == nil {
+                resolved = status
+            }
+            semaphore.signal()
+        }
+        guard semaphore.wait(timeout: .now() + timeout) == .success else { return nil }
+        return resolved
+    }
+
+    private static func report(schema message: String) {
+        print("[CloudKit schema] \(message)")
     }
 
     let container: NSPersistentCloudKitContainer
@@ -161,11 +290,17 @@ final class PersistenceController {
         }
 
         if Self.shouldInitializeCloudKitSchema {
+            // schema 初始化要對已載入的 private store 進行。這些 description 沒有開
+            // shouldAddStoreAsynchronously，載入完成前 loadPersistentStores 不會返回，
+            // 所以這個 wait 目前是立即通過的；寫出來是為了讓「先載入完 store 再初始化
+            // schema」這個相依關係留在程式碼裡，而不是依賴預設值。
+            storeLoadGroup.wait()
             sharedStore = privateStore
-            do {
-                try container.initializeCloudKitSchema(options: [])
-            } catch {
-                assertionFailure("CloudKit schema initialization failed: \(error)")
+            let schemaWritten = Self.initializeCloudKitSchemaIfPossible(on: container)
+            // 測試行程不會帶這個啟動參數，但真的帶了也不該被結束掉：那會讓整份測試
+            // 報告變成沒有結果，而不是一個看得懂的失敗。
+            if !Self.isRunningTests {
+                Self.endSchemaInitializationRun(schemaWritten: schemaWritten)
             }
         }
 
@@ -201,7 +336,7 @@ final class PersistenceController {
     
     @MainActor
     func prepareShare(for group: LedgerGroup) async throws -> (CKShare, CKContainer) {
-        let shareTitle = group.name ?? "Shared Ledger 群組"
+        let shareTitle = group.name ?? LedgerStringKey.groupShareDefaultTitle.string()
         let objectID = group.objectID
         let cloudContainer = CKContainer(identifier: Self.cloudKitContainerIdentifier)
 
@@ -337,8 +472,22 @@ final class PersistenceController {
                         .migrateLegacyBalanceAdjustments(in: writableGroupIDs)
                     try await EntryRepository(persistence: self)
                         .migrateLegacyPayments(in: writableGroupIDs)
+                    try await EntryRepository(persistence: self)
+                        .discardSupersededChildren(in: writableGroupIDs)
                 } catch {
                     assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
+                }
+
+                // A CloudKit import posts remote-change notifications in bursts, and
+                // every one of them sets `shouldRepeatDataRepair`. Without this pause
+                // the loop runs a whole pass — a group fetch plus a share lookup per
+                // group, then four full-table scans — back to back for as long as the
+                // sync lasts, and because it all runs on the main actor the UI never
+                // gets a turn: tapping a tab does nothing until the sync settles.
+                // Waiting lets the rest of the burst collapse into the single pass
+                // that follows.
+                if self.shouldRepeatDataRepair {
+                    try? await Task.sleep(nanoseconds: NSEC_PER_SEC)
                 }
             } while self.shouldRepeatDataRepair
         }
@@ -395,15 +544,15 @@ final class PersistenceController {
         var errorDescription: String? {
             switch self {
             case .missingShare:
-                return "CloudKit 未回傳共享邀請，請稍後再試。"
+                return LedgerStringKey.errorShareMissingShare.string()
             case .noICloudAccount:
-                return "此裝置尚未登入 iCloud，請先在「設定」登入 Apple 帳號後再邀請成員。"
+                return LedgerStringKey.errorShareNotSignedIn.string()
             case .restrictedAccount:
-                return "這個 Apple 帳號的 iCloud 功能受到限制，暫時無法建立共享邀請。"
+                return LedgerStringKey.errorShareAccountRestricted.string()
             case .iCloudUnavailable:
-                return "目前無法連線到 iCloud，請確認網路與 iCloud 狀態後再試。"
+                return LedgerStringKey.errorShareUnavailable.string()
             case .participantIdentityMismatch:
-                return "目前 App 成員與 iCloud 共享參與者身分不一致，已停止更新共享設定。"
+                return LedgerStringKey.errorShareMismatchedParticipant.string()
             }
         }
     }

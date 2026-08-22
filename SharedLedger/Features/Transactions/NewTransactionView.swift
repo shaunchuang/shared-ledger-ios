@@ -72,8 +72,8 @@ struct NewTransactionView: View {
     private var members: [Member] {
         let set = book.group?.members as? Set<Member> ?? []
         let historicalIDs = Set(
-            ((entry?.splits as? Set<EntrySplit>) ?? []).compactMap { $0.member?.id }
-                + ((entry?.payments as? Set<EntryPayment>) ?? []).compactMap { $0.member?.id }
+            (entry?.liveSplits ?? []).compactMap { $0.member?.id }
+                + (entry?.livePayments ?? []).compactMap { $0.member?.id }
         )
         return set
             .filter { member in
@@ -86,13 +86,12 @@ struct NewTransactionView: View {
         LedgerCurrency.normalizedCode(book.group?.currencyCode)
     }
 
+    /// 順序由帳本的分類設定決定；FetchRequest 只負責在分類變動時重畫。
     private var availableCategories: [LedgerCategory] {
-        let availableIDs = Set(
-            CategoryRepository()
-                .availableCategories(in: book)
-                .map(\.objectID)
-        )
-        var result = categories.filter { availableIDs.contains($0.objectID) }
+        let fetchedIDs = Set(categories.map(\.objectID))
+        var result = CategoryRepository()
+            .availableCategories(in: book)
+            .filter { fetchedIDs.contains($0.objectID) }
         if let current = entry?.category,
            !result.contains(where: { $0.objectID == current.objectID }) {
             result.append(current)
@@ -103,70 +102,81 @@ struct NewTransactionView: View {
     var body: some View {
         Form {
             Section {
-                Picker("類型", selection: $draft.kind) {
+                Picker(selection: $draft.kind) {
                     ForEach(EntryKind.userCreatableCases, id: \.self) { kind in
-                        Text(kind.displayName).tag(kind)
+                        Text(kind.displayNameKey).tag(kind)
                     }
+                } label: {
+                    Text(.transactionFormFieldKind)
                 }
                 .pickerStyle(.segmented)
+                .accessibilityLabel(Text(.transactionFormFieldKind))
             }
             .listRowBackground(Color.clear)
 
             Section {
                 HStack {
-                    Text("金額")
+                    Text(.transactionFormFieldAmount)
                     Spacer()
-                    Text(currencyCode)
+                    // 貨幣代碼是資料，不翻譯。
+                    Text(verbatim: currencyCode)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    TextField("0", text: $draft.amountText)
+                    // 標籤留空：欄位名稱已經在同一列的左側，這裡只需要提示輸入格式。
+                    TextField("", text: $draft.amountText, prompt: Text(verbatim: "0"))
                         .keyboardType(amountKeyboardType)
                         .multilineTextAlignment(.trailing)
+                        .accessibilityLabel(Text(.transactionFormFieldAmount))
                 }
-                DatePicker("日期", selection: $draft.date, displayedComponents: .date)
+                DatePicker(selection: $draft.date, displayedComponents: .date) {
+                    Text(.transactionFormFieldDate)
+                }
             }
 
             if draft.kind == .transfer {
-                Section("轉帳帳戶") {
+                Section {
                     if accounts.isEmpty {
-                        Text("請先在群組設定新增至少兩個帳戶。")
+                        Text(.transactionFormTransferAccountsEmpty)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
-                        Picker("轉出帳戶", selection: $draft.sourceAccountID) {
-                            Text("請選擇").tag(UUID?.none)
-                            ForEach(Array(accounts), id: \.objectID) { account in
-                                Text(account.name ?? "未命名帳戶").tag(account.id)
-                            }
+                        Picker(selection: $draft.sourceAccountID) {
+                            accountOptions
+                        } label: {
+                            Text(.transactionFormFieldSourceAccount)
                         }
-                        Picker("轉入帳戶", selection: $draft.destinationAccountID) {
-                            Text("請選擇").tag(UUID?.none)
-                            ForEach(Array(accounts), id: \.objectID) { account in
-                                Text(account.name ?? "未命名帳戶").tag(account.id)
-                            }
+                        Picker(selection: $draft.destinationAccountID) {
+                            accountOptions
+                        } label: {
+                            Text(.transactionFormFieldDestinationAccount)
                         }
                     }
+                } header: {
+                    Text(.transactionFormSectionTransferAccounts)
                 }
             } else {
-                Section("帳戶與分類") {
+                Section {
                     if accounts.isEmpty {
-                        Text("請先在群組設定新增帳戶。")
+                        Text(.transactionFormAccountsEmpty)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
-                        Picker("帳戶", selection: $draft.sourceAccountID) {
-                            Text("請選擇").tag(UUID?.none)
-                            ForEach(Array(accounts), id: \.objectID) { account in
-                                Text(account.name ?? "未命名帳戶").tag(account.id)
-                            }
+                        Picker(selection: $draft.sourceAccountID) {
+                            accountOptions
+                        } label: {
+                            Text(.transactionFormFieldAccount)
                         }
                     }
-                    Picker("分類", selection: $draft.categoryID) {
-                        Text("未分類").tag(UUID?.none)
+                    Picker(selection: $draft.categoryID) {
+                        Text(.transactionFormCategoryNone).tag(UUID?.none)
                         ForEach(availableCategories, id: \.objectID) { category in
-                            Text(categoryLabel(category)).tag(category.id)
+                            Text(verbatim: categoryLabel(category)).tag(category.id)
                         }
+                    } label: {
+                        Text(.transactionFormFieldCategory)
                     }
+                } header: {
+                    Text(.transactionFormSectionAccountAndCategory)
                 }
 
                 Section {
@@ -177,36 +187,49 @@ struct NewTransactionView: View {
                             } label: {
                                 HStack(spacing: 10) {
                                     paymentSelectionIcon(for: member)
-                                    Text(member.displayName ?? "未命名成員")
+                                    Text(verbatim: memberName(member))
                                         .foregroundStyle(.primary)
                                 }
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(Text(verbatim: memberName(member)))
+                            .accessibilityAddTraits(
+                                isPayingMember(member) ? [.isButton, .isSelected] : .isButton
+                            )
+                            .accessibilityHint(Text(.transactionFormPaymentToggleAccessibilityHint))
 
                             Spacer()
 
                             if isPayingMember(member) {
-                                TextField("0", text: paymentAmountBinding(for: member))
-                                    .keyboardType(amountKeyboardType)
-                                    .multilineTextAlignment(.trailing)
-                                    .frame(maxWidth: 120)
-                                Text(currencyCode)
+                                TextField(
+                                    "",
+                                    text: paymentAmountBinding(for: member),
+                                    prompt: Text(verbatim: "0")
+                                )
+                                .keyboardType(amountKeyboardType)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 120)
+                                .accessibilityLabel(Text(verbatim: paymentFieldLabel(for: member)))
+                                Text(verbatim: currencyCode)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
                             }
                         }
                     }
                 } header: {
-                    Text("付款人")
+                    Text(.transactionFormSectionPayers)
                 } footer: {
-                    Text(paymentSummary)
+                    Text(verbatim: paymentSummary)
                 }
 
                 Section {
-                    Picker("方式", selection: $draft.splitMode) {
+                    Picker(selection: $draft.splitMode) {
                         ForEach(SplitMode.allCases, id: \.self) { mode in
-                            Text(mode.displayName).tag(mode)
+                            Text(mode.displayNameKey).tag(mode)
                         }
+                    } label: {
+                        Text(.transactionFormFieldSplitMode)
                     }
 
                     ForEach(members, id: \.objectID) { member in
@@ -216,46 +239,73 @@ struct NewTransactionView: View {
                             } label: {
                                 HStack(spacing: 10) {
                                     splitSelectionIcon(for: member)
-                                    Text(member.displayName ?? "未命名成員")
+                                    Text(verbatim: memberName(member))
                                         .foregroundStyle(.primary)
                                 }
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(Text(verbatim: memberName(member)))
+                            .accessibilityAddTraits(
+                                isSplitMember(member) ? [.isButton, .isSelected] : .isButton
+                            )
+                            .accessibilityHint(Text(.transactionFormSplitToggleAccessibilityHint))
 
                             Spacer()
 
                             if isSplitMember(member), draft.splitMode != .equal {
-                                TextField("0", text: splitValueBinding(for: member))
-                                    .keyboardType(.decimalPad)
-                                    .multilineTextAlignment(.trailing)
-                                    .frame(maxWidth: 120)
-                                Text(draft.splitMode == .percentage ? "%" : currencyCode)
+                                TextField(
+                                    "",
+                                    text: splitValueBinding(for: member),
+                                    prompt: Text(verbatim: "0")
+                                )
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 120)
+                                .accessibilityLabel(Text(verbatim: splitFieldLabel(for: member)))
+                                Text(verbatim: draft.splitMode == .percentage ? "%" : currencyCode)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
                             }
                         }
                     }
                 } header: {
-                    Text("分攤")
+                    Text(.transactionFormSectionSplits)
                 } footer: {
-                    Text(splitSummary)
+                    Text(verbatim: splitSummary)
                 }
             }
 
-            Section("備註") {
-                TextField("備註（選填）", text: $draft.note, axis: .vertical)
-                    .lineLimit(2...4)
+            Section {
+                TextField(
+                    "",
+                    text: $draft.note,
+                    prompt: Text(.transactionFormNotePlaceholder),
+                    axis: .vertical
+                )
+                .lineLimit(2...4)
+                .accessibilityLabel(Text(.transactionFormSectionNote))
+            } header: {
+                Text(.transactionFormSectionNote)
             }
         }
-        .navigationTitle(entry == nil ? "新增交易" : "編輯交易")
+        .navigationTitle(Text(
+            entry == nil
+                ? LedgerStringKey.transactionFormTitleNew
+                : LedgerStringKey.transactionFormTitleEdit
+        ))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("儲存", action: save)
-                    .disabled(!draft.canSave)
+                Button(action: save) {
+                    Text(.commonActionSave)
+                }
+                .disabled(!draft.canSave)
             }
         }
         .onAppear {
@@ -267,11 +317,43 @@ struct NewTransactionView: View {
             syncSinglePaymentAmount(oldValue: oldValue, newValue: newValue)
         }
         .onChange(of: draft.splitMode) { _, _ in prefillSplitValues() }
-        .alert("無法儲存交易", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.transactionFormErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            // 驗證訊息來自 Domain 與 repository，那一層還沒遷移到 catalog。
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
+    }
+
+    /// 帳戶選單在三個 Picker 裡完全一樣，抽出來才不會三份各自漂移。
+    @ViewBuilder
+    private var accountOptions: some View {
+        Text(.transactionFormPickerUnselected).tag(UUID?.none)
+        ForEach(Array(accounts), id: \.objectID) { account in
+            Text(verbatim: account.name
+                ?? LedgerStringKey.commonPlaceholderUnnamedAccount.string()).tag(account.id)
+        }
+    }
+
+    private func memberName(_ member: Member) -> String {
+        member.displayName ?? LedgerStringKey.commonPlaceholderUnnamedMember.string()
+    }
+
+    /// 金額欄位在畫面上沒有自己的標籤，VoiceOver 只會唸出「文字欄位」；
+    /// 讀不出這一格是誰的錢，這個表單就沒辦法用聽的填完。
+    private func paymentFieldLabel(for member: Member) -> String {
+        LedgerStringKey.transactionFormPaymentAmountAccessibilityLabel.string(
+            arguments: [memberName(member)]
+        )
+    }
+
+    private func splitFieldLabel(for member: Member) -> String {
+        let key: LedgerStringKey = draft.splitMode == .percentage
+            ? .transactionFormSplitPercentageAccessibilityLabel
+            : .transactionFormSplitAmountAccessibilityLabel
+        return key.string(arguments: [memberName(member)])
     }
 
     private var errorBinding: Binding<Bool> {
@@ -429,24 +511,30 @@ struct NewTransactionView: View {
 
     private var paymentSummary: String {
         let total = draft.paymentDrafts.compactMap(\.amountValue).reduce(0, +)
-        return "付款合計 \(LedgerCurrency.format(total, currencyCode: currencyCode))；必須等於交易金額。"
+        return LedgerStringKey.transactionFormPayersFooter.string(
+            arguments: [LedgerCurrency.format(total, currencyCode: currencyCode)]
+        )
     }
 
     private var splitSummary: String {
         switch draft.splitMode {
         case .equal:
-            return "金額會依貨幣最小單位平均分攤，尾差以固定順序分配。"
+            return LedgerStringKey.transactionFormSplitsFooterEqual.string()
         case .percentage:
-            let total = draft.splitMemberIDs.compactMap {
-                draft.splitValueTexts[$0].flatMap(TransactionDraft.decimalValue(from:))
-            }.reduce(0, +)
-            return "比例合計 \(NSDecimalNumber(decimal: total).stringValue)%；必須等於 100%。"
+            return LedgerStringKey.transactionFormSplitsFooterPercentage.string(
+                arguments: [NSDecimalNumber(decimal: splitInputTotal).stringValue]
+            )
         case .fixedAmount:
-            let total = draft.splitMemberIDs.compactMap {
-                draft.splitValueTexts[$0].flatMap(TransactionDraft.decimalValue(from:))
-            }.reduce(0, +)
-            return "分攤合計 \(LedgerCurrency.format(total, currencyCode: currencyCode))；必須等於交易金額。"
+            return LedgerStringKey.transactionFormSplitsFooterFixedAmount.string(
+                arguments: [LedgerCurrency.format(splitInputTotal, currencyCode: currencyCode)]
+            )
         }
+    }
+
+    private var splitInputTotal: Decimal {
+        draft.splitMemberIDs.compactMap {
+            draft.splitValueTexts[$0].flatMap(TransactionDraft.decimalValue(from:))
+        }.reduce(0, +)
     }
 
     private func categoryLabel(_ category: LedgerCategory) -> String {
@@ -457,7 +545,7 @@ struct NewTransactionView: View {
             current = parent.parent
         }
         let prefix = String(repeating: "　", count: depth)
-        return prefix + (category.name ?? "未命名分類")
+        return prefix + (category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string())
     }
 
     private func save() {
@@ -488,12 +576,3 @@ struct NewTransactionView: View {
     }
 }
 
-private extension SplitMode {
-    var displayName: String {
-        switch self {
-        case .equal: "平均"
-        case .percentage: "比例"
-        case .fixedAmount: "指定金額"
-        }
-    }
-}

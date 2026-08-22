@@ -16,51 +16,62 @@ struct NewAccountView: View {
     var body: some View {
         Form {
             Section {
-                TextField("帳戶名稱，例如：現金錢包", text: $draft.name)
+                TextField("", text: $draft.name, prompt: Text(.accountNewNamePlaceholder))
+                    .accessibilityLabel(Text(.accountNewSectionName))
             } header: {
-                Text("名稱")
+                Text(.accountNewSectionName)
             }
 
             Section {
-                Picker("類型", selection: $draft.type) {
+                Picker(selection: $draft.type) {
                     ForEach(AccountType.allCases) { type in
-                        Label(type.displayName, systemImage: type.systemImage).tag(type)
+                        Label(type.displayNameKey, systemImage: type.systemImage).tag(type)
                     }
+                } label: {
+                    Text(.accountTypeField)
                 }
             } header: {
-                Text("帳戶類型")
+                Text(.accountNewSectionType)
             }
 
             Section {
                 HStack {
-                    Text(currencyCode)
+                    Text(verbatim: currencyCode)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    TextField("0", text: $draft.openingBalanceText)
+                        .accessibilityHidden(true)
+                    TextField("", text: $draft.openingBalanceText, prompt: Text(verbatim: "0"))
                         .keyboardType(.numbersAndPunctuation)
                         .multilineTextAlignment(.trailing)
+                        .accessibilityLabel(Text(.accountNewSectionOpeningBalance))
                 }
             } header: {
-                Text("期初餘額")
+                Text(.accountNewSectionOpeningBalance)
             } footer: {
-                Text("建立後若帳面與實際餘額不同，請使用餘額調整保留紀錄。")
+                Text(.accountNewOpeningBalanceFooter)
             }
         }
-        .navigationTitle("新增帳戶")
+        .navigationTitle(Text(.accountNewTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
+                Button { dismiss() } label: {
+                    Text(.commonActionCancel)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("新增", action: createAccount)
-                    .disabled(!draft.canCreate)
+                Button(action: createAccount) {
+                    Text(.commonActionAdd)
+                }
+                .disabled(!draft.canCreate)
             }
         }
-        .alert("無法新增帳戶", isPresented: errorBinding) {
-            Button("好", role: .cancel) {}
+        .alert(Text(.accountNewErrorTitle), isPresented: errorBinding) {
+            Button(role: .cancel) {} label: {
+                Text(.commonActionOK)
+            }
         } message: {
-            Text(errorMessage ?? "請稍後再試。")
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
     }
 

@@ -31,15 +31,15 @@ struct DashboardView: View {
                 ScrollView {
                     LedgerEmptyState(
                         systemImage: "chart.pie",
-                        title: "先建立一個群組",
-                        message: "建立群組並開始記帳後，這裡會顯示跨帳本的真實收支統計。"
+                        title: .reportEmptyNoGroupTitle,
+                        message: .reportEmptyNoGroupMessage
                     )
                     .padding(.horizontal, LedgerTheme.pagePadding)
                     .padding(.top, 24)
                 }
             }
         }
-        .navigationTitle("總覽")
+        .navigationTitle(Text(.reportTitle))
         .navigationBarTitleDisplayMode(.large)
     }
 }
@@ -57,6 +57,13 @@ private struct GroupDashboardView: View {
     @State private var selectedCustomBookIDs: Set<UUID> = []
     @State private var isPresentingBookSelection = false
     @State private var snapshot = GroupReportSnapshot.empty
+
+    /// SwiftUI 的 `.system(size:)` 是固定字級，完全不理會 Dynamic Type：這張卡片
+    /// 最重要的那個數字，原本在最大字級下和旁邊的說明一樣大。`@ScaledMetric` 讓它
+    /// 以 42 為基準跟著使用者的字級走。
+    @ScaledMetric(relativeTo: .largeTitle) private var heroAmountSize: CGFloat = 42
+    /// 選擇器是一個包住文字的按鈕，高度要跟著裡面的字一起長。
+    @ScaledMetric(relativeTo: .subheadline) private var selectorMinHeight: CGFloat = 42
 
     init(
         group: LedgerGroup,
@@ -105,18 +112,26 @@ private struct GroupDashboardView: View {
     }
 
     private var monthLabel: String {
-        month.formatted(.dateTime.year().month(.wide))
+        LedgerFormatters.month(month)
     }
 
     private var scopeDetail: String {
         switch scope {
         case .allActiveBooks:
-            return "\(snapshot.includedBookIDs.count) 本使用中帳本"
+            return LedgerStringKey.reportScopeAllBooks.string(
+                arguments: [Int64(snapshot.includedBookIDs.count)]
+            )
         case .currentBook:
-            return selectedBook?.name ?? "未選擇帳本"
+            return selectedBook?.name ?? LedgerStringKey.transactionScopeNoBookSelected.string()
         case .selectedBookIDs:
-            return "已選 \(snapshot.includedBookIDs.count) 本帳本"
+            return LedgerStringKey.reportScopeCustomBooks.string(
+                arguments: [Int64(snapshot.includedBookIDs.count)]
+            )
         }
+    }
+
+    private var groupName: String {
+        group.name ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
     }
 
     var body: some View {
@@ -131,8 +146,8 @@ private struct GroupDashboardView: View {
                 if snapshot.entries.isEmpty {
                     LedgerEmptyState(
                         systemImage: "chart.bar.doc.horizontal",
-                        title: "這個範圍還沒有收支",
-                        message: "目前月份與帳本範圍沒有收入或支出；轉帳與餘額調整不會列入期間收支。"
+                        title: .reportEmptyNoEntriesTitle,
+                        message: .reportEmptyNoEntriesMessage
                     )
                 } else {
                     categorySection
@@ -182,33 +197,41 @@ private struct GroupDashboardView: View {
                             Button {
                                 selectedGroupID = candidate.objectID
                             } label: {
+                                let name = candidate.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string()
                                 if candidate.objectID == group.objectID {
-                                    Label(candidate.name ?? "未命名群組", systemImage: "checkmark")
+                                    Label {
+                                        Text(verbatim: name)
+                                    } icon: {
+                                        Image(systemName: "checkmark")
+                                    }
                                 } else {
-                                    Text(candidate.name ?? "未命名群組")
+                                    Text(verbatim: name)
                                 }
                             }
                         }
                     } label: {
                         HStack(spacing: 5) {
-                            Text(group.name ?? "未命名群組")
+                            Text(verbatim: groupName)
                             Image(systemName: "chevron.up.chevron.down")
                                 .font(.caption2.weight(.bold))
+                                .accessibilityHidden(true)
                         }
                         .font(.headline)
                         .foregroundStyle(.primary)
                     }
-                    .accessibilityLabel("切換群組")
+                    .accessibilityLabel(Text(.transactionGroupPickerAccessibilityLabel))
+                    .accessibilityValue(Text(verbatim: groupName))
                 } else {
-                    Text(group.name ?? "未命名群組")
+                    Text(verbatim: groupName)
                         .font(.headline)
                 }
-                Text("跨帳本共同收支")
+                Text(.reportSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text(currencyCode)
+            Text(verbatim: currencyCode)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(LedgerTheme.primaryStrong)
                 .padding(.horizontal, 10)
@@ -225,35 +248,39 @@ private struct GroupDashboardView: View {
                         shiftMonth(by: -1)
                     } label: {
                         Image(systemName: "chevron.left")
-                            .frame(width: 34, height: 34)
+                            .ledgerTapTarget()
                     }
-                    .accessibilityLabel("上一個月")
+                    .accessibilityLabel(Text(.reportMonthPreviousAccessibilityLabel))
 
                     Spacer()
                     VStack(spacing: 2) {
-                        Text(monthLabel)
+                        Text(verbatim: monthLabel)
                             .font(.headline)
-                        Text(scopeDetail)
+                        Text(verbatim: scopeDetail)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    .accessibilityElement(children: .combine)
                     Spacer()
 
                     Button {
                         shiftMonth(by: 1)
                     } label: {
                         Image(systemName: "chevron.right")
-                            .frame(width: 34, height: 34)
+                            .ledgerTapTarget()
                     }
-                    .accessibilityLabel("下一個月")
+                    .accessibilityLabel(Text(.reportMonthNextAccessibilityLabel))
                 }
 
-                Picker("統計範圍", selection: $scope) {
+                Picker(selection: $scope) {
                     ForEach(ReportBookScope.allCases) { item in
-                        Text(item.displayName).tag(item)
+                        Text(item.displayNameKey).tag(item)
                     }
+                } label: {
+                    Text(.reportScopeField)
                 }
                 .pickerStyle(.segmented)
+                .accessibilityLabel(Text(.reportScopeField))
 
                 if scope == .currentBook, let selectedBook {
                     Menu {
@@ -261,22 +288,39 @@ private struct GroupDashboardView: View {
                             Button {
                                 select(book)
                             } label: {
+                                let name = book.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
                                 if book == selectedBook {
-                                    Label(book.name ?? "未命名帳本", systemImage: "checkmark")
+                                    Label {
+                                        Text(verbatim: name)
+                                    } icon: {
+                                        Image(systemName: "checkmark")
+                                    }
                                 } else {
-                                    Text(book.name ?? "未命名帳本")
+                                    Text(verbatim: name)
                                 }
                             }
                         }
                     } label: {
-                        selectorLabel(selectedBook.name ?? "未命名帳本", systemImage: "book.closed.fill")
+                        selectorLabel(
+                            selectedBook.name
+                                ?? LedgerStringKey.commonPlaceholderUnnamedBook.string(),
+                            systemImage: "book.closed.fill"
+                        )
                     }
-                    .accessibilityLabel("切換目前帳本")
+                    .accessibilityLabel(Text(.transactionBookPickerAccessibilityLabel))
+                    .accessibilityValue(Text(verbatim: selectedBook.name
+                        ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()))
                 } else if scope == .selectedBookIDs {
                     Button {
                         isPresentingBookSelection = true
                     } label: {
-                        selectorLabel("選擇帳本（\(selectedCustomBookIDs.count)）", systemImage: "checklist")
+                        selectorLabel(
+                            LedgerStringKey.reportScopeSelectBooks.string(
+                                arguments: [Int64(selectedCustomBookIDs.count)]
+                            ),
+                            systemImage: "checklist"
+                        )
                     }
                 }
             }
@@ -286,11 +330,11 @@ private struct GroupDashboardView: View {
     private var expenseHero: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
-                Label("期間共同支出", systemImage: "calendar")
+                Label(.reportHeroExpense, systemImage: "calendar")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.80))
                 Spacer()
-                Text(scope.displayName)
+                Text(scope.displayNameKey)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.white.opacity(0.86))
                     .padding(.horizontal, 11)
@@ -299,18 +343,43 @@ private struct GroupDashboardView: View {
             }
 
             VStack(alignment: .leading, spacing: 7) {
-                Text(LedgerCurrency.format(snapshot.expense, currencyCode: currencyCode))
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                Text(verbatim: LedgerCurrency.format(snapshot.expense, currencyCode: currencyCode))
+                    .font(.system(size: heroAmountSize, weight: .bold, design: .rounded))
+                    // 卡片本來就是為這個數字存在的，寬度不夠時讓它換行，不要縮小或截斷。
+                    .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.numericText())
-                Text("收入 \(LedgerCurrency.format(snapshot.income, currencyCode: currencyCode)) · 淨額 \(formattedNet)")
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.74))
+                    .accessibilityLabel(Text(.reportHeroExpense))
+                    .accessibilityValue(Text(verbatim: LedgerCurrency.format(
+                        snapshot.expense,
+                        currencyCode: currencyCode
+                    )))
+                Text(verbatim: LedgerStringKey.reportHeroSummary.string(arguments: [
+                    LedgerCurrency.format(snapshot.income, currencyCode: currencyCode),
+                    formattedNet
+                ]))
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.74))
             }
 
-            HStack(spacing: 8) {
-                statCapsule(title: "交易", value: "\(snapshot.entries.count) 筆")
-                statCapsule(title: "帳本", value: "\(snapshot.includedBookIDs.count) 本")
-                statCapsule(title: "分類", value: "\(snapshot.categories.count) 類")
+            LedgerAdaptiveStack(horizontalSpacing: 8, verticalSpacing: 8) {
+                statCapsule(
+                    title: .reportStatEntries,
+                    value: LedgerStringKey.reportStatEntriesValue.string(
+                        arguments: [Int64(snapshot.entries.count)]
+                    )
+                )
+                statCapsule(
+                    title: .reportStatBooks,
+                    value: LedgerStringKey.reportStatBooksValue.string(
+                        arguments: [Int64(snapshot.includedBookIDs.count)]
+                    )
+                )
+                statCapsule(
+                    title: .reportStatCategories,
+                    value: LedgerStringKey.reportStatCategoriesValue.string(
+                        arguments: [Int64(snapshot.categories.count)]
+                    )
+                )
             }
         }
         .foregroundStyle(.white)
@@ -337,18 +406,19 @@ private struct GroupDashboardView: View {
     }
 
     private var metricGrid: some View {
-        HStack(spacing: 12) {
+        // 三張並排的卡片在最大字級只剩下每張三個字的寬度，改成一張一列。
+        LedgerAdaptiveStack(horizontalSpacing: 12, verticalSpacing: 12, rowAlignment: .top) {
             NavigationLink {
                 ReportSourceListView(
-                    title: "期間收入",
+                    title: .reportMetricIncome,
                     entries: snapshot.entries.filter { $0.kind == .income },
                     currencyCode: currencyCode
                 )
             } label: {
                 MetricTile(
-                    title: "期間收入",
+                    title: .reportMetricIncome,
                     value: LedgerCurrency.format(snapshot.income, currencyCode: currencyCode),
-                    detail: "點擊核對來源",
+                    detail: .reportMetricIncomeDetail,
                     systemImage: "arrow.down.left",
                     tint: LedgerTheme.primary
                 )
@@ -357,15 +427,17 @@ private struct GroupDashboardView: View {
 
             NavigationLink {
                 ReportSourceListView(
-                    title: "期間淨額",
+                    title: .reportMetricNetTitle,
                     entries: snapshot.entries,
                     currencyCode: currencyCode
                 )
             } label: {
                 MetricTile(
-                    title: "收支淨額",
+                    title: .reportMetricNet,
                     value: formattedNet,
-                    detail: snapshot.net >= 0 ? "收入高於支出" : "支出高於收入",
+                    detail: snapshot.net >= 0
+                        ? LedgerStringKey.reportMetricNetDetailPositive
+                        : LedgerStringKey.reportMetricNetDetailNegative,
                     systemImage: "equal.circle",
                     tint: LedgerTheme.amber
                 )
@@ -378,31 +450,37 @@ private struct GroupDashboardView: View {
         LedgerCard(padding: 18) {
             HStack(spacing: 14) {
                 LedgerIconBadge(systemImage: "building.columns.fill", tint: LedgerTheme.primary)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("群組帳戶餘額")
-                        .font(.subheadline.weight(.semibold))
-                    Text("包含所有帳本交易與帳戶餘額調整，不受上方月份與帳本範圍影響")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 12)
-                Text(LedgerCurrency.format(snapshot.accountBalance, currencyCode: currencyCode))
+                LedgerAdaptiveStack(horizontalSpacing: 12, verticalSpacing: 4) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(.reportAccountBalanceTitle)
+                            .font(.subheadline.weight(.semibold))
+                        Text(.reportAccountBalanceDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(verbatim: LedgerCurrency.format(
+                        snapshot.accountBalance,
+                        currencyCode: currencyCode
+                    ))
                     .font(.headline.monospacedDigit())
                     .multilineTextAlignment(.trailing)
+                }
             }
+            .accessibilityElement(children: .combine)
         }
     }
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "分類統計")
+            LedgerSectionHeader(title: .reportSectionCategories)
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
                     ForEach(Array(snapshot.categories.enumerated()), id: \.element.id) { index, category in
                         NavigationLink {
                             ReportSourceListView(
-                                title: category.name,
+                                title: Text(verbatim: category.name),
                                 entries: snapshot.entries.filter { entry in
                                     entry.categoryID == category.categoryID
                                 },
@@ -424,38 +502,62 @@ private struct GroupDashboardView: View {
 
     private var bookContributionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LedgerSectionHeader(title: "帳本貢獻")
+            LedgerSectionHeader(title: .reportSectionBookContribution)
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
                     ForEach(Array(snapshot.books.enumerated()), id: \.element.id) { index, book in
                         NavigationLink {
                             ReportSourceListView(
-                                title: book.name,
+                                title: Text(verbatim: book.name),
                                 entries: snapshot.entries.filter { $0.bookID == book.bookID },
                                 currencyCode: currencyCode
                             )
                         } label: {
                             HStack(spacing: 12) {
                                 LedgerIconBadge(systemImage: "book.closed.fill")
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(book.name)
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("收入 \(LedgerCurrency.format(book.income, currencyCode: currencyCode)) · 支出 \(LedgerCurrency.format(book.expense, currencyCode: currencyCode))")
+                                LedgerAdaptiveStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(verbatim: book.name)
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(verbatim: LedgerStringKey.reportBookAmounts.string(
+                                            arguments: [
+                                                LedgerCurrency.format(
+                                                    book.income,
+                                                    currencyCode: currencyCode
+                                                ),
+                                                LedgerCurrency.format(
+                                                    book.expense,
+                                                    currencyCode: currencyCode
+                                                )
+                                            ]
+                                        ))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                    Text("佔總支出 \(ReportShare.formatted(book.expenseShare))")
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        Text(verbatim: LedgerStringKey.reportCategoryShare.string(
+                                            arguments: [ReportShare.formatted(book.expenseShare)]
+                                        ))
                                         .font(.caption2.monospacedDigit())
                                         .foregroundStyle(.tertiary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                    HStack(spacing: 6) {
+                                        Text(verbatim: LedgerCurrency.format(
+                                            book.net,
+                                            currencyCode: currencyCode,
+                                            showPositiveSign: true
+                                        ))
+                                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(.tertiary)
+                                            .accessibilityHidden(true)
+                                    }
                                 }
-                                Spacer()
-                                Text(LedgerCurrency.format(book.net, currencyCode: currencyCode, showPositiveSign: true))
-                                    .font(.subheadline.weight(.semibold).monospacedDigit())
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.tertiary)
                             }
                             .padding(16)
+                            .accessibilityElement(children: .combine)
                         }
                         .buttonStyle(.plain)
 
@@ -471,14 +573,16 @@ private struct GroupDashboardView: View {
     private var sourceEntriesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                LedgerSectionHeader(title: "來源交易")
+                LedgerSectionHeader(title: .reportSectionSourceEntries)
                 Spacer()
-                NavigationLink("查看全部") {
+                NavigationLink {
                     ReportSourceListView(
-                        title: "來源交易",
+                        title: .reportSectionSourceEntries,
                         entries: snapshot.entries,
                         currencyCode: currencyCode
                     )
+                } label: {
+                    Text(.reportSourceViewAll)
                 }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(LedgerTheme.primary)
@@ -513,23 +617,34 @@ private struct GroupDashboardView: View {
                             toggleCustomBook(book)
                         } label: {
                             HStack {
-                                Text(book.name ?? "未命名帳本")
+                                Text(verbatim: book.name
+                                    ?? LedgerStringKey.commonPlaceholderUnnamedBook.string())
                                     .foregroundStyle(.primary)
                                 Spacer()
-                                Image(systemName: isCustomBookSelected(book) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(isCustomBookSelected(book) ? LedgerTheme.primary : .tertiary)
+                                Image(systemName: isCustomBookSelected(book)
+                                      ? "checkmark.circle.fill"
+                                      : "circle")
+                                .foregroundStyle(isCustomBookSelected(book)
+                                                 ? LedgerTheme.primary
+                                                 : .tertiary)
+                                .accessibilityHidden(true)
                             }
                         }
+                        .accessibilityAddTraits(
+                            isCustomBookSelected(book) ? [.isButton, .isSelected] : .isButton
+                        )
                     }
                 } footer: {
-                    Text("自選範圍只會包含目前使用中的同群組帳本；封存帳本不會被默默納入。")
+                    Text(.reportBookSelectionFooter)
                 }
             }
-            .navigationTitle("選擇統計帳本")
+            .navigationTitle(Text(.reportBookSelectionTitle))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { isPresentingBookSelection = false }
+                    Button { isPresentingBookSelection = false } label: {
+                        Text(.commonActionDone)
+                    }
                 }
             }
         }
@@ -546,62 +661,83 @@ private struct GroupDashboardView: View {
         let fraction = min(1, max(0, NSDecimalNumber(decimal: category.expenseShare).doubleValue))
 
         return VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text(category.name)
+            LedgerAdaptiveStack(verticalSpacing: 4) {
+                Text(verbatim: category.name)
                     .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(LedgerCurrency.format(category.expense, currencyCode: currencyCode))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 6) {
+                    Text(verbatim: LedgerCurrency.format(
+                        category.expense,
+                        currencyCode: currencyCode
+                    ))
                     .font(.subheadline.weight(.semibold).monospacedDigit())
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
             }
             ProgressView(value: fraction)
                 .tint(LedgerTheme.primary)
+                // 進度條說的和下面那行百分比是同一件事，重複唸一次只是噪音。
+                .accessibilityHidden(true)
             HStack(spacing: 6) {
-                Text("佔總支出 \(ReportShare.formatted(category.expenseShare))")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                Text(verbatim: LedgerStringKey.reportCategoryShare.string(
+                    arguments: [ReportShare.formatted(category.expenseShare)]
+                ))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
                 if category.income > 0 {
-                    Text("·")
+                    // 分隔點是版面符號，不是文案。
+                    Text(verbatim: "·")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
-                    Text("收入 \(LedgerCurrency.format(category.income, currencyCode: currencyCode))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    Text(verbatim: LedgerStringKey.reportCategoryIncome.string(
+                        arguments: [LedgerCurrency.format(
+                            category.income,
+                            currencyCode: currencyCode
+                        )]
+                    ))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                 }
             }
         }
         .padding(16)
+        .accessibilityElement(children: .combine)
     }
 
-    private func statCapsule(title: String, value: String) -> some View {
+    private func statCapsule(title: LedgerStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.68))
-            Text(value)
+            Text(verbatim: value)
                 .font(.caption.weight(.bold))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 11)
         .padding(.vertical, 8)
         .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
     }
 
     private func selectorLabel(_ title: String, systemImage: String) -> some View {
         HStack(spacing: 7) {
             Image(systemName: systemImage)
-            Text(title)
+                .accessibilityHidden(true)
+            Text(verbatim: title)
                 .lineLimit(1)
             Spacer()
             Image(systemName: "chevron.up.chevron.down")
                 .font(.caption2.weight(.bold))
+                .accessibilityHidden(true)
         }
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(LedgerTheme.primary)
         .padding(.horizontal, 12)
-        .frame(minHeight: 42)
+        .frame(minHeight: selectorMinHeight)
         .background(LedgerTheme.mint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
     }
 
@@ -645,9 +781,9 @@ private struct GroupDashboardView: View {
 }
 
 private struct MetricTile: View {
-    let title: String
+    let title: LedgerStringKey
     let value: String
-    let detail: String
+    let detail: LedgerStringKey
     let systemImage: String
     let tint: Color
 
@@ -659,17 +795,18 @@ private struct MetricTile: View {
                     Text(title)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(value)
+                    Text(verbatim: value)
                         .font(.title3.weight(.bold).monospacedDigit())
                         .minimumScaleFactor(0.75)
-                        .lineLimit(1)
+                        .lineLimit(2)
                     Text(detail)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -683,38 +820,61 @@ private struct ReportSourceRow: View {
                 systemImage: entry.kind == .income ? "arrow.down.left" : "arrow.up.right",
                 tint: entry.kind == .income ? LedgerTheme.primary : LedgerTheme.coral
             )
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.note.isEmpty ? entry.categoryName : entry.note)
-                    .font(.subheadline.weight(.semibold))
-                Text("\(entry.bookName) · \(entry.date.formatted(date: .abbreviated, time: .omitted))")
+            LedgerAdaptiveStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: entry.note.isEmpty ? entry.categoryName : entry.note)
+                        .font(.subheadline.weight(.semibold))
+                    Text(verbatim: LedgerStringKey.reportSourceRowSubtitle.string(
+                        arguments: [entry.bookName, LedgerFormatters.day(entry.date)]
+                    ))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 6) {
+                    Text(verbatim: LedgerCurrency.formatSigned(
+                        entry.amount,
+                        kind: entry.kind,
+                        currencyCode: currencyCode
+                    ))
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(entry.kind == .income ? LedgerTheme.primary : LedgerTheme.coral)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
             }
-            Spacer()
-            Text(reportAmount(entry.amount, kind: entry.kind, currencyCode: currencyCode))
-                .font(.subheadline.weight(.bold).monospacedDigit())
-                .foregroundStyle(entry.kind == .income ? LedgerTheme.primary : LedgerTheme.coral)
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.tertiary)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
 private struct ReportSourceListView: View {
-    let title: String
-    let entries: [GroupReportSourceEntry]
-    let currencyCode: String
+    private let title: Text
+    private let entries: [GroupReportSourceEntry]
+    private let currencyCode: String
+
+    init(title: LedgerStringKey, entries: [GroupReportSourceEntry], currencyCode: String) {
+        self.init(title: Text(title), entries: entries, currencyCode: currencyCode)
+    }
+
+    /// 標題是分類或帳本名稱時走這一個：名稱是資料，不進 catalog。
+    init(title: Text, entries: [GroupReportSourceEntry], currencyCode: String) {
+        self.title = title
+        self.entries = entries
+        self.currencyCode = currencyCode
+    }
 
     var body: some View {
         List {
             if entries.isEmpty {
-                ContentUnavailableView(
-                    "沒有來源交易",
-                    systemImage: "doc.text.magnifyingglass",
-                    description: Text("目前範圍沒有符合條件的收入或支出。")
-                )
+                ContentUnavailableView {
+                    Label(.reportSourceEmptyTitle, systemImage: "doc.text.magnifyingglass")
+                } description: {
+                    Text(.reportSourceEmptyMessage)
+                }
             } else {
                 ForEach(entries) { entry in
                     NavigationLink {
@@ -736,325 +896,37 @@ private struct ReportSourceEntryView: View {
 
     var body: some View {
         List {
-            Section("來源交易") {
-                detailRow("類型", value: entry.kind.displayName)
-                detailRow("金額", value: reportAmount(entry.amount, kind: entry.kind, currencyCode: currencyCode))
-                detailRow("日期", value: entry.date.formatted(date: .long, time: .omitted))
-                detailRow("帳本", value: entry.bookName)
-                detailRow("分類", value: entry.categoryName)
-                detailRow("帳戶", value: entry.accountName)
+            Section {
+                detailRow(.reportSourceDetailKind, value: entry.kind.displayName)
+                detailRow(.reportSourceDetailAmount, value: LedgerCurrency.formatSigned(
+                    entry.amount,
+                    kind: entry.kind,
+                    currencyCode: currencyCode
+                ))
+                detailRow(.reportSourceDetailDate, value: LedgerFormatters.longDay(entry.date))
+                detailRow(.reportSourceDetailBook, value: entry.bookName)
+                detailRow(.reportSourceDetailCategory, value: entry.categoryName)
+                detailRow(.reportSourceDetailAccount, value: entry.accountName)
                 if !entry.note.isEmpty {
-                    detailRow("備註", value: entry.note)
+                    detailRow(.reportSourceDetailNote, value: entry.note)
                 }
+            } header: {
+                Text(.reportSectionSourceEntries)
             }
         }
-        .navigationTitle("交易核對")
+        .navigationTitle(Text(.reportSourceDetailTitle))
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func detailRow(_ title: String, value: String) -> some View {
+    private func detailRow(_ title: LedgerStringKey, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 16)
-            Text(value)
+            Text(verbatim: value)
                 .multilineTextAlignment(.trailing)
         }
-    }
-}
-
-enum ReportBookScope: String, CaseIterable, Identifiable, Sendable {
-    case allActiveBooks
-    case currentBook
-    case selectedBookIDs
-
-    var id: Self { self }
-
-    var displayName: String {
-        switch self {
-        case .allActiveBooks: return "全部帳本"
-        case .currentBook: return "目前帳本"
-        case .selectedBookIDs: return "自選帳本"
-        }
-    }
-}
-
-struct GroupReportCategorySummary: Identifiable, Equatable, Sendable {
-    let id: String
-    let categoryID: UUID?
-    let name: String
-    let income: Decimal
-    let expense: Decimal
-    /// 這個分類佔期間總支出的比例，範圍 0...1；總支出為 0 時為 0。
-    let expenseShare: Decimal
-}
-
-struct GroupReportBookSummary: Identifiable, Equatable, Sendable {
-    let id: String
-    let bookID: UUID
-    let name: String
-    let income: Decimal
-    let expense: Decimal
-    /// 這個帳本佔期間總支出的比例，範圍 0...1；總支出為 0 時為 0。
-    let expenseShare: Decimal
-
-    var net: Decimal { income - expense }
-}
-
-enum ReportShare {
-    /// 佔比一律以期間總支出為分母，讓分類與帳本的比例可以直接互相對照。
-    /// 總支出為 0（例如只有收入）時回傳 0，而不是製造一個無意義的分母。
-    static func share(of amount: Decimal, in total: Decimal) -> Decimal {
-        guard total > 0, amount > 0 else { return 0 }
-        return amount / total
-    }
-
-    static func formatted(_ share: Decimal) -> String {
-        let percentage = NSDecimalNumber(decimal: share * 100).doubleValue
-        return String(format: "%.1f%%", percentage)
-    }
-}
-
-struct GroupReportSourceEntry: Identifiable, Equatable, Sendable {
-    let id: UUID
-    let bookID: UUID
-    let bookName: String
-    let categoryID: UUID?
-    let categoryName: String
-    let kind: EntryKind
-    let amount: Decimal
-    let date: Date
-    let note: String
-    let accountName: String
-}
-
-struct GroupReportSnapshot: Equatable, Sendable {
-    let interval: DateInterval
-    let includedBookIDs: [UUID]
-    let income: Decimal
-    let expense: Decimal
-    let accountBalance: Decimal
-    let categories: [GroupReportCategorySummary]
-    let books: [GroupReportBookSummary]
-    let entries: [GroupReportSourceEntry]
-
-    var net: Decimal { income - expense }
-
-    static let empty = GroupReportSnapshot(
-        interval: DateInterval(start: .distantPast, duration: 0),
-        includedBookIDs: [],
-        income: 0,
-        expense: 0,
-        accountBalance: 0,
-        categories: [],
-        books: [],
-        entries: []
-    )
-}
-
-@MainActor
-struct GroupReportService {
-    private let persistence: PersistenceController
-
-    init(persistence: PersistenceController = .shared) {
-        self.persistence = persistence
-    }
-
-    func snapshot(
-        in group: LedgerGroup,
-        interval: DateInterval,
-        scope: ReportBookScope,
-        currentBook: LedgerBook?,
-        selectedBookIDs: Set<UUID> = []
-    ) -> GroupReportSnapshot {
-        let activeBooks = BookRepository(persistence: persistence).books(in: group)
-        let includedBooks: [LedgerBook]
-
-        switch scope {
-        case .allActiveBooks:
-            includedBooks = activeBooks
-        case .currentBook:
-            if let currentBook,
-               currentBook.group == group,
-               currentBook.archivedAt == nil {
-                includedBooks = [currentBook]
-            } else {
-                includedBooks = []
-            }
-        case .selectedBookIDs:
-            includedBooks = activeBooks.filter { book in
-                guard let id = book.id else { return false }
-                return selectedBookIDs.contains(id)
-            }
-        }
-
-        let includedObjectIDs = Set(includedBooks.map(\.objectID))
-        let voidedEntryIDs = EntryRepository(persistence: persistence).voidedEntryIDs(in: group)
-        let entries = (group.entries as? Set<LedgerEntry> ?? [])
-            .filter { entry in
-                // DateInterval.contains 含右端點，會讓剛好落在下個月 1 日 00:00:00
-                // 的交易同時被算進兩個月，所以這裡自行做左閉右開判斷。
-                guard let book = entry.book,
-                      includedObjectIDs.contains(book.objectID),
-                      let date = entry.date,
-                      date >= interval.start, date < interval.end,
-                      let kind = entry.kind.flatMap(EntryKind.init(rawValue:)),
-                      kind == .income || kind == .expense
-                else { return false }
-
-                if let entryID = entry.id, voidedEntryIDs.contains(entryID) {
-                    return false
-                }
-                return true
-            }
-            .sorted { lhs, rhs in
-                let lhsDate = lhs.date ?? .distantPast
-                let rhsDate = rhs.date ?? .distantPast
-                if lhsDate == rhsDate {
-                    return (lhs.createdAt ?? .distantPast) > (rhs.createdAt ?? .distantPast)
-                }
-                return lhsDate > rhsDate
-            }
-
-        var income = Decimal.zero
-        var expense = Decimal.zero
-        var categoryTotals: [String: MutableCategorySummary] = [:]
-        var bookTotals: [UUID: MutableBookSummary] = [:]
-        var sourceEntries: [GroupReportSourceEntry] = []
-
-        for entry in entries {
-            guard let kind = entry.kind.flatMap(EntryKind.init(rawValue:)),
-                  let book = entry.book,
-                  let bookID = book.id,
-                  let entryID = entry.id,
-                  let date = entry.date
-            else { continue }
-
-            let amount = (entry.amount as Decimal?) ?? 0
-            guard amount >= 0 else { continue }
-
-            if kind == .income {
-                income += amount
-            } else {
-                expense += amount
-            }
-
-            let categoryID = entry.category?.id
-            let categoryKey = categoryID?.uuidString ?? "uncategorized"
-            var category = categoryTotals[categoryKey] ?? MutableCategorySummary(
-                categoryID: categoryID,
-                name: entry.category?.name ?? "未分類"
-            )
-            if kind == .income {
-                category.income += amount
-            } else {
-                category.expense += amount
-            }
-            categoryTotals[categoryKey] = category
-
-            var bookSummary = bookTotals[bookID] ?? MutableBookSummary(
-                bookID: bookID,
-                name: book.name ?? "未命名帳本"
-            )
-            if kind == .income {
-                bookSummary.income += amount
-            } else {
-                bookSummary.expense += amount
-            }
-            bookTotals[bookID] = bookSummary
-
-            sourceEntries.append(
-                GroupReportSourceEntry(
-                    id: entryID,
-                    bookID: bookID,
-                    bookName: book.name ?? "未命名帳本",
-                    categoryID: categoryID,
-                    categoryName: entry.category?.name ?? "未分類",
-                    kind: kind,
-                    amount: amount,
-                    date: date,
-                    note: entry.note ?? "",
-                    accountName: entry.sourceAccount?.name ?? "-"
-                )
-            )
-        }
-
-        let categories = categoryTotals
-            .map { key, summary in
-                GroupReportCategorySummary(
-                    id: key,
-                    categoryID: summary.categoryID,
-                    name: summary.name,
-                    income: summary.income,
-                    expense: summary.expense,
-                    expenseShare: ReportShare.share(of: summary.expense, in: expense)
-                )
-            }
-            .sorted { lhs, rhs in
-                if lhs.expense != rhs.expense { return lhs.expense > rhs.expense }
-                if lhs.income != rhs.income { return lhs.income > rhs.income }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            }
-
-        let bookOrder = Dictionary(uniqueKeysWithValues: includedBooks.enumerated().compactMap { index, book in
-            book.id.map { ($0, index) }
-        })
-        let books = bookTotals.values
-            .map { summary in
-                GroupReportBookSummary(
-                    id: summary.bookID.uuidString,
-                    bookID: summary.bookID,
-                    name: summary.name,
-                    income: summary.income,
-                    expense: summary.expense,
-                    expenseShare: ReportShare.share(of: summary.expense, in: expense)
-                )
-            }
-            .sorted { lhs, rhs in
-                let lhsOrder = bookOrder[lhs.bookID] ?? Int.max
-                let rhsOrder = bookOrder[rhs.bookID] ?? Int.max
-                if lhsOrder != rhsOrder { return lhsOrder < rhsOrder }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            }
-
-        let accounts = Array(group.accounts as? Set<LedgerAccount> ?? [])
-        let accountBalance = AccountRepository(persistence: persistence).totalBalance(for: accounts)
-
-        return GroupReportSnapshot(
-            interval: interval,
-            includedBookIDs: includedBooks.compactMap(\.id),
-            income: income,
-            expense: expense,
-            accountBalance: accountBalance,
-            categories: categories,
-            books: books,
-            entries: sourceEntries
-        )
-    }
-
-    private struct MutableCategorySummary {
-        let categoryID: UUID?
-        let name: String
-        var income: Decimal = 0
-        var expense: Decimal = 0
-    }
-
-    private struct MutableBookSummary {
-        let bookID: UUID
-        let name: String
-        var income: Decimal = 0
-        var expense: Decimal = 0
-    }
-}
-
-private func reportAmount(_ amount: Decimal, kind: EntryKind, currencyCode: String) -> String {
-    switch kind {
-    case .income:
-        return LedgerCurrency.format(amount, currencyCode: currencyCode, showPositiveSign: true)
-    case .expense:
-        return LedgerCurrency.format(-amount, currencyCode: currencyCode)
-    case .transfer, .balanceAdjustment:
-        return LedgerCurrency.format(amount, currencyCode: currencyCode)
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -53,6 +53,15 @@ struct GroupRepository {
         defaultBook.sortOrder = 0
         defaultBook.group = group
 
+        if draft.usesDefaultCategories {
+            // 一起寫入，讓「群組 + 主要帳本 + 內建分類」是同一次存檔的結果；分開存的話，
+            // 中途失敗會留下一個沒有分類的群組，而使用者只會看到建立失敗。
+            CategoryRepository(persistence: persistence).insertDefaultCategories(
+                in: group,
+                books: [defaultBook]
+            )
+        }
+
         insertAudit(
             action: "group.created",
             actorDisplayName: draft.trimmedOwnerDisplayName,
@@ -87,7 +96,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "group.renamed",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "將群組「\(previousName)」重新命名為「\(trimmedName)」",
             in: group,
             at: now
@@ -113,7 +122,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.invitation.resent",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "重新邀請成員「\(member.displayName ?? "未命名成員")」",
             in: group,
             at: now
@@ -135,7 +144,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.invitation.revoked",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "撤回成員「\(member.displayName ?? "未命名成員")」的 App 邀請狀態",
             in: group,
             at: now
@@ -159,7 +168,7 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.removed",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "將成員「\(member.displayName ?? "未命名成員")」移出群組；歷史帳務關聯保留",
             in: group,
             at: now
@@ -188,7 +197,7 @@ struct GroupRepository {
         }
 
         let now = Date()
-        let previousOwnerName = actor.displayName ?? "目前使用者"
+        let previousOwnerName = actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string()
         member.role = MemberRole.owner.rawValue
         actor.role = MemberRole.administrator.rawValue
         // Without an explicit mapping, `CurrentMemberIdentityRepository` resolves the
@@ -276,11 +285,52 @@ struct GroupRepository {
         group.updatedAt = now
         insertAudit(
             action: "member.left",
-            actorDisplayName: actor.displayName ?? "目前使用者",
+            actorDisplayName: actor.displayName ?? LedgerStringKey.defaultMemberCurrentUser.string(),
             summary: "成員「\(actor.displayName ?? "未命名成員")」退出群組；歷史帳務關聯保留",
             in: group,
             at: now
         )
+        try saveChanges()
+    }
+
+    /// Whether this device may delete the whole group, and why not when it may not.
+    ///
+    /// Deletion is owner-only and private-store-only. A group this device joined
+    /// lives in the shared store, where the rows belong to the owner's iCloud
+    /// account: deleting them locally does not remove anyone else's copy and the
+    /// next sync pulls them straight back. Leaving is the honest action there, so
+    /// this refuses rather than pretending the delete did something.
+    func deletionRestriction(for group: LedgerGroup) -> GroupError? {
+        guard persistence.store(for: group) === persistence.privateStore else {
+            return .deleteRequiresOwnedGroup
+        }
+        guard let actor = CurrentMemberIdentityRepository(persistence: persistence)
+            .currentMember(in: group)
+        else { return .missingCurrentMember }
+        guard actor.role == MemberRole.owner.rawValue else {
+            return .onlyOwnerCanDeleteGroup
+        }
+        return nil
+    }
+
+    /// Deletes a group this device owns, along with every book, account, category,
+    /// transaction, member and audit event under it.
+    ///
+    /// The caller is responsible for confirming with the user first: for a shared
+    /// group this removes the data for every participant, not just this device,
+    /// because the records live in this account's zone.
+    func deleteGroup(_ group: LedgerGroup) throws {
+        if let restriction = deletionRestriction(for: group) { throw restriction }
+
+        let context = persistence.container.viewContext
+        // The local identity mapping lives in its own private-only entity with no
+        // relationship to the group, so the cascade never reaches it. Left behind it
+        // would silently claim a member of a group that no longer exists.
+        CurrentMemberIdentityRepository(persistence: persistence).clearCurrentMember(in: group)
+        EffectivePermissionRepository(persistence: persistence).forgetCachedPermission(for: group)
+        // Every to-many relationship from LedgerGroup uses a cascade delete rule, so
+        // the object graph below it goes with this one delete.
+        context.delete(group)
         try saveChanges()
     }
 
@@ -586,8 +636,8 @@ struct GroupRepository {
     private func insertIdentityAudit(for member: Member, in group: LedgerGroup, at date: Date) {
         insertAudit(
             action: "member.identity.confirmed",
-            actorDisplayName: member.displayName ?? "共享成員",
-            summary: "確認群組成員身分「\(member.displayName ?? "共享成員")」並對應 iCloud 共享參與者",
+            actorDisplayName: member.displayName ?? LedgerStringKey.defaultMemberSharedMember.string(),
+            summary: "確認群組成員身分「\(member.displayName ?? LedgerStringKey.defaultMemberSharedMember.string())」並對應 iCloud 共享參與者",
             in: group,
             at: date
         )
@@ -633,137 +683,58 @@ struct GroupRepository {
         case cloudParticipantAlreadyLinked
         case cloudParticipantMismatch
         case cloudParticipantRoleMismatch
+        case onlyOwnerCanDeleteGroup
+        case deleteRequiresOwnedGroup
 
         var errorDescription: String? {
             switch self {
             case .invalidDraft:
-                return "請輸入群組名稱與你的顯示名稱。"
+                return LedgerStringKey.errorGroupInvalidDraft.string()
             case .invalidDisplayName:
-                return "請輸入你的顯示名稱。"
+                return LedgerStringKey.errorGroupInvalidOwnerName.string()
             case .invalidGroupName:
-                return "請輸入有效的群組名稱。"
+                return LedgerStringKey.errorGroupInvalidName.string()
             case .identityOnlyForSharedGroup:
-                return "只有接受共享邀請的群組需要確認成員身分。"
+                return LedgerStringKey.errorGroupIdentityOnlyForSharedGroup.string()
             case .invalidIdentityCandidate:
-                return "這個待邀請成員無法作為目前使用者。"
+                return LedgerStringKey.errorGroupPendingMemberAsCurrentUser.string()
             case .removedMemberCannotRejoin:
-                return "你已離開或被移出這個群組。需要由管理者重新邀請後才能再次加入。"
+                return LedgerStringKey.errorGroupInactiveIdentity.string()
             case .missingCurrentMember:
-                return "無法確認你在這個群組中的成員身分。"
+                return LedgerStringKey.errorGroupMissingCurrentMember.string()
             case .crossGroupMember:
-                return "不能管理其他群組的成員。"
+                return LedgerStringKey.errorGroupCrossGroupMember.string()
             case .invitationNotPending:
-                return "只有待邀請、已撤回或已離開的成員可以重新邀請。"
+                return LedgerStringKey.errorGroupResendRequiresInactive.string()
             case .inactiveMember:
-                return "這位成員目前不是有效成員。"
+                return LedgerStringKey.errorGroupActiveMemberOnly.string()
             case .invalidMemberOperation:
-                return "無法對這位成員執行此操作。"
+                return LedgerStringKey.errorGroupUnsupportedMemberAction.string()
             case .useLeaveGroupForCurrentMember:
-                return "目前使用者請使用「退出群組」。"
+                return LedgerStringKey.errorGroupLeaveInstead.string()
             case .ownerMustTransferBeforeLeaving:
-                return "群組擁有者不能直接退出或被移除，必須先完成擁有權移轉。"
+                return LedgerStringKey.errorGroupOwnerCannotLeave.string()
             case .onlyOwnerCanTransferOwnership:
-                return "只有目前的群組擁有者可以移轉擁有權。"
+                return LedgerStringKey.errorGroupOnlyOwnerCanTransfer.string()
             case .ownershipTransferRequiresCloudParticipantMapping:
-                return "這位成員還沒有與 iCloud 共享參與者建立可驗證的對應，因此不能接手群組擁有權。"
+                return LedgerStringKey.errorGroupTransferRequiresMappedParticipant.string()
             case .ownershipTransferRequiresWritableParticipant:
-                return "這位成員在 iCloud 共享中的權限是唯讀，請先在共享設定改為可編輯，再移轉群組擁有權。"
+                return LedgerStringKey.errorGroupTransferRequiresWritableParticipant.string()
             case .missingCloudParticipant:
-                return "找不到目前 Apple Account 在這個 iCloud 共享中的參與者身分，請確認共享已完成同步後再試。"
+                return LedgerStringKey.errorGroupMissingParticipant.string()
             case .cloudParticipantNotAccepted:
-                return "目前 iCloud 共享邀請尚未完成接受，暫時不能確認 App 成員身分。"
+                return LedgerStringKey.errorGroupShareNotAccepted.string()
             case .cloudParticipantAlreadyLinked:
-                return "這個 iCloud 共享參與者已經對應到另一位 App 成員。"
+                return LedgerStringKey.errorGroupAlreadyMappedParticipant.string()
             case .cloudParticipantMismatch:
-                return "這位 App 成員已對應到不同的 iCloud 共享參與者，無法直接改綁。"
+                return LedgerStringKey.errorGroupAlreadyMappedMember.string()
+            case .onlyOwnerCanDeleteGroup:
+                return LedgerStringKey.errorGroupOnlyOwnerCanDelete.string()
+            case .deleteRequiresOwnedGroup:
+                return LedgerStringKey.errorGroupDeleteRequiresOwnedGroup.string()
             case .cloudParticipantRoleMismatch:
-                return "App 群組擁有者必須對應到 iCloud 共享的擁有者。"
+                return LedgerStringKey.errorGroupOwnerMustHoldShare.string()
             }
         }
-    }
-}
-
-@MainActor
-struct CurrentMemberIdentityRepository {
-    private let persistence: PersistenceController
-
-    init(persistence: PersistenceController = .shared) {
-        self.persistence = persistence
-    }
-
-    func currentMember(in group: LedgerGroup) -> Member? {
-        if let mappedMember = mappedMember(in: group) {
-            guard mappedMember.archivedAt == nil,
-                  mappedMember.invitationStatus == InvitationStatus.accepted.rawValue
-            else { return nil }
-            return mappedMember
-        }
-
-        guard persistence.store(for: group) === persistence.privateStore else { return nil }
-        let members = group.members as? Set<Member> ?? []
-        let owners = members.filter {
-            $0.archivedAt == nil
-                && $0.role == MemberRole.owner.rawValue
-                && $0.invitationStatus == InvitationStatus.accepted.rawValue
-        }
-        return owners.count == 1 ? owners.first : nil
-    }
-
-    func mappedMember(in group: LedgerGroup) -> Member? {
-        guard let groupID = group.id,
-              let identity = identities(for: groupID).first,
-              let memberID = identity.memberID
-        else { return nil }
-        let members = group.members as? Set<Member> ?? []
-        return members.first { $0.id == memberID }
-    }
-
-    func hasInactiveIdentity(in group: LedgerGroup) -> Bool {
-        mappedMember(in: group)?.archivedAt != nil
-    }
-
-    func setCurrentMember(_ member: Member, in group: LedgerGroup) {
-        guard let groupID = group.id,
-              let memberID = member.id,
-              member.group == group
-        else { return }
-
-        let context = persistence.container.viewContext
-        let existing = identities(for: groupID)
-        let identity = existing.first ?? LocalMemberIdentity(context: context)
-        if identity.objectID.isTemporaryID {
-            context.assign(identity, to: persistence.privateStore)
-            identity.id = UUID()
-            identity.createdAt = Date()
-        }
-        identity.groupID = groupID
-        identity.memberID = memberID
-        for duplicate in existing.dropFirst() {
-            context.delete(duplicate)
-        }
-    }
-
-    func clearCurrentMember(in group: LedgerGroup) {
-        guard let groupID = group.id else { return }
-        let context = persistence.container.viewContext
-        for identity in identities(for: groupID) {
-            context.delete(identity)
-        }
-    }
-
-    func needsResolution(for group: LedgerGroup) -> Bool {
-        persistence.store(for: group) === persistence.sharedStore
-            && currentMember(in: group) == nil
-            && !hasInactiveIdentity(in: group)
-    }
-
-    private func identities(for groupID: UUID) -> [LocalMemberIdentity] {
-        let request = NSFetchRequest<LocalMemberIdentity>(entityName: "LocalMemberIdentity")
-        request.predicate = NSPredicate(format: "groupID == %@", groupID as CVarArg)
-        request.sortDescriptors = [
-            NSSortDescriptor(keyPath: \LocalMemberIdentity.createdAt, ascending: true)
-        ]
-        request.affectedStores = [persistence.privateStore]
-        return (try? persistence.container.viewContext.fetch(request)) ?? []
     }
 }

@@ -1,11 +1,16 @@
 import CloudKit
 import UIKit
+import UserNotifications
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // 沒有 delegate 時，App 在前景收到的本機通知會被系統直接丟掉——連通知中心都
+        // 不會留。共享帳本的變更多半正好發生在使用者開著 App 的時候，少了這行等於
+        // 大部分通知都不會出現。設定 delegate 不需要通知權限，也不會跳出任何詢問。
+        UNUserNotificationCenter.current().delegate = self
         // NSPersistentCloudKitContainer 透過遠端推播接收其他成員的變更。
         // 明確註冊 remote notification，避免出現
         // "BUG IN CLIENT OF CLOUDKIT: ... 'remote-notification' background mode"
@@ -48,6 +53,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         userDidAcceptCloudKitShareWith metadata: CKShare.Metadata
     ) {
         PersistenceController.shared.acceptShare(metadata: metadata)
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// App 在前景時怎麼呈現通知。
+    ///
+    /// 給橫幅與通知中心，但不出聲：使用者正盯著畫面，聲音只是打擾；完全不呈現又會讓
+    /// 「其他成員剛剛改了什麼」這件事在最需要知道的時候消失。
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list]
     }
 }
 

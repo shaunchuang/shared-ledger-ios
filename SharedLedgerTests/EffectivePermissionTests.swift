@@ -180,6 +180,45 @@ final class EffectivePermissionTests: XCTestCase {
         }
     }
 
+    /// Resolving a permission makes a synchronous `fetchShares` call for a shared
+    /// group, so the management screen resolves it once and derives every restriction
+    /// from that one value. This pins that the derived answer is the same one the
+    /// group-resolving helpers give, in both the allowed and the refused case.
+    func testARestrictionDerivedFromAResolvedPermissionMatchesResolvingItPerQuestion() throws {
+        let fixture = try makePrivateFixture()
+        let repository = EffectivePermissionRepository(
+            persistence: fixture.persistence,
+            cache: fixture.cache,
+            shareResolver: { _ in nil }
+        )
+
+        let ownerPermission = repository.permission(in: fixture.group)
+        XCTAssertNil(repository.restriction(.memberManagement, for: ownerPermission))
+        XCTAssertNil(repository.restriction(.ledgerSettings, for: ownerPermission))
+        XCTAssertNil(repository.restriction(.transactionWrite, for: ownerPermission))
+        XCTAssertNil(repository.memberManagementRestriction(in: fixture.group))
+
+        fixture.owner.role = MemberRole.viewer.rawValue
+        let viewerPermission = repository.permission(in: fixture.group)
+
+        XCTAssertEqual(
+            repository.restriction(.memberManagement, for: viewerPermission),
+            repository.memberManagementRestriction(in: fixture.group)
+        )
+        XCTAssertEqual(
+            repository.restriction(.memberManagement, for: viewerPermission),
+            .insufficientRole(.viewer)
+        )
+        XCTAssertEqual(
+            repository.restriction(.transactionWrite, for: viewerPermission),
+            repository.transactionWriteRestriction(in: fixture.group)
+        )
+        XCTAssertEqual(
+            repository.restriction(.ledgerSettings, for: viewerPermission),
+            repository.ledgerSettingsRestriction(in: fixture.group)
+        )
+    }
+
     // MARK: - Participant mapping status
 
     func testAnUnsharedGroupReportsNoParticipantMapping() throws {
@@ -201,7 +240,10 @@ final class EffectivePermissionTests: XCTestCase {
             .cloudParticipantStatuses(in: fixture.group)
 
         XCTAssertEqual(statuses[fixture.member.objectID], .shareUnavailable)
-        XCTAssertEqual(CloudParticipantStatus.shareUnavailable.badgeText, "共享未同步")
+        XCTAssertEqual(
+            CloudParticipantStatus.shareUnavailable.badgeText,
+            LedgerStringKey.participantBadgeShareUnavailable.string()
+        )
     }
 
     func testAMemberWithoutAParticipantIDIsReportedAsUnmapped() throws {
@@ -214,7 +256,10 @@ final class EffectivePermissionTests: XCTestCase {
             .cloudParticipantStatuses(in: fixture.group)
 
         XCTAssertEqual(statuses[fixture.member.objectID], .unmapped)
-        XCTAssertEqual(CloudParticipantStatus.unmapped.badgeText, "未對應")
+        XCTAssertEqual(
+            CloudParticipantStatus.unmapped.badgeText,
+            LedgerStringKey.participantBadgeUnmapped.string()
+        )
     }
 
     /// A participant that left or was removed from the share must not silently look
@@ -231,26 +276,29 @@ final class EffectivePermissionTests: XCTestCase {
             .cloudParticipantStatuses(in: fixture.group)
 
         XCTAssertEqual(statuses[fixture.member.objectID], .participantMissing)
-        XCTAssertEqual(CloudParticipantStatus.participantMissing.badgeText, "參與者已不存在")
+        XCTAssertEqual(
+            CloudParticipantStatus.participantMissing.badgeText,
+            LedgerStringKey.participantBadgeParticipantMissing.string()
+        )
     }
 
     func testMappedBadgesDistinguishOwnerWriteAndReadOnly() {
         XCTAssertEqual(
             CloudParticipantStatus.mapped(canWrite: true, isShareOwner: true, isAccepted: true).badgeText,
-            "共享擁有者"
+            LedgerStringKey.participantBadgeShareOwner.string()
         )
         XCTAssertEqual(
             CloudParticipantStatus.mapped(canWrite: true, isShareOwner: false, isAccepted: true).badgeText,
-            "可編輯"
+            LedgerStringKey.participantBadgeWritable.string()
         )
         XCTAssertEqual(
             CloudParticipantStatus.mapped(canWrite: false, isShareOwner: false, isAccepted: true).badgeText,
-            "唯讀"
+            LedgerStringKey.participantBadgeReadOnly.string()
         )
         // An unaccepted invitation outranks the permission: there is nobody there yet.
         XCTAssertEqual(
             CloudParticipantStatus.mapped(canWrite: true, isShareOwner: false, isAccepted: false).badgeText,
-            "邀請未接受"
+            LedgerStringKey.participantBadgeNotAccepted.string()
         )
         XCTAssertTrue(
             CloudParticipantStatus.mapped(canWrite: false, isShareOwner: false, isAccepted: true).isMapped
