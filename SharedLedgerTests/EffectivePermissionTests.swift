@@ -219,6 +219,32 @@ final class EffectivePermissionTests: XCTestCase {
         )
     }
 
+    func testDerivingAccountRestrictionsReusesOneSharedPermissionLookup() throws {
+        let fixture = try makeSharedFixture()
+        fixture.cache.store(true, for: fixture.group)
+        var shareLookupCount = 0
+
+        let repository = EffectivePermissionRepository(
+            persistence: fixture.persistence,
+            cache: fixture.cache,
+            shareResolver: { _ in
+                shareLookupCount += 1
+                return nil
+            }
+        )
+        let permission = repository.permission(in: fixture.group)
+
+        for _ in 0..<20 {
+            XCTAssertNil(repository.restriction(.transactionWrite, for: permission))
+            XCTAssertEqual(
+                repository.restriction(.ledgerSettings, for: permission),
+                .insufficientRole(.member)
+            )
+        }
+
+        XCTAssertEqual(shareLookupCount, 1)
+    }
+
     // MARK: - Participant mapping status
 
     func testAnUnsharedGroupReportsNoParticipantMapping() throws {
