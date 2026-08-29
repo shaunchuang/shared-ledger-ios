@@ -2,6 +2,7 @@ import CoreData
 import SwiftUI
 
 struct AccountsView: View {
+    @Environment(\.managedObjectContext) private var context
     @ObservedObject var group: LedgerGroup
 
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
@@ -11,7 +12,11 @@ struct AccountsView: View {
     @State private var accountPendingArchive: LedgerAccount?
     @State private var errorMessage: String?
     @State private var accountBalances: [NSManagedObjectID: Decimal] = [:]
-    @State private var hasLoadedBalances = false
+    /// Creating and archiving accounts is a ledger settings change, so it follows
+    /// the permission the repository enforces on save. Cached rather than resolved in
+    /// `body`: the notice, the empty state, the toolbar and every account row asked
+    /// the question separately, and each answer made a synchronous share lookup.
+    @State private var settingsAccess = PermissionAccess.unresolved
 
     init(group: LedgerGroup) {
         self.group = group
@@ -30,19 +35,13 @@ struct AccountsView: View {
         accounts.filter { $0.archivedAt != nil }
     }
 
-    /// Creating and archiving accounts is a ledger settings change, so it follows
-    /// the same effective permission the repository enforces on save.
-    private var settingsRestriction: PermissionError? {
-        EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
-    }
-
     private var presentNewAccount: (() -> Void)? {
-        guard settingsRestriction == nil else { return nil }
+        guard settingsAccess.isAllowed else { return nil }
         return { isPresentingNewAccount = true }
     }
 
     private func archiveAction(for account: LedgerAccount) -> (() -> Void)? {
-        guard settingsRestriction == nil else { return nil }
+        guard settingsAccess.isAllowed else { return nil }
         return { accountPendingArchive = account }
     }
 
@@ -59,7 +58,7 @@ struct AccountsView: View {
             LedgerBackground()
             ScrollView {
                 LazyVStack(spacing: 16) {
-                    if let message = settingsRestriction?.errorDescription {
+                    if let message = settingsAccess.noticeMessage {
                         LedgerNotice(message: message)
                     }
 
@@ -67,10 +66,10 @@ struct AccountsView: View {
                         LedgerEmptyState(
                             systemImage: "creditcard",
                             title: .accountEmptyTitle,
-                            message: settingsRestriction == nil
+                            message: settingsAccess.isAllowed
                                 ? LedgerStringKey.accountEmptyMessageWritable
                                 : LedgerStringKey.accountEmptyMessageReadOnly,
-                            actionTitle: settingsRestriction == nil
+                            actionTitle: settingsAccess.isAllowed
                                 ? LedgerStringKey.accountNewTitle
                                 : nil,
                             action: presentNewAccount
@@ -120,7 +119,7 @@ struct AccountsView: View {
         .navigationTitle(Text(.accountTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if settingsRestriction == nil {
+            if settingsAccess.isAllowed {
                 Button {
                     isPresentingNewAccount = true
                 } label: {
@@ -171,21 +170,26 @@ struct AccountsView: View {
             Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
         .onAppear {
-            guard !hasLoadedBalances else { return }
-            hasLoadedBalances = true
+            reloadAccess()
             refreshBalances()
         }
+        // A newly inserted account is not in `accounts` yet when the change
+        // notification below arrives, so its balance is filled in here instead.
         .onChange(of: accounts.count) {
             refreshBalances()
         }
         .onReceive(
             NotificationCenter.default.publisher(
                 for: .NSManagedObjectContextObjectsDidChange,
-                object: group.managedObjectContext
+                object: context
             )
         ) { notification in
-            guard shouldRefreshBalances(for: notification) else { return }
-            refreshBalances()
+            if ContextChangeObserver.touches(notification, .groupPermissions) {
+                reloadAccess()
+            }
+            if ContextChangeObserver.touches(notification, .accountBalances) {
+                refreshBalances()
+            }
         }
     }
 
@@ -213,37 +217,27 @@ struct AccountsView: View {
     }
 
     private func refreshBalances() {
-        accountBalances = balances(for: Array(accounts), repository: accountRepository)
+        // A deleted account can still be in `accounts` for the moment between the
+        // change notification and the fetch request catching up, and reading a
+        // deleted object's relationships raises an Objective-C exception that no
+        // Swift `catch` can stop.
+        let liveAccounts = accounts.filter { !$0.isDeleted && $0.managedObjectContext != nil }
+        accountBalances = balances(for: liveAccounts, repository: accountRepository)
     }
 
-    private func shouldRefreshBalances(for notification: Notification) -> Bool {
-        let accountIDs = Set(accounts.map(\.objectID))
-        let changedObjects = (
-            (notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>) ?? []
-        ).union(
-            (notification.userInfo?[NSUpdatedObjectsKey] as? Set<NSManagedObject>) ?? []
-        ).union(
-            (notification.userInfo?[NSDeletedObjectsKey] as? Set<NSManagedObject>) ?? []
-        )
-
-        return changedObjects.contains { object in
-            if let ledgerAccount = object as? LedgerAccount {
-                return accountIDs.contains(ledgerAccount.objectID)
-            }
-            if let entry = object as? LedgerEntry {
-                if let sourceID = entry.sourceAccount?.objectID, accountIDs.contains(sourceID) {
-                    return true
-                }
-                if let destinationID = entry.destinationAccount?.objectID, accountIDs.contains(destinationID) {
-                    return true
-                }
-            }
-            if let adjustment = object as? AccountAdjustment,
-               let accountID = adjustment.account?.objectID {
-                return accountIDs.contains(accountID)
-            }
-            return false
+    /// The repositories refuse the same actions with the same `PermissionError` this
+    /// resolves, so the affordances and the write paths can never disagree.
+    private func reloadAccess() {
+        // A sync can delete the group while this screen is still on the stack, and
+        // reading a deleted object's properties raises an Objective-C exception that
+        // no Swift `catch` can stop.
+        guard !group.isDeleted, group.managedObjectContext != nil else {
+            settingsAccess = PermissionAccess(restriction: .missingCurrentMember)
+            return
         }
+        settingsAccess = PermissionAccess(
+            restriction: EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
+        )
     }
 }
 
@@ -323,6 +317,7 @@ private struct AccountRow: View {
 
 private struct AccountDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var context
     @ObservedObject var account: LedgerAccount
     private let accountRepository = AccountRepository()
 
@@ -333,6 +328,15 @@ private struct AccountDetailView: View {
     @State private var isConfirmingReconciliation = false
     @State private var isConfirmingArchive = false
     @State private var errorMessage: String?
+    /// Balance adjustment and reconciliation post ledger entries, so they follow the
+    /// transaction permission; archiving is a settings change. The toolbar and the
+    /// menu asked those two questions five times per `body` pass, so both are resolved
+    /// together from one `EffectivePermission` and cached here.
+    @State private var entryAccess = PermissionAccess.unresolved
+    @State private var settingsAccess = PermissionAccess.unresolved
+    /// Summing the balance walks every entry and adjustment on the account, so it is
+    /// resolved when that data changes rather than on every `body` pass.
+    @State private var currentBalance: Decimal = 0
 
     /// 餘額是這個畫面的主角，字級要跟著使用者走；`.system(size:)` 本身不會。
     @ScaledMetric(relativeTo: .largeTitle) private var balanceFontSize: CGFloat = 38
@@ -360,26 +364,12 @@ private struct AccountDetailView: View {
         )
     }
 
-    /// Balance adjustment and reconciliation post ledger entries, so they follow the
-    /// transaction permission; archiving is a settings change.
-    private var transactionRestriction: PermissionError? {
-        guard let group = account.group else { return .missingCurrentMember }
-        return EffectivePermissionRepository().transactionWriteRestriction(in: group)
-    }
-
-    private var settingsRestriction: PermissionError? {
-        guard let group = account.group else { return .missingCurrentMember }
-        return EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
-    }
-
     var body: some View {
-        let currentBalance = accountRepository.currentBalance(for: account)
-
         ZStack {
             LedgerBackground()
             ScrollView {
                 VStack(spacing: 18) {
-                    balanceCard(currentBalance)
+                    balanceCard
                     reconciliationCard
                     transactionHistory
                 }
@@ -393,9 +383,9 @@ private struct AccountDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if account.archivedAt == nil,
-               transactionRestriction == nil || settingsRestriction == nil {
+               entryAccess.isAllowed || settingsAccess.isAllowed {
                 Menu {
-                    if transactionRestriction == nil {
+                    if entryAccess.isAllowed {
                         Button {
                             isAdjustingBalance = true
                         } label: {
@@ -407,8 +397,8 @@ private struct AccountDetailView: View {
                             Label(.accountActionReconcile, systemImage: "checkmark.seal")
                         }
                     }
-                    if settingsRestriction == nil {
-                        if transactionRestriction == nil { Divider() }
+                    if settingsAccess.isAllowed {
+                        if entryAccess.isAllowed { Divider() }
                         Button(role: .destructive) {
                             isConfirmingArchive = true
                         } label: {
@@ -472,9 +462,55 @@ private struct AccountDetailView: View {
         } message: {
             Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
+        .onAppear {
+            reloadAccess()
+            reloadBalance()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            if ContextChangeObserver.touches(notification, .groupPermissions) {
+                reloadAccess()
+            }
+            if ContextChangeObserver.touches(notification, .accountBalances) {
+                reloadBalance()
+            }
+        }
     }
 
-    private func balanceCard(_ currentBalance: Decimal) -> some View {
+    /// Both questions come from one resolved permission, because resolving it makes a
+    /// synchronous `fetchShares` call for a shared group.
+    private func reloadAccess() {
+        // A sync can delete the account while this screen is still on the stack, and
+        // reading a deleted object's relationships raises an Objective-C exception
+        // that no Swift `catch` can stop.
+        guard !account.isDeleted,
+              account.managedObjectContext != nil,
+              let group = account.group
+        else {
+            entryAccess = PermissionAccess(restriction: .missingCurrentMember)
+            settingsAccess = PermissionAccess(restriction: .missingCurrentMember)
+            return
+        }
+        let permissions = EffectivePermissionRepository()
+        let permission = permissions.permission(in: group)
+        entryAccess = PermissionAccess(
+            restriction: permissions.restriction(.transactionWrite, for: permission)
+        )
+        settingsAccess = PermissionAccess(
+            restriction: permissions.restriction(.ledgerSettings, for: permission)
+        )
+    }
+
+    private func reloadBalance() {
+        guard !account.isDeleted, account.managedObjectContext != nil else { return }
+        currentBalance = accountRepository.currentBalance(for: account)
+    }
+
+    private var balanceCard: some View {
         LedgerCard {
             VStack(alignment: .leading, spacing: 16) {
                 Label(.accountDetailBalanceCurrent, systemImage: "creditcard.fill")

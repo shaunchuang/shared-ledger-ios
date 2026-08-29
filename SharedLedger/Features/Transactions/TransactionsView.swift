@@ -42,31 +42,6 @@ struct TransactionsView: View {
     }
 }
 
-/// Whether this device may add or change transactions in a group, and how to explain
-/// it when it may not.
-///
-/// Resolving it walks the current member identity and, for a shared group, makes a
-/// synchronous `fetchShares` call into the CloudKit mirroring metadata. The screens
-/// below therefore cache it in `@State` and refresh it when the data behind it
-/// changes, instead of recomputing it on every `body` pass.
-private struct TransactionWriteAccess {
-    /// Writes are refused until the first resolution, and nothing is explained yet:
-    /// a notice for a state nobody has checked would flash the wrong message on the
-    /// frame before `onAppear` runs.
-    static let unresolved = TransactionWriteAccess(restriction: .missingCurrentMember, isResolved: false)
-
-    let restriction: PermissionError?
-    let isResolved: Bool
-
-    init(restriction: PermissionError?, isResolved: Bool = true) {
-        self.restriction = restriction
-        self.isResolved = isResolved
-    }
-
-    var canWrite: Bool { isResolved && restriction == nil }
-    var noticeMessage: String? { isResolved ? restriction?.errorDescription : nil }
-}
-
 private struct BookTransactionsView: View {
     /// 交易類型的快速切換。搜尋面板不再重複提供類型選擇，讓 `query.kinds` 只有
     /// 這一個入口，畫面上就不會出現兩個彼此矛盾的類型狀態。
@@ -118,7 +93,7 @@ private struct BookTransactionsView: View {
     @State private var result = TransactionSearchResult.empty
     @State private var isPresentingNewEntry = false
     @State private var isPresentingFilters = false
-    @State private var writeAccess = TransactionWriteAccess.unresolved
+    @State private var writeAccess = PermissionAccess.unresolved
 
     init(
         group: LedgerGroup,
@@ -152,7 +127,7 @@ private struct BookTransactionsView: View {
     /// The repositories refuse the write with the same `PermissionError` this
     /// resolves, so the entry point and the save path can never disagree.
     private func reloadWriteAccess() {
-        writeAccess = TransactionWriteAccess(
+        writeAccess = PermissionAccess(
             restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
         )
     }
@@ -212,7 +187,7 @@ private struct BookTransactionsView: View {
                 }
                 .accessibilityLabel(Text(verbatim: filterAccessibilityLabel))
             }
-            if selectedBook != nil, writeAccess.canWrite {
+            if selectedBook != nil, writeAccess.isAllowed {
                 ToolbarItem {
                     Button {
                         isPresentingNewEntry = true
@@ -485,7 +460,7 @@ private struct TransactionResultListView: View {
     let isFiltered: Bool
     let showsBookName: Bool
     let hasSearchableBooks: Bool
-    let writeAccess: TransactionWriteAccess
+    let writeAccess: PermissionAccess
     let onAddFirst: () -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -493,7 +468,7 @@ private struct TransactionResultListView: View {
     @ScaledMetric(relativeTo: .subheadline) private var totalsDividerHeight: CGFloat = 30
 
     private var addAction: (() -> Void)? {
-        guard writeAccess.canWrite, !isFiltered else { return nil }
+        guard writeAccess.isAllowed, !isFiltered else { return nil }
         return onAddFirst
     }
 
@@ -601,7 +576,7 @@ private struct TransactionResultListView: View {
             LedgerEmptyState(
                 systemImage: "receipt",
                 title: .transactionEmptyNoneTitle,
-                message: writeAccess.canWrite
+                message: writeAccess.isAllowed
                     ? LedgerStringKey.transactionEmptyNoneMessageWritable
                     : LedgerStringKey.transactionEmptyNoneMessageReadOnly,
                 actionTitle: addAction == nil ? nil : LedgerStringKey.transactionActionAdd,
@@ -740,7 +715,7 @@ struct TransactionDetailView: View {
     /// call — and `body` reads each of them several times per pass. They are resolved
     /// once per change instead of once per read.
     @State private var isVoided = false
-    @State private var writeAccess = TransactionWriteAccess.unresolved
+    @State private var writeAccess = PermissionAccess.unresolved
 
     private var repository: EntryRepository { EntryRepository() }
 
@@ -772,7 +747,7 @@ struct TransactionDetailView: View {
             return
         }
         isVoided = repository.isVoided(entry)
-        writeAccess = TransactionWriteAccess(
+        writeAccess = PermissionAccess(
             restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
         )
     }
@@ -892,7 +867,7 @@ struct TransactionDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     }
-                } else if writeAccess.canWrite {
+                } else if writeAccess.isAllowed {
                     Section {
                         Button(role: .destructive) {
                             showVoidConfirmation = true
@@ -920,7 +895,7 @@ struct TransactionDetailView: View {
             reloadStatus()
         }
         .toolbar {
-            if !isVoided, entry.book?.archivedAt == nil, writeAccess.canWrite {
+            if !isVoided, entry.book?.archivedAt == nil, writeAccess.isAllowed {
                 Button {
                     isEditing = true
                 } label: {

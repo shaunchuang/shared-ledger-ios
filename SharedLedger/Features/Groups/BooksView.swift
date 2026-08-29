@@ -2,6 +2,7 @@ import CoreData
 import SwiftUI
 
 struct BooksView: View {
+    @Environment(\.managedObjectContext) private var context
     @ObservedObject var group: LedgerGroup
     @Binding var selectedBookID: String
 
@@ -9,6 +10,12 @@ struct BooksView: View {
 
     private let repository = BookRepository()
     @State private var isPresentingNewBook = false
+    /// Book creation, renaming, reordering and archiving are all ledger settings
+    /// changes, so they follow the permission the repository enforces on save. It is
+    /// cached rather than resolved inside `body`, where the notice, the toolbar and
+    /// every book row asked the same question and each answer made a synchronous
+    /// share lookup that blocks the main thread while a sync holds the store.
+    @State private var settingsAccess = PermissionAccess.unresolved
     @State private var bookPendingRename: LedgerBook?
     @State private var bookPendingArchive: LedgerBook?
     @State private var errorMessage: String?
@@ -34,23 +41,32 @@ struct BooksView: View {
         books.filter { $0.archivedAt != nil }
     }
 
-    /// Book creation, renaming, reordering and archiving are all ledger settings
-    /// changes, so they follow the same effective permission the repository enforces.
-    private var settingsRestriction: PermissionError? {
-        EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
-    }
-
     /// `nil` disables drag reordering, which is a persisted settings change.
     private var moveBooksHandler: ((IndexSet, Int) -> Void)? {
-        guard settingsRestriction == nil else { return nil }
+        guard settingsAccess.isAllowed else { return nil }
         return moveBooks
+    }
+
+    /// The repositories refuse the same actions with the same `PermissionError` this
+    /// resolves, so the affordances and the write paths can never disagree.
+    private func reloadAccess() {
+        // A sync can delete the group while this screen is still on the stack, and
+        // reading a deleted object's properties raises an Objective-C exception that
+        // no Swift `catch` can stop.
+        guard !group.isDeleted, group.managedObjectContext != nil else {
+            settingsAccess = PermissionAccess(restriction: .missingCurrentMember)
+            return
+        }
+        settingsAccess = PermissionAccess(
+            restriction: EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
+        )
     }
 
     var body: some View {
         ZStack {
             LedgerBackground()
             List {
-                if let message = settingsRestriction?.errorDescription {
+                if let message = settingsAccess.noticeMessage {
                     Section {
                         Label {
                             // 權限說明來自資料層的 `PermissionError`，那一層還沒遷移。
@@ -104,10 +120,10 @@ struct BooksView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if activeBooks.count > 1, settingsRestriction == nil {
+                if activeBooks.count > 1, settingsAccess.isAllowed {
                     EditButton()
                 }
-                if settingsRestriction == nil {
+                if settingsAccess.isAllowed {
                     Button {
                         isPresentingNewBook = true
                     } label: {
@@ -163,9 +179,21 @@ struct BooksView: View {
         } message: {
             Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
-        .onAppear(perform: normalizeSelection)
+        .onAppear {
+            normalizeSelection()
+            reloadAccess()
+        }
         .onChange(of: activeBooks.count) {
             normalizeSelection()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
+            reloadAccess()
         }
     }
 
@@ -212,7 +240,7 @@ struct BooksView: View {
             // 不必再塞一個只有選中時才有內容的 value。
             .accessibilityAddTraits(isSelected(book) ? [.isButton, .isSelected] : .isButton)
 
-            if settingsRestriction == nil {
+            if settingsAccess.isAllowed {
                 Menu {
                     if !book.isDefault {
                         Button {

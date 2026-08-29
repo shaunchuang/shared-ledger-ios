@@ -152,6 +152,8 @@ V4 資料修復對每個既有分類採以下規則：
 - Merge policy、衝突決策與稽核記錄必須一致，不可只依畫面最後顯示結果推測同步成功。
 - 衝突策略分兩層：欄位層沿用 `NSMergeByPropertyObjectTrumpMergePolicy`，本機剛寫入的值勝過 store 裡的舊值；物件層由交易 revision 決定，一筆交易的付款與分攤永遠整組採用或整組捨棄，不逐筆合併。無法判定的情況（明細還沒到齊、合計與金額對不起來）一律不進結算，並由 `EntryConflictScanner` 列在 iCloud 同步頁，讓使用者知道哪一筆需要重新編輯。
 
+畫面不可在 `body` 裡解析有效權限或加總餘額。共享群組每解析一次權限就同步呼叫一次 `fetchShares`，同步佔住 store 時這個呼叫會卡住主執行緒；而 `body` 每次合併變更都會重跑，一次 pass 又常常重複問同一個問題，於是畫面直接凍住。做法是把答案存進 `@State`（權限用 `PermissionAccess`，一個畫面問多個問題時先 `permission(in:)` 再用 `restriction(_:for:)` 推導），在 `onAppear` 與相關物件變更時各解析一次。變更過濾一律用 `ContextChangeObserver.touches(_:_:)`：它只看物件型別、不讀屬性，對已刪除或失效的 managed object 讀關聯會丟 `NSObjectInaccessibleException`，Swift 的 `catch` 攔不住。
+
 `PersistenceController.prepareShare` 應在 closure 外先讀取分享標題並標記 `@MainActor`，不可在 `@Sendable` closure 捕捉 `LedgerGroup`。
 
 ## CloudKit 儲存與分享

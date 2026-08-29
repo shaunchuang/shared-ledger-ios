@@ -219,6 +219,51 @@ final class EffectivePermissionTests: XCTestCase {
         )
     }
 
+    /// Every resolution of a shared group's permission makes a synchronous share
+    /// lookup that blocks the main thread for as long as a sync is holding the store.
+    /// A screen that asks several questions therefore has to resolve once and derive
+    /// the rest, and these two tests pin what that costs either way.
+    func testResolvingOnceAnswersEveryQuestionWithASingleShareLookup() throws {
+        let fixture = try makeSharedFixture()
+        fixture.cache.store(true, for: fixture.group)
+        let lookups = ShareLookupCounter()
+        let repository = EffectivePermissionRepository(
+            persistence: fixture.persistence,
+            cache: fixture.cache,
+            shareResolver: { _ in
+                lookups.count += 1
+                return nil
+            }
+        )
+
+        let permission = repository.permission(in: fixture.group)
+        _ = repository.restriction(.transactionWrite, for: permission)
+        _ = repository.restriction(.ledgerSettings, for: permission)
+        _ = repository.restriction(.memberManagement, for: permission)
+
+        XCTAssertEqual(lookups.count, 1)
+    }
+
+    func testAskingTheRepositoryPerQuestionRepeatsTheShareLookup() throws {
+        let fixture = try makeSharedFixture()
+        fixture.cache.store(true, for: fixture.group)
+        let lookups = ShareLookupCounter()
+        let repository = EffectivePermissionRepository(
+            persistence: fixture.persistence,
+            cache: fixture.cache,
+            shareResolver: { _ in
+                lookups.count += 1
+                return nil
+            }
+        )
+
+        _ = repository.transactionWriteRestriction(in: fixture.group)
+        _ = repository.ledgerSettingsRestriction(in: fixture.group)
+        _ = repository.memberManagementRestriction(in: fixture.group)
+
+        XCTAssertEqual(lookups.count, 3)
+    }
+
     // MARK: - Participant mapping status
 
     func testAnUnsharedGroupReportsNoParticipantMapping() throws {
@@ -385,6 +430,12 @@ final class EffectivePermissionTests: XCTestCase {
         draft.openingBalanceText = "0"
         return draft
     }
+}
+
+/// Counts the share lookups a permission resolution makes. A reference type so the
+/// escaping resolver closure and the assertion see the same count.
+private final class ShareLookupCounter {
+    var count = 0
 }
 
 extension XCTestCase {

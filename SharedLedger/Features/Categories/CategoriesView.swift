@@ -113,6 +113,7 @@ enum CategorySheetRoute: Identifiable {
 }
 
 struct CategoriesView: View {
+    @Environment(\.managedObjectContext) private var context
     @ObservedObject var group: LedgerGroup
 
     @FetchRequest private var rootCategories: FetchedResults<LedgerCategory>
@@ -123,6 +124,12 @@ struct CategoriesView: View {
     @State private var errorMessage: String?
     /// 排序寫在子分類上，父層的 FetchRequest 不會因此重新計算，所以用它強制重畫。
     @State private var revision = 0
+    /// 管理分類是帳本設定變更，跟著 repository 存檔時檢查的權限走。
+    ///
+    /// 這個答案是快取的，不在 `body` 裡解析：說明、空狀態、工具列與每一列分類都要問
+    /// 一次，而共享群組每問一次就同步查一次 CKShare，那個呼叫會在同步佔住 store 時
+    /// 卡住主執行緒。
+    @State private var settingsAccess = PermissionAccess.unresolved
 
     init(group: LedgerGroup) {
         self.group = group
@@ -133,18 +140,29 @@ struct CategoriesView: View {
         )
     }
 
-    private var manageRestriction: PermissionError? {
-        EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
-    }
+    private var canManage: Bool { settingsAccess.isAllowed }
 
-    private var canManage: Bool { manageRestriction == nil }
+    /// The repository refuses the same changes with the same `PermissionError` this
+    /// resolves, so the affordances and the write paths can never disagree.
+    private func reloadAccess() {
+        // A sync can delete the group while this screen is still on the stack, and
+        // reading a deleted object's properties raises an Objective-C exception that
+        // no Swift `catch` can stop.
+        guard !group.isDeleted, group.managedObjectContext != nil else {
+            settingsAccess = PermissionAccess(restriction: .missingCurrentMember)
+            return
+        }
+        settingsAccess = PermissionAccess(
+            restriction: EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
+        )
+    }
 
     var body: some View {
         ZStack {
             LedgerBackground()
             ScrollView {
                 VStack(spacing: 16) {
-                    if let message = manageRestriction?.errorDescription {
+                    if let message = settingsAccess.noticeMessage {
                         LedgerNotice(message: message)
                     }
 
@@ -266,6 +284,16 @@ struct CategoriesView: View {
         } message: {
             Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
+        .onAppear(perform: reloadAccess)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
+            reloadAccess()
+        }
     }
 
     private func categoryName(_ category: LedgerCategory) -> String {
@@ -342,6 +370,7 @@ struct CategoriesView: View {
 }
 
 struct BookCategoriesView: View {
+    @Environment(\.managedObjectContext) private var context
     @ObservedObject var book: LedgerBook
 
     @FetchRequest private var rootCategories: FetchedResults<LedgerCategory>
@@ -349,6 +378,8 @@ struct BookCategoriesView: View {
     @State private var errorMessage: String?
     @State private var isPresentingNewCategory = false
     @State private var revision = 0
+    /// 同 `CategoriesView`：解析一次存起來，不要在 `body` 裡逐題問。
+    @State private var settingsAccess = PermissionAccess.unresolved
 
     init(book: LedgerBook) {
         self.book = book
@@ -361,12 +392,20 @@ struct BookCategoriesView: View {
         )
     }
 
-    private var manageRestriction: PermissionError? {
-        guard let group = book.group else { return .missingCurrentMember }
-        return EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
-    }
+    private var canManage: Bool { settingsAccess.isAllowed }
 
-    private var canManage: Bool { manageRestriction == nil }
+    private func reloadAccess() {
+        guard !book.isDeleted,
+              book.managedObjectContext != nil,
+              let group = book.group
+        else {
+            settingsAccess = PermissionAccess(restriction: .missingCurrentMember)
+            return
+        }
+        settingsAccess = PermissionAccess(
+            restriction: EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
+        )
+    }
 
     /// FetchRequest 負責讓畫面跟著資料變動重畫，順序則交給帳本自己的設定。
     private var orderedRootCategories: [LedgerCategory] {
@@ -381,7 +420,7 @@ struct BookCategoriesView: View {
             LedgerBackground()
             ScrollView {
                 VStack(spacing: 16) {
-                    if let message = manageRestriction?.errorDescription {
+                    if let message = settingsAccess.noticeMessage {
                         LedgerNotice(message: message)
                     }
 
@@ -453,6 +492,16 @@ struct BookCategoriesView: View {
             }
         } message: {
             Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
+        }
+        .onAppear(perform: reloadAccess)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .NSManagedObjectContextObjectsDidChange,
+                object: context
+            )
+        ) { notification in
+            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
+            reloadAccess()
         }
     }
 
