@@ -16,6 +16,13 @@ struct SettlementRootView: View {
     @State private var selectedTransfer: SettlementTransfer?
     @State private var settlementToReverse: SettlementHistoryItem?
     @State private var errorMessage: String?
+    /// Why settlements cannot be recorded, resolved once per change instead of inside
+    /// `body`. Every read used to resolve the group's effective permission, which for
+    /// a shared group makes a synchronous `fetchShares` call that blocks the main
+    /// thread while a sync holds the store — and the suggestion and history rows each
+    /// asked again.
+    @State private var settlementAccess = PermissionAccess.unresolved
+    @State private var canRecordSettlements = false
 
     private var selectedGroup: LedgerGroup? {
         if let selectedGroupID,
@@ -44,13 +51,26 @@ struct SettlementRootView: View {
         LedgerCurrency.normalizedCode(selectedGroup?.currencyCode)
     }
 
-    private var settlementRestriction: PermissionError? {
-        guard let group = selectedBook?.group else { return .missingCurrentMember }
-        return EffectivePermissionRepository().transactionWriteRestriction(in: group)
-    }
-
-    private var canRecordSettlements: Bool {
-        selectedBook.map { SettlementRepository().canRecordSettlements(in: $0) } ?? false
+    /// `SettlementRepository` refuses the same writes with the same `PermissionError`
+    /// this resolves, so the rows and the write paths can never disagree.
+    private func reloadAccess() {
+        // A sync can delete the book while this screen is still on screen, and reading
+        // a deleted object's relationships raises an Objective-C exception that no
+        // Swift `catch` can stop.
+        guard let book = selectedBook,
+              !book.isDeleted,
+              book.managedObjectContext != nil,
+              let group = book.group
+        else {
+            settlementAccess = PermissionAccess(restriction: .missingCurrentMember)
+            canRecordSettlements = false
+            return
+        }
+        let restriction = EffectivePermissionRepository().transactionWriteRestriction(in: group)
+        settlementAccess = PermissionAccess(restriction: restriction)
+        // Recording a settlement posts entries into the book, which an archived book
+        // refuses whatever the permission says.
+        canRecordSettlements = restriction == nil && book.archivedAt == nil
     }
 
     private var memberNames: [UUID: String] {
@@ -121,7 +141,7 @@ struct SettlementRootView: View {
                         Section {
                             Label {
                                 // 權限說明來自資料層的 `PermissionError`，那一層還沒遷移。
-                                Text(verbatim: settlementRestriction?.errorDescription
+                                Text(verbatim: settlementAccess.noticeMessage
                                     ?? LedgerStringKey.settlementReadOnlyFallback.string())
                             } icon: {
                                 Image(systemName: "lock.fill")
@@ -163,18 +183,22 @@ struct SettlementRootView: View {
         .navigationTitle(Text(.settlementTitle))
         .onAppear {
             normalizeSelection()
+            reloadAccess()
             reload()
         }
         .onChange(of: groups.count) { _, _ in
             normalizeSelection()
+            reloadAccess()
             reload()
         }
         .onChange(of: selectedGroupID) { _, _ in
             selectedBookID = nil
             normalizeSelection()
+            reloadAccess()
             reload()
         }
         .onChange(of: selectedBookID) { _, _ in
+            reloadAccess()
             reload()
         }
         .onReceive(
@@ -183,6 +207,9 @@ struct SettlementRootView: View {
                 object: context
             )
         ) { notification in
+            if ContextChangeObserver.touches(notification, .groupPermissions) {
+                reloadAccess()
+            }
             // A TabView keeps this view alive while other tabs are on screen, so an
             // unfiltered subscription reruns the settlement solver for writes it does
             // not depend on — editing an account or a category, for example.
