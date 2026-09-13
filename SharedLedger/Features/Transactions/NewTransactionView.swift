@@ -7,6 +7,7 @@ struct NewTransactionView: View {
 
     let book: LedgerBook
     let entry: LedgerEntry?
+    let focusesAmount: Bool
     let onSaved: () -> Void
 
     @FetchRequest private var accounts: FetchedResults<LedgerAccount>
@@ -14,16 +15,21 @@ struct NewTransactionView: View {
 
     @State private var draft: TransactionDraft
     @State private var errorMessage: String?
+    @FocusState private var isAmountFocused: Bool
+    @State private var didPrefill = false
 
     init(
         book: LedgerBook,
         entry: LedgerEntry? = nil,
+        initialKind: EntryKind = .expense,
+        focusesAmount: Bool = false,
         onSaved: @escaping () -> Void
     ) {
         self.book = book
         self.entry = entry
+        self.focusesAmount = focusesAmount
         self.onSaved = onSaved
-        _draft = State(initialValue: entry.map(TransactionDraft.init(entry:)) ?? TransactionDraft())
+        _draft = State(initialValue: entry.map(TransactionDraft.init(entry:)) ?? TransactionDraft(kind: initialKind))
 
         let accountPredicate: NSPredicate
         if let group = book.group {
@@ -101,6 +107,25 @@ struct NewTransactionView: View {
 
     var body: some View {
         Form {
+            if focusesAmount, accounts.isEmpty, let group = book.group {
+                Section {
+                    NavigationLink {
+                        AccountsView(group: group)
+                    } label: {
+                        Label(.accountTitle, systemImage: "wallet.pass")
+                    }
+                } footer: {
+                    Text(.transactionFormAccountsEmpty)
+                }
+            }
+            if focusesAmount {
+                Section {
+                    Text(verbatim: "\(book.group?.name ?? "") · \(book.name ?? "")")
+                        .font(.subheadline.weight(.semibold))
+                } header: {
+                    Text(.widgetSettingsBook)
+                }
+            }
             Section {
                 Picker(selection: $draft.kind) {
                     ForEach(EntryKind.userCreatableCases, id: \.self) { kind in
@@ -125,6 +150,7 @@ struct NewTransactionView: View {
                     // 標籤留空：欄位名稱已經在同一列的左側，這裡只需要提示輸入格式。
                     TextField("", text: $draft.amountText, prompt: Text(verbatim: "0"))
                         .keyboardType(amountKeyboardType)
+                        .focused($isAmountFocused)
                         .multilineTextAlignment(.trailing)
                         .accessibilityLabel(Text(.transactionFormFieldAmount))
                 }
@@ -296,6 +322,10 @@ struct NewTransactionView: View {
         ))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button { isAmountFocused = false } label: { Text(.commonActionDone) }
+            }
             ToolbarItem(placement: .cancellationAction) {
                 Button { dismiss() } label: {
                     Text(.commonActionCancel)
@@ -309,12 +339,25 @@ struct NewTransactionView: View {
             }
         }
         .onAppear {
-            if entry == nil {
+            if entry == nil, !didPrefill {
                 prefillDefaults()
+                didPrefill = true
             }
+        }
+        .task {
+            guard entry == nil, focusesAmount else { return }
+            // Wait for the sheet presentation; cancellation must not focus a
+            // dismissed form or reset any of the user's input.
+            do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
+            isAmountFocused = true
         }
         .onChange(of: draft.amountText) { oldValue, newValue in
             syncSinglePaymentAmount(oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: accounts.count) { _, _ in
+            if entry == nil, draft.sourceAccountID == nil {
+                draft.sourceAccountID = accounts.first?.id
+            }
         }
         .onChange(of: draft.splitMode) { _, _ in prefillSplitValues() }
         .alert(Text(.transactionFormErrorTitle), isPresented: errorBinding) {
@@ -575,4 +618,3 @@ struct NewTransactionView: View {
         }
     }
 }
-
