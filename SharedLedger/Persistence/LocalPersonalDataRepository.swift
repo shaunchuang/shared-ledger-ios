@@ -1,5 +1,6 @@
 import CoreData
 import Foundation
+import WidgetKit
 
 /// 這台裝置上、只屬於使用者自己的資料有多少。
 struct LocalPersonalDataSummary: Equatable, Sendable {
@@ -9,6 +10,7 @@ struct LocalPersonalDataSummary: Equatable, Sendable {
     let hasNotificationData: Bool
     /// 記著幾個群組最後一次確認到的 iCloud 寫入權限。
     let cachedPermissionCount: Int
+    var hasWidgetData: Bool = false
 
     static let empty = LocalPersonalDataSummary(
         identityMappingCount: 0,
@@ -17,7 +19,7 @@ struct LocalPersonalDataSummary: Equatable, Sendable {
     )
 
     var isEmpty: Bool {
-        identityMappingCount == 0 && !hasNotificationData && cachedPermissionCount == 0
+        identityMappingCount == 0 && !hasNotificationData && cachedPermissionCount == 0 && !hasWidgetData
     }
 }
 
@@ -34,22 +36,26 @@ struct LocalPersonalDataRepository {
     private let persistence: PersistenceController
     private let notificationStore: LedgerNotificationStore
     private let permissionCache: CloudPermissionCache
+    private let widgetStore: LedgerWidgetStore
 
     init(
         persistence: PersistenceController = .shared,
         notificationStore: LedgerNotificationStore = .standard,
-        permissionCache: CloudPermissionCache? = nil
+        permissionCache: CloudPermissionCache? = nil,
+        widgetStore: LedgerWidgetStore = .shared
     ) {
         self.persistence = persistence
         self.notificationStore = notificationStore
         self.permissionCache = permissionCache ?? persistence.cloudPermissionCache
+        self.widgetStore = widgetStore
     }
 
     func summary() -> LocalPersonalDataSummary {
         LocalPersonalDataSummary(
             identityMappingCount: identities().count,
             hasNotificationData: notificationStore.hasStoredData,
-            cachedPermissionCount: permissionCache.storedGroupCount
+            cachedPermissionCount: permissionCache.storedGroupCount,
+            hasWidgetData: widgetStore.hasStoredData
         )
     }
 
@@ -71,6 +77,8 @@ struct LocalPersonalDataRepository {
 
         notificationStore.reset()
         permissionCache.clearAll()
+        try widgetStore.reset()
+        WidgetCenter.shared.reloadTimelines(ofKind: LedgerWidgetStore.widgetKind)
     }
 
     /// 身分對應只寫在 private store，查詢也限定在那裡：shared store 裡不會有，
