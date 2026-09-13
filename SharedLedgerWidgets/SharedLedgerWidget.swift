@@ -50,7 +50,7 @@ private struct LedgerWidgetView: View {
     }
 
     private func summaryView(_ snapshot: LedgerWidgetSnapshot, summary: LedgerWidgetSnapshot.Summary) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
                 Image(systemName: "book.closed.fill")
                     .foregroundStyle(LedgerTheme.primary)
@@ -66,8 +66,16 @@ private struct LedgerWidgetView: View {
                     metric(.widgetMonthIncome, amount: summary.income, currency: snapshot.currencyCode)
                 }
             }
-            Text(verbatim: LedgerStringKey.widgetTodayCount.string(arguments: [Int64(summary.todayCount)]))
-                .font(.caption)
+            HStack(spacing: 6) {
+                Text(verbatim: LedgerStringKey.widgetTodayCount.string(arguments: [Int64(summary.todayCount)]))
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if family == .systemMedium {
+                    Spacer(minLength: 0)
+                    updatedAt(snapshot)
+                }
+            }
             Spacer(minLength: 0)
             if family == .systemMedium {
                 HStack(spacing: 10) {
@@ -79,16 +87,20 @@ private struct LedgerWidgetView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(LedgerTheme.primary)
             }
-            Text(verbatim: LedgerStringKey.widgetUpdatedAt.string(
-                arguments: [LedgerFormatters.timestamp(snapshot.updatedAt)]
-            ))
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
+            if family == .systemSmall { updatedAt(snapshot) }
         }
         .privacySensitive()
         .widgetURL(LedgerWidgetRoute.newEntry(bookID: snapshot.bookID, kind: .expense).url)
+    }
+
+    private func updatedAt(_ snapshot: LedgerWidgetSnapshot) -> some View {
+        Text(verbatim: LedgerStringKey.widgetUpdatedAt.string(
+            arguments: [LedgerFormatters.timestamp(snapshot.updatedAt)]
+        ))
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
     }
 
     private func metric(_ title: LedgerStringKey, amount: Decimal, currency: String) -> some View {
@@ -110,7 +122,7 @@ private struct LedgerWidgetView: View {
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity, minHeight: 36)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(LedgerTheme.primary.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
                 .foregroundStyle(LedgerTheme.primary)
         }

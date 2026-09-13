@@ -27,7 +27,7 @@ struct LocalPersonalDataSummary: Equatable, Sendable {
 ///
 /// 這是 P0-11 的另一半：群組刪除處理的是會同步出去、其他成員也看得到的帳務資料，
 /// 這裡處理的是反過來的那一類——身分對應、通知偏好與遞送紀錄、CloudKit 權限快取，
-/// 三者都刻意不同步，因此也不會有任何一台其他裝置替使用者清掉。
+/// 這些資料與小工具偏好／摘要都刻意不同步，因此必須在本機一併清除。
 ///
 /// 帳務資料一筆都不動：這些全是可以重新推導的本機狀態，刪掉之後最壞的結果是共享
 /// 群組要重新確認一次身分、通知偏好回到預設值。
@@ -59,9 +59,8 @@ struct LocalPersonalDataRepository {
         )
     }
 
-    /// - Note: 三份資料一起清。Core Data 那一份失敗時整筆 rollback 並往外丟，
-    ///   `UserDefaults` 的兩份留到 Core Data 成功之後才動，避免出現「通知偏好清掉了、
-    ///   身分對應還在」這種一半的狀態。
+    /// Core Data 失敗時 rollback；本機偏好與小工具快取留到儲存成功後才清除。
+    /// 檔案刪除失敗仍向呼叫端回報，不宣稱全部清除成功。
     func deleteAll() throws {
         let context = persistence.container.viewContext
         let stored = identities()

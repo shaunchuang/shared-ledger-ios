@@ -107,6 +107,17 @@ struct NewTransactionView: View {
 
     var body: some View {
         Form {
+            if focusesAmount, accounts.isEmpty, let group = book.group {
+                Section {
+                    NavigationLink {
+                        AccountsView(group: group)
+                    } label: {
+                        Label(.accountTitle, systemImage: "wallet.pass")
+                    }
+                } footer: {
+                    Text(.transactionFormAccountsEmpty)
+                }
+            }
             if focusesAmount {
                 Section {
                     Text(verbatim: "\(book.group?.name ?? "") · \(book.name ?? "")")
@@ -342,6 +353,11 @@ struct NewTransactionView: View {
         }
         .onChange(of: draft.amountText) { oldValue, newValue in
             syncSinglePaymentAmount(oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: accounts.count) { _, _ in
+            if entry == nil, draft.sourceAccountID == nil {
+                draft.sourceAccountID = accounts.first?.id
+            }
         }
         .onChange(of: draft.splitMode) { _, _ in prefillSplitValues() }
         .alert(Text(.transactionFormErrorTitle), isPresented: errorBinding) {

@@ -21,6 +21,9 @@ struct WidgetSettingsView: View {
                 } else {
                     Picker(selection: $selectedBookID) {
                         Text(.widgetSettingsSelectBook).tag(UUID?.none)
+                        if let selectedBookID, !activeBookIDs.contains(selectedBookID) {
+                            Text(.widgetBookUnavailable).tag(Optional(selectedBookID))
+                        }
                         ForEach(groups, id: \.objectID) { group in
                             ForEach(BookRepository().books(in: group), id: \.objectID) { book in
                                 Text(verbatim: "\(group.name ?? "") · \(book.name ?? "")")
