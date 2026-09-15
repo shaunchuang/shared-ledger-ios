@@ -122,6 +122,25 @@
 		7D895AA5A48B924C62431E4F /* LedgerTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907F9A7F5296FEC46239CC6F /* LedgerTheme.swift */; };
 		2452AE9C07E67EB517792EFE /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000089 /* Localizable.xcstrings */; };
 		E2EC56D44AE4B3B4EE6A797B /* SharedLedgerWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 60C909BD9FD755C72759330B; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F878ED018035F991ED5E402D /* WatchLedgerMessage.swift */ = {isa = PBXBuildFile; fileRef = C7C1B7BBCD87697C0F2D8A29; };
+		71D98382D38455E14042C067 /* WatchLedgerMessage.swift */ = {isa = PBXBuildFile; fileRef = C7C1B7BBCD87697C0F2D8A29; };
+		3D9464A41D60EB7063A15654 /* WatchLedgerService.swift */ = {isa = PBXBuildFile; fileRef = 6B8DB4C60259C9E952345FD7; };
+		872CCD18B1F8E2836E44ECFF /* WatchLedgerBridge.swift */ = {isa = PBXBuildFile; fileRef = BDF4BA55266B6BB92C38BCE6; };
+		BD7E9FF8AAC0E89C74295EB6 /* WatchSettingsView.swift */ = {isa = PBXBuildFile; fileRef = B5EFBEDE91FC76799BF32BB7; };
+		9520DEA1BD202AA5B6E0A837 /* WatchLedgerTests.swift */ = {isa = PBXBuildFile; fileRef = 90C491BC09F0726111513AEF; };
+		BE30536A23E0BD928697A451 /* SharedLedgerWatchApp.swift */ = {isa = PBXBuildFile; fileRef = ED8D96D773E04C7B7C35F062; };
+		A8028814A56B427E7CF280DC /* WatchLedgerModel.swift */ = {isa = PBXBuildFile; fileRef = CD9F7E780BFBCB57134CC3D1; };
+		7F9E9117499A19D8B7E1FD1C /* WatchLedgerView.swift */ = {isa = PBXBuildFile; fileRef = 1F3FE127AC9683E52C4001FD; };
+		13B2D1F42E08FDFAB5156054 /* Assets.xcassets */ = {isa = PBXBuildFile; fileRef = 7278BB7444DADA8B38D1FA83; };
+		8BD86A9933C82BFEC7574166 /* LedgerWidgetSnapshot.swift */ = {isa = PBXBuildFile; fileRef = E67987CA3C33F87E0286B514; };
+		72B8256C5799FCF5441EECE9 /* EntryKind.swift */ = {isa = PBXBuildFile; fileRef = 17603CF7F718E4B15A463C90; };
+		E926C2FBAC25486ED9E15F66 /* LedgerCurrency.swift */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000020; };
+		C637517D0BEA310C9AFC17E0 /* LedgerStringKey.swift */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000081; };
+		16F256EABFA3F33D0FA772A0 /* LedgerLocalization.swift */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000083; };
+		F97E541C863F2C4533C01ED8 /* LedgerStringKey+SwiftUI.swift */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000085; };
+		E47E129169B7E58734F4237B /* LedgerFormatters.swift */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000087; };
+		31CFC00A0131DF57B550EF40 /* Localizable.xcstrings */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000089; };
+		7413E4103DECEDC03DD5A905 /* Embed Watch app */ = {isa = PBXBuildFile; fileRef = EAAF391102C9058484BE18EF; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -133,6 +152,13 @@
 			remoteInfo = SharedLedger;
 		};
 		C17070D9FF2382B8D9A2F629 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 8F43C949A922257A42D8BCFD; proxyType = 1; remoteGlobalIDString = 2321AA17FF92354376004665; remoteInfo = SharedLedgerWidgets; };
+		F028CF15A9D5209E864980B1 /* Watch Proxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8F43C949A922257A42D8BCFD;
+			proxyType = 1;
+			remoteGlobalIDString = 0B68D88DD6ABB2F515D11DA4;
+			remoteInfo = SharedLedgerWatch;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -143,6 +169,15 @@
 			dstSubfolderSpec = 13;
 			files = (E2EC56D44AE4B3B4EE6A797B /* SharedLedgerWidgets.appex in Embed App Extensions */, );
 			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6564CFB7F1D1147C1D397037 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (7413E4103DECEDC03DD5A905, );
+			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -265,6 +300,17 @@
 		9C9E8F0271B56CBA9BC7DC5A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		55CB03148489B516A7E96DA1 /* SharedLedgerWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SharedLedgerWidgets.entitlements"; sourceTree = "<group>"; };
 		60C909BD9FD755C72759330B /* SharedLedgerWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SharedLedgerWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7C1B7BBCD87697C0F2D8A29 /* WatchLedgerMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WatchLedgerMessage.swift"; sourceTree = "<group>"; };
+		6B8DB4C60259C9E952345FD7 /* WatchLedgerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WatchLedgerService.swift"; sourceTree = "<group>"; };
+		BDF4BA55266B6BB92C38BCE6 /* WatchLedgerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WatchLedgerBridge.swift"; sourceTree = "<group>"; };
+		B5EFBEDE91FC76799BF32BB7 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WatchSettingsView.swift"; sourceTree = "<group>"; };
+		90C491BC09F0726111513AEF /* WatchLedgerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WatchLedgerTests.swift"; sourceTree = "<group>"; };
+		ED8D96D773E04C7B7C35F062 /* SharedLedgerWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SharedLedgerWatchApp.swift"; sourceTree = "<group>"; };
+		CD9F7E780BFBCB57134CC3D1 /* WatchLedgerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WatchLedgerModel.swift"; sourceTree = "<group>"; };
+		1F3FE127AC9683E52C4001FD /* WatchLedgerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WatchLedgerView.swift"; sourceTree = "<group>"; };
+		83DC04AE0F6F60E18E79F4C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
+		7278BB7444DADA8B38D1FA83 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets.xcassets"; sourceTree = "<group>"; };
+		EAAF391102C9058484BE18EF /* SharedLedgerWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SharedLedgerWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -321,6 +367,8 @@
 		45C5D57ACA3A08343620B37B /* Persistence */ = {
 			isa = PBXGroup;
 			children = (
+				BDF4BA55266B6BB92C38BCE6,
+				6B8DB4C60259C9E952345FD7,
 				81E23202C0BC4C5BF10B0C0B /* LedgerWidgetCoordinator.swift */,
 				97B208A4838ADD0247F4C0A2 /* LedgerWidgetSnapshotService.swift */,
 				BF5C66D604F4E09866E94685 /* LedgerWidgetStore.swift */,
@@ -360,6 +408,7 @@
 		4E2AAC912D128933C96BBF6E /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				C7C1B7BBCD87697C0F2D8A29,
 				21E48B23DF33B1CD22E2D2AD /* LedgerWidgetRoute.swift */,
 				E67987CA3C33F87E0286B514 /* LedgerWidgetSnapshot.swift */,
 				C0DE00000000000000000061 /* LedgerSyncStatus.swift */,
@@ -402,6 +451,7 @@
 		7185875C8BA55197FA6037FF = {
 			isa = PBXGroup;
 			children = (
+				EA4D4FB83FB8E65847B1B0C1,
 				E0D6C6E9E06A32EF668A45E2 /* SharedLedgerWidgets */,
 				08F98D4249EBB6434B4A4747 /* SharedLedger */,
 				C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */,
@@ -412,6 +462,7 @@
 		74D83BEED003441E30601CD1 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				B5EFBEDE91FC76799BF32BB7,
 				C012E00C47CE9F7EF73B4879 /* WidgetSettingsView.swift */,
 				C0DE00000000000000000065 /* SyncStatusView.swift */,
 				C0DE00000000000000000073 /* NotificationSettingsView.swift */,
@@ -426,6 +477,7 @@
 		8AE7FC6EE131B3B423168477 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				EAAF391102C9058484BE18EF,
 				60C909BD9FD755C72759330B /* SharedLedgerWidgets.appex */,
 				1EB2692318D6DD111B869EF4 /* SharedLedger.app */,
 				B96365B99D5F8B14F65FD5FF /* SharedLedgerTests.xctest */,
@@ -475,6 +527,7 @@
 		C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */ = {
 			isa = PBXGroup;
 			children = (
+				90C491BC09F0726111513AEF,
 				2949269E93E93615A2CA7B07 /* LedgerWidgetTests.swift */,
 				C0DE0000000000000000008D /* LocalizationTests.swift */,
 				C0DE0000000000000000009A /* EntryRevisionTests.swift */,
@@ -527,6 +580,18 @@
 			path = SharedLedgerWidgets;
 			sourceTree = "<group>";
 		};
+		EA4D4FB83FB8E65847B1B0C1 /* SharedLedgerWatch */ = {
+			isa = PBXGroup;
+			children = (
+				7278BB7444DADA8B38D1FA83,
+				83DC04AE0F6F60E18E79F4C8,
+				1F3FE127AC9683E52C4001FD,
+				CD9F7E780BFBCB57134CC3D1,
+				ED8D96D773E04C7B7C35F062,
+			);
+			path = SharedLedgerWatch;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -534,6 +599,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4C958C014D6A24E4843BC063 /* Build configuration list for PBXNativeTarget "SharedLedger" */;
 			buildPhases = (
+				6564CFB7F1D1147C1D397037,
 				FFA9AF4B44FA77B49173CB50 /* Embed App Extensions */,
 				BE11A25C14EF233F2B7B6858 /* Sources */,
 				A11C0A021122334455667788 /* Resources */,
@@ -541,6 +607,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				68B7E3B10FBC9F1C3AEAC626,
 				5C75ACE9E2C5E9D12DD03F7A /* PBXTargetDependency */,
 			);
 			name = SharedLedger;
@@ -579,6 +646,17 @@
 			productReference = 60C909BD9FD755C72759330B /* SharedLedgerWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		0B68D88DD6ABB2F515D11DA4 /* Watch Target */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A76DB58F474FBE0EBBB64A80;
+			buildPhases = (3D71DC7A46172615C901AFBA, 982C16396D6327DDD51B9FE4, );
+			buildRules = ();
+			dependencies = ();
+			name = SharedLedgerWatch;
+			productName = SharedLedgerWatch;
+			productReference = EAAF391102C9058484BE18EF;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -612,6 +690,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				0B68D88DD6ABB2F515D11DA4,
 				2321AA17FF92354376004665 /* SharedLedgerWidgets */,
 				873C1CC67E5BEF41C2DCF1B2 /* SharedLedger */,
 				C99D62B4D29AAC13A1054CC9 /* SharedLedgerTests */,
@@ -638,6 +717,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		982C16396D6327DDD51B9FE4 /* Watch Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				31CFC00A0131DF57B550EF40,
+				13B2D1F42E08FDFAB5156054,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -645,6 +733,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9520DEA1BD202AA5B6E0A837,
 				76DB1811C6F21A184558CBBC /* LedgerWidgetTests.swift in Sources */,
 				C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */,
 				C0DE0000000000000000008C /* LocalizationTests.swift in Sources */,
@@ -671,6 +760,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BD7E9FF8AAC0E89C74295EB6,
+				872CCD18B1F8E2836E44ECFF,
+				3D9464A41D60EB7063A15654,
+				F878ED018035F991ED5E402D,
 				6B77A302368A25A5552AFC7C /* WidgetQuickEntryView.swift in Sources */,
 				76FABC43D36A6B94BBB4F900 /* WidgetSettingsView.swift in Sources */,
 				3C60EF31548B947C004332E7 /* LedgerWidgetCoordinator.swift in Sources */,
@@ -772,6 +865,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		3D71DC7A46172615C901AFBA /* Watch Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E47E129169B7E58734F4237B,
+				F97E541C863F2C4533C01ED8,
+				16F256EABFA3F33D0FA772A0,
+				C637517D0BEA310C9AFC17E0,
+				E926C2FBAC25486ED9E15F66,
+				72B8256C5799FCF5441EECE9,
+				8BD86A9933C82BFEC7574166,
+				7F9E9117499A19D8B7E1FD1C,
+				A8028814A56B427E7CF280DC,
+				BE30536A23E0BD928697A451,
+				71D98382D38455E14042C067,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -781,6 +892,11 @@
 			targetProxy = B7AB176CDD286B163D641919 /* PBXContainerItemProxy */;
 		};
 		5C75ACE9E2C5E9D12DD03F7A /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 2321AA17FF92354376004665 /* SharedLedgerWidgets */; targetProxy = C17070D9FF2382B8D9A2F629 /* PBXContainerItemProxy */; };
+		68B7E3B10FBC9F1C3AEAC626 /* Watch Dependency */ = {
+			isa = PBXTargetDependency;
+			target = 0B68D88DD6ABB2F515D11DA4;
+			targetProxy = F028CF15A9D5209E864980B1;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -1051,6 +1167,54 @@
 			};
 			name = Release;
 		};
+		1B73956122E7E24C3135B65D /* Watch Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XC43HRR4X2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SharedLedgerWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";
+				MARKETING_VERSION = 1.0;
+				VERSIONING_SYSTEM = "apple-generic";
+				PRODUCT_BUNDLE_IDENTIFIER = com.shaunchuang.SharedLedger.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", );
+			};
+			name = Debug;
+		};
+		5E983B07162742F61B71DC18 /* Watch Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XC43HRR4X2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SharedLedgerWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";
+				MARKETING_VERSION = 1.0;
+				VERSIONING_SYSTEM = "apple-generic";
+				PRODUCT_BUNDLE_IDENTIFIER = com.shaunchuang.SharedLedger.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", );
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1082,6 +1246,12 @@
 			defaultConfigurationName = Debug;
 		};
 		8F45EF75D5934F90971763E6 /* Build configuration list for PBXNativeTarget "SharedLedgerWidgets" */ = {isa = XCConfigurationList; buildConfigurations = (28DAFC14D23E1D495508C342 /* Debug */, 0056ADA85279C70421762B4F /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		A76DB58F474FBE0EBBB64A80 /* Watch Configurations */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (1B73956122E7E24C3135B65D, 5E983B07162742F61B71DC18, );
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCVersionGroup section */

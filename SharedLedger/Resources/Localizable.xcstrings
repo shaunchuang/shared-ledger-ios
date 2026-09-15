@@ -9033,13 +9033,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No ledger data is deleted and nobody you share with is affected. You will be asked again which member you are in shared groups. Notification preferences return to their defaults, and the widget book selection and summary are cleared."
+            "value": "No ledger data is deleted and nobody you share with is affected. You will be asked again which member you are in shared groups. Notification preferences return to their defaults, and the widget book selection and summary are cleared. The Apple Watch book selection is also cleared; its summary and options are removed on the next watch update."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "帳務資料不會被刪除，其他成員也不受影響。下次開啟共享群組時需要重新確認自己是哪一位成員，通知偏好會回到預設值，小工具的帳本選擇與摘要也會清除。"
+            "value": "帳務資料不會被刪除，其他成員也不受影響。下次開啟共享群組時需要重新確認自己是哪一位成員，通知偏好會回到預設值，小工具的帳本選擇與摘要也會清除。 Apple Watch 帳本選擇也會清除；手錶下次收到更新時移除摘要與選項。"
           }
         }
       }
@@ -9067,13 +9067,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This device stores your member identity, notification preferences and delivery history, cached iCloud write permissions, and the widget book selection and summary."
+            "value": "This device stores your member identity, notification preferences and delivery history, cached iCloud write permissions, and the widget book selection and summary. The Apple Watch book selection is also cleared; its summary and options are removed on the next watch update."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "這台裝置保存成員身分對應、通知偏好與遞送紀錄、iCloud 寫入權限快取，以及小工具的帳本選擇與摘要。"
+            "value": "這台裝置保存成員身分對應、通知偏好與遞送紀錄、iCloud 寫入權限快取，以及小工具的帳本選擇與摘要。 Apple Watch 帳本選擇也會清除；手錶下次收到更新時移除摘要與選項。"
           }
         }
       }
@@ -13827,6 +13827,363 @@
           "stringUnit": {
             "state": "translated",
             "value": "淨額"
+          }
+        }
+      }
+    },
+    "watch.backspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete last digit"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除上一位數字"
+          }
+        }
+      }
+    },
+    "watch.book": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch book"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手錶使用的帳本"
+          }
+        }
+      }
+    },
+    "watch.busy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your iPhone is processing data. Try again shortly."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone 正在處理資料，請稍後再試。"
+          }
+        }
+      }
+    },
+    "watch.changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The book, members, or settings changed. Refresh and review the entry again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "帳本、成員或設定已變更，請更新資料後重新確認。"
+          }
+        }
+      }
+    },
+    "watch.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save this entry?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認儲存這筆記帳？"
+          }
+        }
+      }
+    },
+    "watch.disconnected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone is unavailable. Check pairing, open the iPhone app, and retry. Your pending entry is kept."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未連上 iPhone。請確認兩台裝置已配對，開啟 iPhone App 後再試。待確認的記帳內容會保留。"
+          }
+        }
+      }
+    },
+    "watch.equalSplit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Split equally among these members. Use iPhone for other split methods."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下成員平均分攤；其他分攤方式請使用 iPhone。"
+          }
+        }
+      }
+    },
+    "watch.invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the amount, currency, and entry details."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請確認金額、幣別與記帳內容。"
+          }
+        }
+      }
+    },
+    "watch.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not share a book"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不傳送帳本資料"
+          }
+        }
+      }
+    },
+    "watch.payer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Payer: %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "付款人：%@"
+          }
+        }
+      }
+    },
+    "watch.pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This entry is awaiting iPhone confirmation. Retry confirmation instead of adding it again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這筆記帳仍待 iPhone 確認。請重試確認，避免另外建立相同交易。"
+          }
+        }
+      }
+    },
+    "watch.refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新資料"
+          }
+        }
+      }
+    },
+    "watch.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry confirmation"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重試確認"
+          }
+        }
+      }
+    },
+    "watch.saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved to your iPhone ledger."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存到 iPhone 帳本。"
+          }
+        }
+      }
+    },
+    "watch.settings.instructions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install Shared Ledger using the iPhone Watch app, then open it on your watch and refresh. Enter an amount, choose an account and category, and confirm the current member as payer with equal splitting. Saving requires the paired iPhone. Pending entries survive disconnects; retries do not duplicate them. Summaries show the most recently received data."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 iPhone 的 Watch App 安裝 Shared Ledger，再於手錶開啟 App 並更新資料。手錶可輸入金額、選帳戶與分類，由目前成員付款並平均分攤。儲存需要連上配對 iPhone；斷線時保留待確認內容，重試不會重複入帳。摘要顯示的是最近更新的資料。"
+          }
+        }
+      }
+    },
+    "watch.settings.intro": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See your ledger and add income or expenses from your wrist."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "抬手看收支，直接記收入與支出。"
+          }
+        }
+      }
+    },
+    "watch.settings.privacy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected book’s name, totals, accounts, categories, and split members are sent to your paired watch. Clear the selection to remove its summary and options when the watch next receives an update."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "會傳送所選帳本的名稱、收支摘要、帳戶、分類與分攤成員到配對手錶。取消選擇後，手錶下次收到更新時會清除摘要與選項。"
+          }
+        }
+      }
+    },
+    "watch.setup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On iPhone, open Settings → Apple Watch ledger, choose a book, and check the accounts and your member identity."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請在 iPhone「設定 → Apple Watch 記帳」選擇帳本，並確認帳戶與成員身分。"
+          }
+        }
+      }
+    },
+    "watch.storageError": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not keep the pending entry. Check watch storage and retry."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法保存待確認內容，請確認手錶儲存空間後再試。"
+          }
+        }
+      }
+    },
+    "watch.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Watch ledger"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Watch 記帳"
+          }
+        }
+      }
+    },
+    "watch.tooLarge": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book has too many options to transfer. Use your iPhone or choose another book."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此帳本的選項較多，請使用 iPhone 記帳或選擇其他帳本。"
           }
         }
       }
