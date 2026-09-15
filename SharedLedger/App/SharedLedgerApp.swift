@@ -21,6 +21,7 @@ struct SharedLedgerApp: App {
                 .onAppear {
                     LedgerNotificationCoordinator.shared.start()
                     LedgerWidgetCoordinator.shared.start()
+                    WatchLedgerBridge.shared.start()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     // 回到前景時再跑一次：背景期間 CloudKit 仍會匯入資料，但 App 沒有
@@ -28,6 +29,7 @@ struct SharedLedgerApp: App {
                     guard phase == .active else { return }
                     LedgerNotificationCoordinator.shared.start()
                     LedgerWidgetCoordinator.shared.start()
+                    WatchLedgerBridge.shared.start()
                 }
         }
     }
