@@ -1,5 +1,6 @@
 import Combine
 import CoreData
+import Foundation
 import WatchConnectivity
 
 /// iPhone endpoint. Messages are decoded as value types before main-actor work.
@@ -18,7 +19,9 @@ final class WatchLedgerBridge: NSObject, WCSessionDelegate {
             observer = Publishers.Merge3(
                 NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave, object: context),
                 NotificationCenter.default.publisher(for: .NSManagedObjectContextDidMergeChangesObjectIDs, object: context),
-                NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+                // Permission resolution may update its UserDefaults cache. A
+                // broad defaults observer would turn publishing into a loop.
+                NotificationCenter.default.publisher(for: WatchLedgerService.selectionChanged)
             ).debounce(for: .milliseconds(400), scheduler: RunLoop.main)
                 .sink { [weak self] _ in Task { @MainActor [weak self] in self?.publish() } }
         }

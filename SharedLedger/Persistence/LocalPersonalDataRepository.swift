@@ -83,6 +83,7 @@ struct LocalPersonalDataRepository {
         permissionCache.clearAll()
         try widgetStore.reset()
         watchDefaults.removeObject(forKey: WatchLedgerService.selectionKey)
+        NotificationCenter.default.post(name: WatchLedgerService.selectionChanged, object: nil)
         WidgetCenter.shared.reloadTimelines(ofKind: LedgerWidgetStore.widgetKind)
     }
 

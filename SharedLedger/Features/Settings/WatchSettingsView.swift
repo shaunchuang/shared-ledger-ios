@@ -12,6 +12,9 @@ struct WatchSettingsView: View {
                 Text(.watchSettingsIntro)
                 Picker(selection: $selectedBookID) {
                     Text(.watchNone).tag("")
+                    if !selectedBookID.isEmpty, !activeBookIDs.contains(selectedBookID) {
+                        Text(.widgetBookUnavailable).tag(selectedBookID)
+                    }
                     ForEach(groups, id: \.objectID) { group in
                         ForEach(BookRepository().books(in: group), id: \.objectID) { book in
                             if let id = book.id {
@@ -26,5 +29,9 @@ struct WatchSettingsView: View {
         .navigationTitle(Text(verbatim: "Apple Watch"))
         .onAppear { WatchLedgerBridge.shared.start() }
         .onChange(of: selectedBookID) { _, _ in WatchLedgerBridge.shared.publish() }
+    }
+
+    private var activeBookIDs: Set<String> {
+        Set(groups.flatMap { BookRepository().books(in: $0).compactMap { $0.id?.uuidString } })
     }
 }

@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 struct WatchLedgerService {
     static let selectionKey = "watch.selectedBookID"
+    static let selectionChanged = Notification.Name("WatchLedgerSelectionChanged")
     let persistence: PersistenceController
     var defaults: UserDefaults = .standard
 
