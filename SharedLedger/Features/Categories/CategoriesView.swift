@@ -112,8 +112,38 @@ enum CategorySheetRoute: Identifiable {
     }
 }
 
+enum CategoryRowAction: Hashable {
+    case rename
+    case addChild
+    case move(Int)
+    case merge
+    case archive
+}
+
+/// iOS 26 的原生 `Menu` 在這個 ScrollView 裡會顯示項目，卻可能完全不送出按鈕動作。
+/// 改用 popover 後，先記住使用者選到的動作並關閉 popover；等內容真的消失才取出動作，
+/// 避免在兩個 presentation 還重疊時開 sheet 或 confirmation dialog。
+final class CategoryRowActionCoordinator: ObservableObject {
+    @Published var isPresented = false
+    private(set) var pendingAction: CategoryRowAction?
+
+    func present() {
+        pendingAction = nil
+        isPresented = true
+    }
+
+    func select(_ action: CategoryRowAction) {
+        pendingAction = action
+        isPresented = false
+    }
+
+    func takePendingAction() -> CategoryRowAction? {
+        defer { pendingAction = nil }
+        return pendingAction
+    }
+}
+
 struct CategoriesView: View {
-    @Environment(\.managedObjectContext) private var context
     @ObservedObject var group: LedgerGroup
 
     @FetchRequest private var rootCategories: FetchedResults<LedgerCategory>
@@ -124,12 +154,6 @@ struct CategoriesView: View {
     @State private var errorMessage: String?
     /// 排序寫在子分類上，父層的 FetchRequest 不會因此重新計算，所以用它強制重畫。
     @State private var revision = 0
-    /// 管理分類是帳本設定變更，跟著 repository 存檔時檢查的權限走。
-    ///
-    /// 這個答案是快取的，不在 `body` 裡解析：說明、空狀態、工具列與每一列分類都要問
-    /// 一次，而共享群組每問一次就同步查一次 CKShare，那個呼叫會在同步佔住 store 時
-    /// 卡住主執行緒。
-    @State private var settingsAccess = PermissionAccess.unresolved
 
     init(group: LedgerGroup) {
         self.group = group
@@ -140,29 +164,18 @@ struct CategoriesView: View {
         )
     }
 
-    private var canManage: Bool { settingsAccess.isAllowed }
-
-    /// The repository refuses the same changes with the same `PermissionError` this
-    /// resolves, so the affordances and the write paths can never disagree.
-    private func reloadAccess() {
-        // A sync can delete the group while this screen is still on the stack, and
-        // reading a deleted object's properties raises an Objective-C exception that
-        // no Swift `catch` can stop.
-        guard !group.isDeleted, group.managedObjectContext != nil else {
-            settingsAccess = PermissionAccess(restriction: .missingCurrentMember)
-            return
-        }
-        settingsAccess = PermissionAccess(
-            restriction: EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
-        )
+    private var manageRestriction: PermissionError? {
+        EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
     }
+
+    private var canManage: Bool { manageRestriction == nil }
 
     var body: some View {
         ZStack {
             LedgerBackground()
             ScrollView {
                 VStack(spacing: 16) {
-                    if let message = settingsAccess.noticeMessage {
+                    if let message = manageRestriction?.errorDescription {
                         LedgerNotice(message: message)
                     }
 
@@ -191,7 +204,7 @@ struct CategoriesView: View {
                                         category: category,
                                         depth: 0,
                                         canManage: canManage,
-                                        onAddChild: presentChildCategory,
+                                        onAddChild: { sheetRoute = .newCategory(parent: $0) },
                                         onRename: { sheetRoute = .rename($0) },
                                         onMerge: { sheetRoute = .merge($0) },
                                         onMove: move,
@@ -284,16 +297,6 @@ struct CategoriesView: View {
         } message: {
             Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
-        .onAppear(perform: reloadAccess)
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: .NSManagedObjectContextObjectsDidChange,
-                object: context
-            )
-        ) { notification in
-            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
-            reloadAccess()
-        }
     }
 
     private func categoryName(_ category: LedgerCategory) -> String {
@@ -316,10 +319,6 @@ struct CategoriesView: View {
 
     private func presentRootCategory() {
         sheetRoute = .newCategory(parent: nil)
-    }
-
-    private func presentChildCategory(_ parent: LedgerCategory) {
-        sheetRoute = .newCategory(parent: parent)
     }
 
     /// 新增、改名與合併都會動到子分類那一層，父層的 FetchRequest 不會因此重新計算，
@@ -370,7 +369,6 @@ struct CategoriesView: View {
 }
 
 struct BookCategoriesView: View {
-    @Environment(\.managedObjectContext) private var context
     @ObservedObject var book: LedgerBook
 
     @FetchRequest private var rootCategories: FetchedResults<LedgerCategory>
@@ -378,8 +376,6 @@ struct BookCategoriesView: View {
     @State private var errorMessage: String?
     @State private var isPresentingNewCategory = false
     @State private var revision = 0
-    /// 同 `CategoriesView`：解析一次存起來，不要在 `body` 裡逐題問。
-    @State private var settingsAccess = PermissionAccess.unresolved
 
     init(book: LedgerBook) {
         self.book = book
@@ -392,20 +388,12 @@ struct BookCategoriesView: View {
         )
     }
 
-    private var canManage: Bool { settingsAccess.isAllowed }
-
-    private func reloadAccess() {
-        guard !book.isDeleted,
-              book.managedObjectContext != nil,
-              let group = book.group
-        else {
-            settingsAccess = PermissionAccess(restriction: .missingCurrentMember)
-            return
-        }
-        settingsAccess = PermissionAccess(
-            restriction: EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
-        )
+    private var manageRestriction: PermissionError? {
+        guard let group = book.group else { return .missingCurrentMember }
+        return EffectivePermissionRepository().ledgerSettingsRestriction(in: group)
     }
+
+    private var canManage: Bool { manageRestriction == nil }
 
     /// FetchRequest 負責讓畫面跟著資料變動重畫，順序則交給帳本自己的設定。
     private var orderedRootCategories: [LedgerCategory] {
@@ -420,7 +408,7 @@ struct BookCategoriesView: View {
             LedgerBackground()
             ScrollView {
                 VStack(spacing: 16) {
-                    if let message = settingsAccess.noticeMessage {
+                    if let message = manageRestriction?.errorDescription {
                         LedgerNotice(message: message)
                     }
 
@@ -493,16 +481,6 @@ struct BookCategoriesView: View {
         } message: {
             Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
         }
-        .onAppear(perform: reloadAccess)
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: .NSManagedObjectContextObjectsDidChange,
-                object: context
-            )
-        ) { notification in
-            guard ContextChangeObserver.touches(notification, .groupPermissions) else { return }
-            reloadAccess()
-        }
     }
 
     private var errorBinding: Binding<Bool> {
@@ -543,6 +521,7 @@ private struct GroupCategoryTreeRow: View {
     /// 子分類前面那個小圓點是跟著名稱走的層級記號，字放大時它也要放大，
     /// 否則在大字級下小到看不見。
     @ScaledMetric(relativeTo: .subheadline) private var depthMarkerScale: CGFloat = 1
+    @StateObject private var actionCoordinator = CategoryRowActionCoordinator()
 
     private var children: [LedgerCategory] {
         guard let group = category.group else { return [] }
@@ -587,49 +566,29 @@ private struct GroupCategoryTreeRow: View {
                 .accessibilityElement(children: .combine)
                 Spacer()
                 if canManage {
-                    // 一列可以做的事已經超過兩個圖示放得下的數量，收進選單也讓
+                    // 一列可以做的事已經超過兩個圖示放得下的數量，收進動作面板也讓
                     // VoiceOver 讀得到每個動作的名稱，而不是一排看不懂的圖示。
-                    Menu {
-                        Button {
-                            onRename(category)
-                        } label: {
-                            Label(.categoryActionRename, systemImage: "pencil")
-                        }
-                        Button {
-                            onAddChild(category)
-                        } label: {
-                            Label(.categoryActionAddChild, systemImage: "plus.circle")
-                        }
-                        if let index = siblingIndex {
-                            Button {
-                                onMove(category, -1)
-                            } label: {
-                                Label(.categoryActionMoveUp, systemImage: "arrow.up")
-                            }
-                            .disabled(index == 0)
-                            Button {
-                                onMove(category, 1)
-                            } label: {
-                                Label(.categoryActionMoveDown, systemImage: "arrow.down")
-                            }
-                            .disabled(index == siblings.count - 1)
-                        }
-                        Button {
-                            onMerge(category)
-                        } label: {
-                            Label(.categoryActionMerge, systemImage: "arrow.triangle.merge")
-                        }
-                        Button(role: .destructive) {
-                            onArchive(category)
-                        } label: {
-                            Label(.categoryActionArchive, systemImage: "archivebox")
-                        }
+                    Button {
+                        actionCoordinator.present()
                     } label: {
                         Image(systemName: "ellipsis")
                             .ledgerTapTarget()
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel(Text(verbatim: LedgerStringKey
                         .categoryMenuAccessibilityLabel.string(arguments: [name])))
+                    .popover(
+                        isPresented: $actionCoordinator.isPresented,
+                        attachmentAnchor: .rect(.bounds)
+                    ) {
+                        GroupCategoryActionPopover(
+                            canMoveUp: siblingIndex.map { $0 > 0 } ?? false,
+                            canMoveDown: siblingIndex.map { $0 < siblings.count - 1 } ?? false,
+                            onSelect: actionCoordinator.select
+                        )
+                        .onDisappear(perform: performPendingAction)
+                        .presentationCompactAdaptation(.popover)
+                    }
                 }
             }
             .padding(.leading, CGFloat(depth) * 18)
@@ -649,6 +608,98 @@ private struct GroupCategoryTreeRow: View {
                 )
             }
         }
+    }
+
+    private func performPendingAction() {
+        guard let action = actionCoordinator.takePendingAction() else { return }
+        switch action {
+        case .rename:
+            onRename(category)
+        case .addChild:
+            onAddChild(category)
+        case let .move(offset):
+            onMove(category, offset)
+        case .merge:
+            onMerge(category)
+        case .archive:
+            onArchive(category)
+        }
+    }
+}
+
+private struct GroupCategoryActionPopover: View {
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let onSelect: (CategoryRowAction) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            actionButton(
+                .categoryActionRename,
+                systemImage: "pencil",
+                action: .rename
+            )
+            actionButton(
+                .categoryActionAddChild,
+                systemImage: "plus.circle",
+                action: .addChild
+            )
+            actionButton(
+                .categoryActionMoveUp,
+                systemImage: "arrow.up",
+                action: .move(-1),
+                isEnabled: canMoveUp
+            )
+            actionButton(
+                .categoryActionMoveDown,
+                systemImage: "arrow.down",
+                action: .move(1),
+                isEnabled: canMoveDown
+            )
+            actionButton(
+                .categoryActionMerge,
+                systemImage: "arrow.triangle.merge",
+                action: .merge
+            )
+            Divider().padding(.vertical, 4)
+            actionButton(
+                .categoryActionArchive,
+                systemImage: "archivebox",
+                action: .archive,
+                tint: LedgerTheme.coral
+            )
+        }
+        .padding(8)
+        .frame(minWidth: 270)
+    }
+
+    private func actionButton(
+        _ title: LedgerStringKey,
+        systemImage: String,
+        action: CategoryRowAction,
+        isEnabled: Bool = true,
+        tint: Color = LedgerTheme.primary
+    ) -> some View {
+        Button {
+            onSelect(action)
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(tint)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .foregroundStyle(action == .archive ? tint : .primary)
+                Spacer(minLength: 12)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: LedgerTheme.tapTargetMinimum)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.42)
     }
 }
 
