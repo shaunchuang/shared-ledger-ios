@@ -8,14 +8,29 @@ import WatchConnectivity
 final class WatchLedgerBridge: NSObject, WCSessionDelegate {
     static let shared = WatchLedgerBridge()
     private var observer: AnyCancellable?
-    private let service = WatchLedgerService(persistence: .shared)
+    private let persistence: PersistenceController
+    private let service: WatchLedgerService
+    private let saveRequest: (WatchLedgerRequest) throws -> UUID
+    private let widgetCoordinator: LedgerWidgetCoordinator
+
+    init(persistence: PersistenceController = .shared,
+         defaults: UserDefaults = .standard,
+         widgetStore: LedgerWidgetStore = .shared,
+         saveRequest: ((WatchLedgerRequest) throws -> UUID)? = nil) {
+        self.persistence = persistence
+        let service = WatchLedgerService(persistence: persistence, defaults: defaults)
+        self.service = service
+        self.saveRequest = saveRequest ?? service.save
+        self.widgetCoordinator = LedgerWidgetCoordinator(persistence: persistence, store: widgetStore)
+        super.init()
+    }
 
     func start() {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         if session.delegate == nil { session.delegate = self; session.activate() }
         if observer == nil {
-            let context = PersistenceController.shared.container.viewContext
+            let context = persistence.container.viewContext
             observer = Publishers.Merge3(
                 NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave, object: context),
                 NotificationCenter.default.publisher(for: .NSManagedObjectContextDidMergeChangesObjectIDs, object: context),
@@ -31,7 +46,7 @@ final class WatchLedgerBridge: NSObject, WCSessionDelegate {
     func publish() {
         guard WCSession.default.activationState == .activated,
               WCSession.default.isPaired, WCSession.default.isWatchAppInstalled,
-              !PersistenceController.shared.container.viewContext.hasChanges else { return }
+              !persistence.container.viewContext.hasChanges else { return }
         do {
             let data = try contextData()
             try WCSession.default.updateApplicationContext(["ledger": data])
@@ -42,6 +57,45 @@ final class WatchLedgerBridge: NSObject, WCSessionDelegate {
         let data = try JSONEncoder().encode(service.context())
         if data.count <= 55_000 { return data }
         return try JSONEncoder().encode(WatchLedgerContext(restriction: LedgerStringKey.watchTooLarge.string()))
+    }
+
+    /// Shared by the live message delegate and integration tests. It does not
+    /// require a foreground scene or a running WidgetKit notification observer.
+    func reply(to message: WatchLedgerMessage) -> WatchLedgerReply {
+        var reply = WatchLedgerReply()
+        if let request = message.request {
+            do {
+                reply.savedID = try saveRequest(request)
+                // Refresh before replying: a background launch may suspend soon
+                // afterwards and never run the scene's onAppear/debounced work.
+                widgetCoordinator.refresh()
+            } catch {
+                if Self.isDefinitiveRejection(error) { reply.rejectedID = request.id }
+                reply.error = error.localizedDescription
+            }
+        }
+        do {
+            reply.context = try JSONDecoder().decode(WatchLedgerContext.self, from: contextData())
+        } catch {
+            // A refresh error never discards a successful save acknowledgement.
+            if reply.savedID == nil && reply.error == nil { reply.error = error.localizedDescription }
+        }
+        return reply
+    }
+
+    private static func isDefinitiveRejection(_ error: Error) -> Bool {
+        if let error = error as? WatchLedgerError {
+            switch error {
+            case .busy: return false
+            case .invalid, .changed, .setup: return true
+            }
+        }
+        if let error = error as? PermissionError {
+            return error != .cloudPermissionUnknown
+        }
+        // Only known input/permission failures may release the pending UUID.
+        // Storage, lookup and unknown failures leave the outcome unconfirmed.
+        return error is EntryRepository.EntryError || error is AllocationCalculator.AllocationError
     }
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
@@ -58,19 +112,7 @@ final class WatchLedgerBridge: NSObject, WCSessionDelegate {
             replyHandler(Data()); return
         }
         Task { @MainActor in
-            var reply = WatchLedgerReply()
-            if let request = message.request {
-                do { reply.savedID = try self.service.save(request) }
-                catch {
-                    reply.rejectedID = request.id
-                    reply.error = error.localizedDescription
-                }
-            }
-            // A refresh error after a successful save must never turn its ack
-            // into a rejection (and encourage another transaction).
-            if let contextData = try? self.contextData() {
-                reply.context = try? JSONDecoder().decode(WatchLedgerContext.self, from: contextData)
-            }
+            let reply = self.reply(to: message)
             replyHandler((try? JSONEncoder().encode(reply)) ?? Data())
             self.publish()
         }

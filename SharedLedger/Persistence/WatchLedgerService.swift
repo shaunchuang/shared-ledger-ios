@@ -9,6 +9,9 @@ struct WatchLedgerService {
     var defaults: UserDefaults = .standard
 
     func context(now: Date = Date()) throws -> WatchLedgerContext {
+        // Both application-context pushes and direct refresh replies must only
+        // describe committed data. The watch keeps its dated cache while busy.
+        guard !persistence.container.viewContext.hasChanges else { throw WatchLedgerError.busy }
         guard let id = defaults.string(forKey: Self.selectionKey).flatMap(UUID.init(uuidString:)),
               let book = try book(id), let group = book.group else {
             return WatchLedgerContext(restriction: LedgerStringKey.watchSetup.string())
@@ -45,18 +48,12 @@ struct WatchLedgerService {
     @discardableResult
     func save(_ request: WatchLedgerRequest) throws -> UUID {
         guard request.isValid else { throw WatchLedgerError.invalid }
+        // A lost reply must still be acknowledged while the phone has unrelated
+        // edits. Use a fresh context so pending inserts/edits cannot impersonate
+        // a committed receipt, and never save or roll back the phone's edits.
+        if try hasCommittedEntry(request) { return request.id }
         let context = persistence.container.viewContext
         guard !context.hasChanges else { throw WatchLedgerError.busy }
-        let existing = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
-        existing.predicate = NSPredicate(format: "id == %@", request.id as CVarArg)
-        existing.fetchLimit = 1
-        if let entry = try context.fetch(existing).first {
-            // Even if later voided, this request has already been committed.
-            guard entry.book?.id == request.bookID, entry.group?.id == request.groupID else {
-                throw WatchLedgerError.changed
-            }
-            return request.id
-        }
         guard defaults.string(forKey: Self.selectionKey) == request.bookID.uuidString,
               let book = try book(request.bookID), let group = book.group,
               group.id == request.groupID,
@@ -78,6 +75,20 @@ struct WatchLedgerService {
             identifier: request.id
         )
         return request.id
+    }
+
+    private func hasCommittedEntry(_ request: WatchLedgerRequest) throws -> Bool {
+        let committedContext = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
+        committedContext.persistentStoreCoordinator = persistence.container.persistentStoreCoordinator
+        let fetch = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+        fetch.predicate = NSPredicate(format: "id == %@", request.id as CVarArg)
+        fetch.fetchLimit = 1
+        guard let entry = try committedContext.fetch(fetch).first else { return false }
+        // A later edit or void does not undo the original successful submission.
+        guard entry.book?.id == request.bookID, entry.group?.id == request.groupID else {
+            throw WatchLedgerError.changed
+        }
+        return true
     }
 
     private func book(_ id: UUID) throws -> LedgerBook? {

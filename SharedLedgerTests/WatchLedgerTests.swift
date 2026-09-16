@@ -120,6 +120,162 @@ final class WatchLedgerTests: XCTestCase {
         XCTAssertEqual(try f.count("LedgerEntry"), 1)
     }
 
+    func testLostReplyRetryAcknowledgesCommittedEntryWithoutTouchingPhoneEdits() throws {
+        let f = try fixture()
+        let request = f.request()
+        try f.service.save(request)
+        let context = f.persistence.container.viewContext
+        let entry = try XCTUnwrap(context.fetch(NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")).first)
+        // Even editing the original entry's scope must not change its receipt.
+        entry.book = nil
+        f.book.name = "Unfinished edit"
+        let reply = f.bridge().reply(to: WatchLedgerMessage(request: request))
+        XCTAssertEqual(reply.savedID, request.id)
+        XCTAssertNil(reply.rejectedID)
+        XCTAssertNil(reply.context)
+        XCTAssertNil(reply.error)
+        XCTAssertTrue(context.hasChanges)
+        XCTAssertNil(entry.book)
+        XCTAssertEqual(f.book.name, "Unfinished edit")
+        var state = WatchLedgerState(pending: request)
+        state.receive(reply)
+        XCTAssertNil(state.pending)
+        context.rollback()
+        XCTAssertEqual(entry.book?.id, f.book.id)
+        XCTAssertEqual(try f.count("LedgerEntry"), 1)
+        XCTAssertEqual(try f.count("EntryPayment"), 1)
+        XCTAssertEqual(try f.count("EntrySplit"), 1)
+    }
+
+    func testUnsavedInsertCannotImpersonateCommittedReceipt() throws {
+        let f = try fixture()
+        let request = f.request()
+        let context = f.persistence.container.viewContext
+        let pendingEntry = LedgerEntry(context: context)
+        context.assign(pendingEntry, to: f.persistence.privateStore)
+        pendingEntry.id = request.id
+        pendingEntry.book = f.book
+        pendingEntry.group = f.group
+        let reply = f.bridge().reply(to: WatchLedgerMessage(request: request))
+        XCTAssertNil(reply.savedID)
+        XCTAssertNil(reply.rejectedID)
+        XCTAssertNotNil(reply.error)
+        var state = WatchLedgerState(pending: request)
+        state.receive(reply)
+        XCTAssertEqual(state.pending, request)
+        XCTAssertTrue(context.hasChanges)
+        context.rollback()
+        XCTAssertEqual(try f.count("LedgerEntry"), 0)
+    }
+
+    func testBusyReplyPreservesPendingForRetryAfterPhoneDiscardsChanges() throws {
+        let f = try fixture()
+        let request = f.request()
+        let bridge = f.bridge()
+        var state = WatchLedgerState(pending: request)
+        f.book.name = "Unfinished edit"
+        let busy = bridge.reply(to: WatchLedgerMessage(request: request))
+        XCTAssertNil(busy.savedID)
+        XCTAssertNil(busy.rejectedID)
+        XCTAssertNil(busy.context)
+        XCTAssertNotNil(busy.error)
+        state.receive(busy)
+        XCTAssertEqual(state.pending, request)
+        XCTAssertEqual(try f.count("LedgerEntry"), 0)
+        f.persistence.container.viewContext.rollback()
+        let retry = bridge.reply(to: WatchLedgerMessage(request: request))
+        XCTAssertEqual(retry.savedID, request.id)
+        state.receive(retry)
+        XCTAssertNil(state.pending)
+        XCTAssertEqual(try f.count("LedgerEntry"), 1)
+    }
+
+    func testStorageAndUnknownFailuresNeverReleasePendingRequest() throws {
+        let f = try fixture()
+        let request = f.request()
+        // The phone has committed, but the watch has not received its result.
+        try f.service.save(request)
+        let errors: [Error] = [
+            NSError(domain: NSCocoaErrorDomain, code: NSPersistentStoreOperationError),
+            NSError(domain: "UnexpectedWatchFailure", code: 1),
+            PermissionError.cloudPermissionUnknown
+        ]
+        var state = WatchLedgerState(pending: request)
+        for error in errors {
+            let bridge = f.bridge(saveRequest: { _ in throw error })
+            let reply = bridge.reply(to: WatchLedgerMessage(request: request))
+            XCTAssertNil(reply.savedID)
+            XCTAssertNil(reply.rejectedID)
+            XCTAssertNotNil(reply.error)
+            state.receive(reply)
+            XCTAssertEqual(state.pending, request)
+        }
+        state.receive(f.bridge().reply(to: WatchLedgerMessage(request: request)))
+        XCTAssertNil(state.pending)
+        XCTAssertEqual(try f.count("LedgerEntry"), 1)
+        XCTAssertEqual(try f.count("EntryPayment"), 1)
+        XCTAssertEqual(try f.count("EntrySplit"), 1)
+    }
+
+    func testDefinitiveInputRejectionStillAllowsEditing() throws {
+        let f = try fixture()
+        let request = f.request(accountID: UUID())
+        var state = WatchLedgerState(pending: request)
+        let reply = f.bridge().reply(to: WatchLedgerMessage(request: request))
+        XCTAssertNil(reply.savedID)
+        XCTAssertEqual(reply.rejectedID, request.id)
+        XCTAssertNotNil(reply.error)
+        state.receive(reply)
+        XCTAssertNil(state.pending)
+        XCTAssertEqual(try f.count("LedgerEntry"), 0)
+    }
+
+    func testDirectRefreshPreservesLastCommittedSummaryDuringPhoneEdits() throws {
+        let f = try fixture()
+        try f.service.save(f.request())
+        let committed = try f.service.context()
+        let context = f.persistence.container.viewContext
+        let entry = try XCTUnwrap(context.fetch(NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")).first)
+        entry.amount = NSDecimalNumber(value: 999)
+        f.book.name = "Unfinished edit"
+        XCTAssertThrowsError(try f.service.context())
+        let bridge = f.bridge()
+        let reply = bridge.reply(to: WatchLedgerMessage())
+        XCTAssertNil(reply.context)
+        XCTAssertNotNil(reply.error)
+        var state = WatchLedgerState(context: committed)
+        state.receive(reply)
+        XCTAssertEqual(state.context?.snapshot, committed.snapshot)
+        XCTAssertTrue(context.hasChanges)
+        XCTAssertEqual(entry.amount, NSDecimalNumber(value: 999))
+        context.rollback()
+        let refreshed = bridge.reply(to: WatchLedgerMessage())
+        XCTAssertNil(refreshed.error)
+        XCTAssertEqual(refreshed.context?.snapshot?.bookName, committed.snapshot?.bookName)
+        XCTAssertEqual(refreshed.context?.snapshot?.days, committed.snapshot?.days)
+    }
+
+    func testBackgroundSaveRefreshesWidgetWithoutStartingSceneObservers() throws {
+        let f = try fixture()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let store = LedgerWidgetStore(directory: directory, defaults: f.defaults)
+        store.select(bookID: f.book.id)
+        try store.save(try f.service.context().snapshot)
+        XCTAssertEqual(store.load()?.days.count, 0)
+        // No start(), onAppear, observer subscription or run-loop delay.
+        let bridge = f.bridge(widgetStore: store)
+        let request = f.request()
+        let reply = bridge.reply(to: WatchLedgerMessage(request: request))
+        XCTAssertEqual(reply.savedID, request.id)
+        let summary = try XCTUnwrap(store.load()?.summary(at: request.date))
+        XCTAssertEqual(summary.expense, request.amount)
+        XCTAssertEqual(summary.todayCount, 1)
+        XCTAssertEqual(bridge.reply(to: WatchLedgerMessage(request: request)).savedID, request.id)
+        XCTAssertEqual(store.load()?.summary(at: request.date), summary)
+    }
+
     private struct Fixture {
         let persistence: PersistenceController
         let defaults: UserDefaults
@@ -128,6 +284,12 @@ final class WatchLedgerTests: XCTestCase {
         let owner: Member
         let account: LedgerAccount
         var service: WatchLedgerService { WatchLedgerService(persistence: persistence, defaults: defaults) }
+
+        func bridge(widgetStore: LedgerWidgetStore = LedgerWidgetStore(directory: nil, defaults: nil),
+                    saveRequest: ((WatchLedgerRequest) throws -> UUID)? = nil) -> WatchLedgerBridge {
+            WatchLedgerBridge(persistence: persistence, defaults: defaults,
+                              widgetStore: widgetStore, saveRequest: saveRequest)
+        }
 
         func request(id: UUID = UUID(), bookID: UUID? = nil, currency: String = "USD", kind: EntryKind = .expense,
                      amount: Decimal = Decimal(string: "12.50")!, accountID: UUID? = nil,
