@@ -276,6 +276,7 @@ final class WatchLedgerTests: XCTestCase {
         XCTAssertEqual(store.load()?.summary(at: request.date), summary)
     }
 
+    @MainActor
     private struct Fixture {
         let persistence: PersistenceController
         let defaults: UserDefaults
