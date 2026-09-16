@@ -56,7 +56,7 @@ struct WatchLedgerRequest: Codable, Equatable {
 
     var isValid: Bool {
         version == 1 && (kind == .expense || kind == .income)
-            && !amount.isNaN && amount > 0 && amount <= 999_999_999_999
+            && !amount.isNaN && amount > 0 && amount <= Decimal(Int64(999_999_999_999))
             && LedgerCurrency.normalizedCode(currencyCode) == currencyCode
             && LedgerCurrency.isValidAmount(amount, currencyCode: currencyCode)
             && !memberIDs.isEmpty && Set(memberIDs).count == memberIDs.count
