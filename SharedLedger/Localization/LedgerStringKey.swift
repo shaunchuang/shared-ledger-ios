@@ -7,6 +7,32 @@ import Foundation
 /// 用列舉而不是字串常數，是為了讓 `Text(.settingsTitle)` 這種寫法在編譯期就擋掉拼錯的鍵，
 /// 而 `CaseIterable` 讓完整性測試不需要另外維護一份清單。
 enum LedgerStringKey: String, CaseIterable, Sendable {
+    // MARK: - 桌面小工具
+    case widgetTitle = "widget.title"
+    case widgetDescription = "widget.description"
+    case widgetSettingsIntro = "widget.settings.intro"
+    case widgetSettingsInstructions = "widget.settings.instructions"
+    case widgetSettingsUnavailable = "widget.settings.unavailable"
+    case widgetSettingsSelectBook = "widget.settings.selectBook"
+    case widgetSettingsBook = "widget.settings.book"
+    case widgetSettingsPrivacy = "widget.settings.privacy"
+    case widgetSettingsRefresh = "widget.settings.refresh"
+    case widgetSettingsQuickEntry = "widget.settings.quickEntry"
+    case widgetBookUnavailable = "widget.book.unavailable"
+    case widgetCreateGroup = "widget.createGroup"
+    case widgetChooseBook = "widget.chooseBook"
+    case widgetQuickEntry = "widget.quickEntry"
+    case widgetRefreshTitle = "widget.refresh.title"
+    case widgetRefreshMessage = "widget.refresh.message"
+    case widgetSetupTitle = "widget.setup.title"
+    case widgetSetupMessage = "widget.setup.message"
+    case widgetMonthExpense = "widget.month.expense"
+    case widgetMonthIncome = "widget.month.income"
+    case widgetTodayCount = "widget.today.count"
+    case widgetAddExpense = "widget.add.expense"
+    case widgetAddIncome = "widget.add.income"
+    case widgetUpdatedAt = "widget.updatedAt"
+
     // MARK: - 帳戶
     case accountActionAdjustBalance = "account.action.adjustBalance"
     case accountActionArchive = "account.action.archive"

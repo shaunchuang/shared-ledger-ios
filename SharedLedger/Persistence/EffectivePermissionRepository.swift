@@ -103,6 +103,38 @@ enum PermissionError: LocalizedError, Equatable {
     }
 }
 
+/// One permission question a screen has already resolved, together with whether it
+/// has been resolved at all.
+///
+/// Resolving a permission walks the current member identity and, for a shared group,
+/// makes a synchronous `fetchShares` call into the CloudKit mirroring metadata — a
+/// call that blocks the main thread for as long as a sync is holding the store. A
+/// screen that asks the question inside `body` therefore pays for it once per read,
+/// and `body` re-runs on every merged CloudKit change: opening such a screen during a
+/// sync freezes the app. Screens hold this in `@State` instead, refresh it when
+/// `.groupPermissions` objects change, and answer every affordance from the cached
+/// value.
+struct PermissionAccess {
+    /// Nothing is known before the first resolution, so no affordance is offered and
+    /// no restriction is explained: a notice for a state nobody has checked would
+    /// flash the wrong reason on the frame before `onAppear` runs.
+    static let unresolved = PermissionAccess(restriction: .missingCurrentMember, isResolved: false)
+
+    let restriction: PermissionError?
+    let isResolved: Bool
+
+    init(restriction: PermissionError?, isResolved: Bool = true) {
+        self.restriction = restriction
+        self.isResolved = isResolved
+    }
+
+    /// True only once the permission has been resolved and it allows the action.
+    var isAllowed: Bool { isResolved && restriction == nil }
+
+    /// Why the action is unavailable, or `nil` while nothing has been resolved yet.
+    var noticeMessage: String? { isResolved ? restriction?.errorDescription : nil }
+}
+
 /// Remembers the last CloudKit write permission successfully resolved for a group
 /// so an offline device keeps working with what it already knew instead of either
 /// guessing a permission or blocking every write.

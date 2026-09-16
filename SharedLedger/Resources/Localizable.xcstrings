@@ -9033,13 +9033,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No ledger data is deleted and nobody you share with is affected. You will be asked again which member you are the next time you open a shared group, and notification preferences return to their defaults."
+            "value": "No ledger data is deleted and nobody you share with is affected. You will be asked again which member you are in shared groups. Notification preferences return to their defaults, and the widget book selection and summary are cleared."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "帳務資料不會被刪除，其他成員也不受影響。下次開啟共享群組時需要重新確認自己是哪一位成員，通知偏好會回到預設值。"
+            "value": "帳務資料不會被刪除，其他成員也不受影響。下次開啟共享群組時需要重新確認自己是哪一位成員，通知偏好會回到預設值，小工具的帳本選擇與摘要也會清除。"
           }
         }
       }
@@ -9067,13 +9067,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This data never leaves this device: which member you are in each shared group, your notification preferences and what has already been delivered, and the iCloud write permission last resolved for each group."
+            "value": "This device stores your member identity, notification preferences and delivery history, cached iCloud write permissions, and the widget book selection and summary."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "這些資料只存在這台裝置：共享群組裡「我是哪一位成員」的對應、通知偏好與已送出的通知紀錄，以及每個群組最後一次確認到的 iCloud 寫入權限。"
+            "value": "這台裝置保存成員身分對應、通知偏好與遞送紀錄、iCloud 寫入權限快取，以及小工具的帳本選擇與摘要。"
           }
         }
       }
@@ -13827,6 +13827,414 @@
           "stringUnit": {
             "state": "translated",
             "value": "淨額"
+          }
+        }
+      }
+    },
+    "widget.add.expense": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add expense"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記支出"
+          }
+        }
+      }
+    },
+    "widget.add.income": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add income"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記收入"
+          }
+        }
+      }
+    },
+    "widget.book.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This book is archived, removed, or not yet synced. Choose a book again before adding an entry."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這本帳本已封存、移除或尚未同步。請重新選擇帳本後再記帳。"
+          }
+        }
+      }
+    },
+    "widget.chooseBook": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose widget book"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇小工具帳本"
+          }
+        }
+      }
+    },
+    "widget.createGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create your first group and book"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建立第一個群組與帳本"
+          }
+        }
+      }
+    },
+    "widget.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See your ledger at a glance and start an entry with one tap."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看帳本收支，點一下就開始記帳。"
+          }
+        }
+      }
+    },
+    "widget.month.expense": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spent this month"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本月支出"
+          }
+        }
+      }
+    },
+    "widget.month.income": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Income this month"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本月收入"
+          }
+        }
+      }
+    },
+    "widget.quickEntry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick entry"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速記帳"
+          }
+        }
+      }
+    },
+    "widget.refresh.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to open the app, refresh this month’s totals, and add an entry."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點一下開啟 App，更新本月收支並開始記帳。"
+          }
+        }
+      }
+    },
+    "widget.refresh.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh your summary"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新記帳摘要"
+          }
+        }
+      }
+    },
+    "widget.settings.book": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widget book"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小工具使用的帳本"
+          }
+        }
+      }
+    },
+    "widget.settings.instructions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a book below. Touch and hold an empty area of the Home Screen, choose Edit → Add Widget, search for Shared Ledger, then add the small or medium widget."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先選擇帳本，再長按 iPhone 主畫面空白處，選擇編輯 → 加入小工具，搜尋 Shared Ledger，加入小型或中型小工具。"
+          }
+        }
+      }
+    },
+    "widget.settings.intro": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your ledger and quick entry on the Home Screen"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "桌面看收支，一鍵開始記帳"
+          }
+        }
+      }
+    },
+    "widget.settings.privacy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The group and book names, totals, and entry count will appear on your Home Screen. All widgets on this device use this selection. Clear the selection to remove the summary."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選取後，群組與帳本名稱、收支金額及筆數會顯示在桌面。此裝置上的小工具共用這個選擇；取消選擇即可清除摘要。"
+          }
+        }
+      }
+    },
+    "widget.settings.quickEntry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Small widget: tap to add an expense. Medium widget: choose expense or income. Enter the amount, check the account, payer, and split, then save."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小型小工具：點一下記支出。中型小工具：選擇記支出或記收入。開啟後直接輸入金額，確認帳戶、付款人與分攤，再儲存。"
+          }
+        }
+      }
+    },
+    "widget.settings.refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The summary shows the app’s latest data and its update time. Other members’ entries must first sync to this device. iOS schedules widget updates; open the app to refresh the summary."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "摘要反映 App 最近取得的資料，會顯示更新時間；其他成員的新記帳須先同步到這台裝置。系統會安排小工具更新，開啟 App 可重新取得摘要。"
+          }
+        }
+      }
+    },
+    "widget.settings.selectBook": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a book (hide summary)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇帳本（停止顯示摘要）"
+          }
+        }
+      }
+    },
+    "widget.settings.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets are unavailable in this build. Please update the app and try again."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本暫時無法使用桌面小工具，請更新 App 後再試。"
+          }
+        }
+      }
+    },
+    "widget.setup.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to choose a book, see totals, and start entries quickly."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點一下選擇帳本，即可查看收支與快速記帳。"
+          }
+        }
+      }
+    },
+    "widget.setup.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your ledger at a glance"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把帳本放到桌面"
+          }
+        }
+      }
+    },
+    "widget.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Home Screen widget"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "桌面小工具"
+          }
+        }
+      }
+    },
+    "widget.today.count": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Income/expense entries today: %lld"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日收支 %lld 筆"
+          }
+        }
+      }
+    },
+    "widget.updatedAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新於 %@"
           }
         }
       }

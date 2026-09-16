@@ -144,6 +144,19 @@ V4 資料修復對每個既有分類採以下規則：
 
 ## Core Data 與 Concurrency
 
+### WidgetKit 與快速記帳
+
+- `SharedLedgerWidgets` 是最低 iOS 17 的 WidgetKit extension，Bundle ID 為 `com.shaunchuang.SharedLedger.Widgets`。App target 依賴並嵌入 `.appex`，現有 scheme 的 build、test 與 archive 都會建置 extension。
+- App 與 extension 共用 `group.com.shaunchuang.SharedLedger` App Group。Apple Developer 帳號必須註冊此群組，並將 App 與 extension 的 App IDs 都加入；在兩個 target 的 Signing & Capabilities 確認同一 Team、App Groups 與更新後的 provisioning profiles。CI 的無簽章 archive 無法驗證此步驟。
+- `LedgerWidgetSnapshotService` 只投影選定帳本的本月收支日彙總，透過 `LedgerWidgetStore` 原子替換 App Group 中的 JSON。金額仍為 `Decimal`，顯示共用 `LedgerCurrency`；不搬移 Core Data stores，不新增 model version，不讓 extension 讀寫 CloudKit 或帳務資料庫。
+- JSON 只包含版本、群組／帳本名稱、帳本 UUID、貨幣、月份、時區、更新時間與每日收支／筆數，不含備註、帳戶、成員或憑證。檔案使用首次解鎖後的資料保護，小工具內容標示 `privacySensitive`；App Group 不可用時顯示未設定狀態，不退回不共享的 defaults。
+- App 前景啟動、view context 儲存、背景資料合併及時區變更時更新；儲存／合併通知合併為一次更新，有未儲存變更時不發布。WidgetKit 排程重讀快取並預載午夜切換，系統決定實際刷新時機。跨月／時區的舊快取不冒充新期間資料。
+- 取消選擇、帳本封存／移除後清除快取；「刪除本機個人資料」亦移除小工具選擇與摘要。暫時讀取失敗保留帶時間戳記的最後成功快取。
+- `sharedledger://new-entry?book=<UUID>&kind=expense|income` 僅開啟草稿；`sharedledger://widget-settings` 開啟小工具設定。`LedgerWidgetRoute` 嚴格解析連結，App 重新驗證該帳本及寫入權限，不以失效的 UUID 自動改記其他帳本。沒有任何 URL 能直接寫入金額或儲存交易。
+- `LedgerWidgetTests` 驗證連結、帳本／日期範圍、作廢／轉帳排除、修改後重算、Decimal 快取、毀損／未支援版本、午夜／月界／夏令時間、封存清除及個人資料重設。主畫面與簽章驗收依 [MVP.md](MVP.md) 的小工具驗收項目執行。
+
+### Context 與權限解析
+
 - `NSManagedObject` 不是 Sendable，不可跨 actor 或 queue 直接傳遞。
 - 不可用 `@unchecked Sendable` 壓掉 `NSManagedObject` 的 concurrency 問題。
 - 畫面使用的 view context 資料以 `@MainActor` 管理。

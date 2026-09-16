@@ -101,6 +101,27 @@
 		C0DE00000000000000000070 /* LedgerNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000071 /* LedgerNotificationCoordinator.swift */; };
 		C0DE00000000000000000072 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000073 /* NotificationSettingsView.swift */; };
 		C0DE00000000000000000074 /* LedgerNotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000075 /* LedgerNotificationTests.swift */; };
+		75449E8E627E6C56DE5BD034 /* LedgerWidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67987CA3C33F87E0286B514 /* LedgerWidgetSnapshot.swift */; };
+		5F5FCEFD878A18677F265FDA /* LedgerWidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67987CA3C33F87E0286B514 /* LedgerWidgetSnapshot.swift */; };
+		B92707260F1FC98B36E0BB24 /* LedgerWidgetRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21E48B23DF33B1CD22E2D2AD /* LedgerWidgetRoute.swift */; };
+		A4C9691485EF3E05E4DCE912 /* LedgerWidgetRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21E48B23DF33B1CD22E2D2AD /* LedgerWidgetRoute.swift */; };
+		77A2A98881B0B37EFAF0294D /* LedgerWidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5C66D604F4E09866E94685 /* LedgerWidgetStore.swift */; };
+		952CEDF5BEE909E3CE467FCD /* LedgerWidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5C66D604F4E09866E94685 /* LedgerWidgetStore.swift */; };
+		07F7FF8EE56A44CC54D2D794 /* LedgerWidgetSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B208A4838ADD0247F4C0A2 /* LedgerWidgetSnapshotService.swift */; };
+		3C60EF31548B947C004332E7 /* LedgerWidgetCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E23202C0BC4C5BF10B0C0B /* LedgerWidgetCoordinator.swift */; };
+		76FABC43D36A6B94BBB4F900 /* WidgetSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C012E00C47CE9F7EF73B4879 /* WidgetSettingsView.swift */; };
+		6B77A302368A25A5552AFC7C /* WidgetQuickEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE4C46A3DB2A323061E2682 /* WidgetQuickEntryView.swift */; };
+		ED03F540164C264A6DB8E7FF /* SharedLedgerWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA68512C317B3CC3817E06C /* SharedLedgerWidget.swift */; };
+		76DB1811C6F21A184558CBBC /* LedgerWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2949269E93E93615A2CA7B07 /* LedgerWidgetTests.swift */; };
+		63C8128EE9B8BCF584B568DF /* LedgerCurrency.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000020 /* LedgerCurrency.swift */; };
+		E46B52BD0B521D0DAEC895C0 /* EntryKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17603CF7F718E4B15A463C90 /* EntryKind.swift */; };
+		CC21BBFBDED23770091FFEC5 /* LedgerStringKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000081 /* LedgerStringKey.swift */; };
+		6D2156A57C1074B9FA9441FB /* LedgerLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000083 /* LedgerLocalization.swift */; };
+		3FB27871C5E90FD1073005E6 /* LedgerStringKey+SwiftUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000085 /* LedgerStringKey+SwiftUI.swift */; };
+		2E49BD9918F7A5F3468ACF41 /* LedgerFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000087 /* LedgerFormatters.swift */; };
+		7D895AA5A48B924C62431E4F /* LedgerTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907F9A7F5296FEC46239CC6F /* LedgerTheme.swift */; };
+		2452AE9C07E67EB517792EFE /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000089 /* Localizable.xcstrings */; };
+		E2EC56D44AE4B3B4EE6A797B /* SharedLedgerWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 60C909BD9FD755C72759330B; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,7 +132,20 @@
 			remoteGlobalIDString = 873C1CC67E5BEF41C2DCF1B2;
 			remoteInfo = SharedLedger;
 		};
+		C17070D9FF2382B8D9A2F629 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 8F43C949A922257A42D8BCFD; proxyType = 1; remoteGlobalIDString = 2321AA17FF92354376004665; remoteInfo = SharedLedgerWidgets; };
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FFA9AF4B44FA77B49173CB50 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (E2EC56D44AE4B3B4EE6A797B /* SharedLedgerWidgets.appex in Embed App Extensions */, );
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		C0DE00000000000000000081 /* LedgerStringKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerStringKey.swift"; sourceTree = "<group>"; };
@@ -219,6 +253,18 @@
 		C0DE00000000000000000071 /* LedgerNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationCoordinator.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000073 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000075 /* LedgerNotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerNotificationTests.swift; sourceTree = "<group>"; };
+		E67987CA3C33F87E0286B514 /* LedgerWidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerWidgetSnapshot.swift"; sourceTree = "<group>"; };
+		21E48B23DF33B1CD22E2D2AD /* LedgerWidgetRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerWidgetRoute.swift"; sourceTree = "<group>"; };
+		BF5C66D604F4E09866E94685 /* LedgerWidgetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerWidgetStore.swift"; sourceTree = "<group>"; };
+		97B208A4838ADD0247F4C0A2 /* LedgerWidgetSnapshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerWidgetSnapshotService.swift"; sourceTree = "<group>"; };
+		81E23202C0BC4C5BF10B0C0B /* LedgerWidgetCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerWidgetCoordinator.swift"; sourceTree = "<group>"; };
+		C012E00C47CE9F7EF73B4879 /* WidgetSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WidgetSettingsView.swift"; sourceTree = "<group>"; };
+		3AE4C46A3DB2A323061E2682 /* WidgetQuickEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WidgetQuickEntryView.swift"; sourceTree = "<group>"; };
+		3BA68512C317B3CC3817E06C /* SharedLedgerWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SharedLedgerWidget.swift"; sourceTree = "<group>"; };
+		2949269E93E93615A2CA7B07 /* LedgerWidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LedgerWidgetTests.swift"; sourceTree = "<group>"; };
+		9C9E8F0271B56CBA9BC7DC5A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
+		55CB03148489B516A7E96DA1 /* SharedLedgerWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SharedLedgerWidgets.entitlements"; sourceTree = "<group>"; };
+		60C909BD9FD755C72759330B /* SharedLedgerWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SharedLedgerWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -275,6 +321,9 @@
 		45C5D57ACA3A08343620B37B /* Persistence */ = {
 			isa = PBXGroup;
 			children = (
+				81E23202C0BC4C5BF10B0C0B /* LedgerWidgetCoordinator.swift */,
+				97B208A4838ADD0247F4C0A2 /* LedgerWidgetSnapshotService.swift */,
+				BF5C66D604F4E09866E94685 /* LedgerWidgetStore.swift */,
 				C0DE00000000000000000063 /* SyncStatusMonitor.swift */,
 				C0DE0000000000000000006D /* LedgerNotificationStore.swift */,
 				C0DE0000000000000000006F /* LedgerNotificationScheduler.swift */,
@@ -311,6 +360,8 @@
 		4E2AAC912D128933C96BBF6E /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				21E48B23DF33B1CD22E2D2AD /* LedgerWidgetRoute.swift */,
+				E67987CA3C33F87E0286B514 /* LedgerWidgetSnapshot.swift */,
 				C0DE00000000000000000061 /* LedgerSyncStatus.swift */,
 				C0DE00000000000000000069 /* LedgerNotification.swift */,
 				C0DE0000000000000000006B /* LedgerNotificationPlanner.swift */,
@@ -351,6 +402,7 @@
 		7185875C8BA55197FA6037FF = {
 			isa = PBXGroup;
 			children = (
+				E0D6C6E9E06A32EF668A45E2 /* SharedLedgerWidgets */,
 				08F98D4249EBB6434B4A4747 /* SharedLedger */,
 				C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */,
 				8AE7FC6EE131B3B423168477 /* Products */,
@@ -360,6 +412,7 @@
 		74D83BEED003441E30601CD1 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				C012E00C47CE9F7EF73B4879 /* WidgetSettingsView.swift */,
 				C0DE00000000000000000065 /* SyncStatusView.swift */,
 				C0DE00000000000000000073 /* NotificationSettingsView.swift */,
 				C0DE00000000000000000055 /* DataExportView.swift */,
@@ -373,6 +426,7 @@
 		8AE7FC6EE131B3B423168477 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				60C909BD9FD755C72759330B /* SharedLedgerWidgets.appex */,
 				1EB2692318D6DD111B869EF4 /* SharedLedger.app */,
 				B96365B99D5F8B14F65FD5FF /* SharedLedgerTests.xctest */,
 			);
@@ -382,6 +436,7 @@
 		A00FF5B3326BD5AA942B4307 /* Transactions */ = {
 			isa = PBXGroup;
 			children = (
+				3AE4C46A3DB2A323061E2682 /* WidgetQuickEntryView.swift */,
 				D4E6F6CD76DCD3D541266091 /* EntryKind+Presentation.swift */,
 				F7E0587D01B5AC7D2297C150 /* NewTransactionView.swift */,
 				C0DE0000000000000000001A /* TransactionFilterView.swift */,
@@ -420,6 +475,7 @@
 		C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */ = {
 			isa = PBXGroup;
 			children = (
+				2949269E93E93615A2CA7B07 /* LedgerWidgetTests.swift */,
 				C0DE0000000000000000008D /* LocalizationTests.swift */,
 				C0DE0000000000000000009A /* EntryRevisionTests.swift */,
 				C0DE0000000000000000009C /* EntryRevisionModelMigrationTests.swift */,
@@ -461,6 +517,16 @@
 			path = Settlement;
 			sourceTree = "<group>";
 		};
+		E0D6C6E9E06A32EF668A45E2 /* SharedLedgerWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				55CB03148489B516A7E96DA1 /* SharedLedgerWidgets.entitlements */,
+				9C9E8F0271B56CBA9BC7DC5A /* Info.plist */,
+				3BA68512C317B3CC3817E06C /* SharedLedgerWidget.swift */,
+			);
+			path = SharedLedgerWidgets;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -468,12 +534,14 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4C958C014D6A24E4843BC063 /* Build configuration list for PBXNativeTarget "SharedLedger" */;
 			buildPhases = (
+				FFA9AF4B44FA77B49173CB50 /* Embed App Extensions */,
 				BE11A25C14EF233F2B7B6858 /* Sources */,
 				A11C0A021122334455667788 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				5C75ACE9E2C5E9D12DD03F7A /* PBXTargetDependency */,
 			);
 			name = SharedLedger;
 			packageProductDependencies = (
@@ -499,6 +567,17 @@
 			productName = SharedLedgerTests;
 			productReference = B96365B99D5F8B14F65FD5FF /* SharedLedgerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2321AA17FF92354376004665 /* SharedLedgerWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8F45EF75D5934F90971763E6;
+			buildPhases = (1D92E44F13FE3684D6C4B5B7 /* Sources */, B07256405FA3675FDC933246 /* Resources */, );
+			buildRules = ();
+			dependencies = ();
+			name = SharedLedgerWidgets;
+			productName = SharedLedgerWidgets;
+			productReference = 60C909BD9FD755C72759330B /* SharedLedgerWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -533,6 +612,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				2321AA17FF92354376004665 /* SharedLedgerWidgets */,
 				873C1CC67E5BEF41C2DCF1B2 /* SharedLedger */,
 				C99D62B4D29AAC13A1054CC9 /* SharedLedgerTests */,
 			);
@@ -550,6 +630,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B07256405FA3675FDC933246 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2452AE9C07E67EB517792EFE /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -557,6 +645,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				76DB1811C6F21A184558CBBC /* LedgerWidgetTests.swift in Sources */,
 				C0DE00000000000000000066 /* LedgerSyncStatusTests.swift in Sources */,
 				C0DE0000000000000000008C /* LocalizationTests.swift in Sources */,
 				C0DE00000000000000000099 /* EntryRevisionTests.swift in Sources */,
@@ -582,6 +671,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6B77A302368A25A5552AFC7C /* WidgetQuickEntryView.swift in Sources */,
+				76FABC43D36A6B94BBB4F900 /* WidgetSettingsView.swift in Sources */,
+				3C60EF31548B947C004332E7 /* LedgerWidgetCoordinator.swift in Sources */,
+				07F7FF8EE56A44CC54D2D794 /* LedgerWidgetSnapshotService.swift in Sources */,
+				77A2A98881B0B37EFAF0294D /* LedgerWidgetStore.swift in Sources */,
+				B92707260F1FC98B36E0BB24 /* LedgerWidgetRoute.swift in Sources */,
+				75449E8E627E6C56DE5BD034 /* LedgerWidgetSnapshot.swift in Sources */,
 				C0DE00000000000000000060 /* LedgerSyncStatus.swift in Sources */,
 				C0DE00000000000000000080 /* LedgerStringKey.swift in Sources */,
 				C0DE00000000000000000082 /* LedgerLocalization.swift in Sources */,
@@ -658,6 +754,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1D92E44F13FE3684D6C4B5B7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7D895AA5A48B924C62431E4F /* LedgerTheme.swift in Sources */,
+				2E49BD9918F7A5F3468ACF41 /* LedgerFormatters.swift in Sources */,
+				3FB27871C5E90FD1073005E6 /* LedgerStringKey+SwiftUI.swift in Sources */,
+				6D2156A57C1074B9FA9441FB /* LedgerLocalization.swift in Sources */,
+				CC21BBFBDED23770091FFEC5 /* LedgerStringKey.swift in Sources */,
+				E46B52BD0B521D0DAEC895C0 /* EntryKind.swift in Sources */,
+				63C8128EE9B8BCF584B568DF /* LedgerCurrency.swift in Sources */,
+				ED03F540164C264A6DB8E7FF /* SharedLedgerWidget.swift in Sources */,
+				952CEDF5BEE909E3CE467FCD /* LedgerWidgetStore.swift in Sources */,
+				A4C9691485EF3E05E4DCE912 /* LedgerWidgetRoute.swift in Sources */,
+				5F5FCEFD878A18677F265FDA /* LedgerWidgetSnapshot.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -666,6 +780,7 @@
 			target = 873C1CC67E5BEF41C2DCF1B2 /* SharedLedger */;
 			targetProxy = B7AB176CDD286B163D641919 /* PBXContainerItemProxy */;
 		};
+		5C75ACE9E2C5E9D12DD03F7A /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 2321AA17FF92354376004665 /* SharedLedgerWidgets */; targetProxy = C17070D9FF2382B8D9A2F629 /* PBXContainerItemProxy */; };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -890,6 +1005,52 @@
 			};
 			name = Release;
 		};
+		28DAFC14D23E1D495508C342 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SharedLedgerWidgets/SharedLedgerWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XC43HRR4X2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SharedLedgerWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shaunchuang.SharedLedger.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0056ADA85279C70421762B4F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SharedLedgerWidgets/SharedLedgerWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XC43HRR4X2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SharedLedgerWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Shared Ledger";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shaunchuang.SharedLedger.Widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -920,6 +1081,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		8F45EF75D5934F90971763E6 /* Build configuration list for PBXNativeTarget "SharedLedgerWidgets" */ = {isa = XCConfigurationList; buildConfigurations = (28DAFC14D23E1D495508C342 /* Debug */, 0056ADA85279C70421762B4F /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 /* End XCConfigurationList section */
 
 /* Begin XCVersionGroup section */
