@@ -22,6 +22,9 @@ private struct GroupManagementAccess {
     /// The App role after the CloudKit participant permission has been applied, so
     /// the management UI matches what the repositories will actually allow.
     var role: MemberRole?
+    /// Downstream screens inherit this resolved value instead of fetching the same
+    /// CloudKit share again during their first navigation frame.
+    var permission: EffectivePermission?
     /// Identified by object ID rather than by the object, so a member deleted between
     /// two resolutions is simply not matched by any row instead of being faulted.
     var currentMemberID: NSManagedObjectID?
@@ -70,6 +73,7 @@ struct GroupDetailView: View {
     /// Summing it fetches every entry that moves money through the group's accounts,
     /// so it is resolved when that data changes rather than on every `body` pass.
     @State private var totalAccountBalance: Decimal = 0
+    @State private var accountBalanceRefreshTask: Task<Void, Never>?
 
     init(
         group: LedgerGroup,
@@ -208,6 +212,9 @@ struct GroupDetailView: View {
             normalizeSelectedBook()
             reloadAccess()
             reloadAccountBalance()
+        }
+        .onDisappear {
+            accountBalanceRefreshTask?.cancel()
         }
         .onChange(of: activeBooks.count) {
             normalizeSelectedBook()
@@ -357,7 +364,7 @@ struct GroupDetailView: View {
                     }
 
                     NavigationLink {
-                        AccountsView(group: group)
+                        AccountsView(group: group, initialPermission: access.permission)
                     } label: {
                         LedgerNavRow(
                             title: .groupDetailRowAccountsTitle,
@@ -597,6 +604,7 @@ struct GroupDetailView: View {
         let permission = permissions.permission(in: group)
         access = GroupManagementAccess(
             role: permission.role,
+            permission: permission,
             currentMemberID: CurrentMemberIdentityRepository(persistence: persistence)
                 .currentMember(in: group)?
                 .objectID,
@@ -609,7 +617,13 @@ struct GroupDetailView: View {
     }
 
     private func reloadAccountBalance() {
-        totalAccountBalance = AccountRepository().totalBalance(for: accounts)
+        let accountSnapshot = accounts
+        accountBalanceRefreshTask?.cancel()
+        accountBalanceRefreshTask = Task {
+            let balances = await AccountRepository().balances(for: accountSnapshot)
+            guard !Task.isCancelled else { return }
+            totalAccountBalance = balances.values.reduce(Decimal.zero, +)
+        }
     }
 
     private func members(matching predicate: (Member) -> Bool) -> [Member] {
