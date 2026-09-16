@@ -3,6 +3,12 @@ import SwiftUI
 import UIKit
 
 struct NewTransactionView: View {
+    private enum Field: Hashable {
+        case amount, note
+        case payment(NSManagedObjectID)
+        case split(NSManagedObjectID)
+    }
+
     @Environment(\.dismiss) private var dismiss
 
     let book: LedgerBook
@@ -15,7 +21,7 @@ struct NewTransactionView: View {
 
     @State private var draft: TransactionDraft
     @State private var errorMessage: String?
-    @FocusState private var isAmountFocused: Bool
+    @FocusState private var focusedField: Field?
     @State private var didPrefill = false
 
     init(
@@ -150,7 +156,7 @@ struct NewTransactionView: View {
                     // 標籤留空：欄位名稱已經在同一列的左側，這裡只需要提示輸入格式。
                     TextField("", text: $draft.amountText, prompt: Text(verbatim: "0"))
                         .keyboardType(amountKeyboardType)
-                        .focused($isAmountFocused)
+                        .focused($focusedField, equals: .amount)
                         .multilineTextAlignment(.trailing)
                         .accessibilityLabel(Text(.transactionFormFieldAmount))
                 }
@@ -232,6 +238,7 @@ struct NewTransactionView: View {
                                     text: paymentAmountBinding(for: member),
                                     prompt: Text(verbatim: "0")
                                 )
+                                .focused($focusedField, equals: .payment(member.objectID))
                                 .keyboardType(amountKeyboardType)
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 120)
@@ -284,6 +291,7 @@ struct NewTransactionView: View {
                                     text: splitValueBinding(for: member),
                                     prompt: Text(verbatim: "0")
                                 )
+                                .focused($focusedField, equals: .split(member.objectID))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 120)
@@ -309,6 +317,7 @@ struct NewTransactionView: View {
                     prompt: Text(.transactionFormNotePlaceholder),
                     axis: .vertical
                 )
+                .focused($focusedField, equals: .note)
                 .lineLimit(2...4)
                 .accessibilityLabel(Text(.transactionFormSectionNote))
             } header: {
@@ -324,7 +333,7 @@ struct NewTransactionView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button { isAmountFocused = false } label: { Text(.commonActionDone) }
+                Button { focusedField = nil } label: { Text(.commonActionDone) }
             }
             ToolbarItem(placement: .cancellationAction) {
                 Button { dismiss() } label: {
@@ -349,7 +358,7 @@ struct NewTransactionView: View {
             // Wait for the sheet presentation; cancellation must not focus a
             // dismissed form or reset any of the user's input.
             do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
-            isAmountFocused = true
+            focusedField = .amount
         }
         .onChange(of: draft.amountText) { oldValue, newValue in
             syncSinglePaymentAmount(oldValue: oldValue, newValue: newValue)
