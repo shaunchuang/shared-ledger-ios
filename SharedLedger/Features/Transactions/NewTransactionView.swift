@@ -385,7 +385,9 @@ struct NewTransactionView: View {
         }
         .sheet(isPresented: $isSelectingCategory) {
             NavigationStack {
-                TransactionCategorySelectionView(categories: availableCategories, selection: $draft.categoryID)
+                TransactionCategorySelectionView(categories: availableCategories, selection: $draft.categoryID) {
+                    isSelectingCategory = false
+                }
             }
         }
         .onChange(of: draft.amountText) { oldValue, newValue in
@@ -711,35 +713,65 @@ private func transactionCategoryPath(_ category: LedgerCategory) -> String {
 private struct TransactionCategorySelectionView: View {
     let categories: [LedgerCategory]
     @Binding var selection: UUID?
-    @Environment(\.dismiss) private var dismiss
+    let closePicker: () -> Void
+    var parent: LedgerCategory? = nil
     @State private var search = ""
 
+    private var keyword: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var matches: [LedgerCategory] {
-        let keyword = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        return keyword.isEmpty ? categories : categories.filter {
-            transactionCategoryPath($0).localizedStandardContains(keyword)
+        if !keyword.isEmpty {
+            return categories.filter { transactionCategoryPath($0).localizedStandardContains(keyword) }
+        }
+        if let parent {
+            return categories.filter { $0.parent?.objectID == parent.objectID }
+        }
+        let availableIDs = Set(categories.map(\.objectID))
+        return categories.filter { category in
+            // An archived selection may be present without its ancestors while editing.
+            guard let parentID = category.parent?.objectID else { return true }
+            return !availableIDs.contains(parentID)
         }
     }
 
     var body: some View {
         List {
-            if search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if keyword.isEmpty {
                 Button {
-                    selection = nil
-                    dismiss()
+                    selection = parent?.id
+                    closePicker()
                 } label: {
-                    row(LedgerStringKey.transactionFormCategoryNone.string(), selected: selection == nil)
+                    row(parent.map {
+                        LedgerStringKey.categoryPickerUseParent.string(arguments: [
+                            $0.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
+                        ])
+                    } ?? LedgerStringKey.transactionFormCategoryNone.string(), selected: selection == parent?.id)
                 }
-                .accessibilityAddTraits(selection == nil ? .isSelected : [])
+                .accessibilityAddTraits(selection == parent?.id ? .isSelected : [])
             }
             ForEach(matches, id: \.objectID) { category in
-                Button {
-                    selection = category.id
-                    dismiss()
-                } label: {
-                    row(transactionCategoryPath(category), selected: selection == category.id)
+                if keyword.isEmpty, categories.contains(where: { $0.parent?.objectID == category.objectID }) {
+                    NavigationLink {
+                        TransactionCategorySelectionView(
+                            categories: categories, selection: $selection,
+                            closePicker: closePicker, parent: category
+                        )
+                    } label: {
+                        row(category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string(),
+                            selected: selection == category.id)
+                    }
+                    .accessibilityAddTraits(selection == category.id ? .isSelected : [])
+                } else {
+                    Button {
+                        selection = category.id
+                        closePicker()
+                    } label: {
+                        row(transactionCategoryPath(category), selected: selection == category.id)
+                    }
+                    .accessibilityAddTraits(selection == category.id ? .isSelected : [])
                 }
-                .accessibilityAddTraits(selection == category.id ? .isSelected : [])
             }
             if matches.isEmpty {
                 ContentUnavailableView {
@@ -749,12 +781,12 @@ private struct TransactionCategorySelectionView: View {
                 }
             }
         }
-        .navigationTitle(Text(.transactionFormFieldCategory))
+        .navigationTitle(parent?.name ?? LedgerStringKey.transactionFormFieldCategory.string())
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: Text(.categoryPickerSearchPrompt))
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button { dismiss() } label: { Text(.commonActionCancel) }
+                Button(action: closePicker) { Text(.commonActionCancel) }
             }
         }
     }

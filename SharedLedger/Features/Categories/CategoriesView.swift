@@ -1020,6 +1020,15 @@ private struct DefaultCategoryPreviewView: View {
     let onInstalled: (Int) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var errorMessage: String?
+    @State private var search = ""
+
+    private var keyword: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var matches: [CategoryNode] {
+        DefaultCategoryCatalog.categories.compactMap { $0.matching(keyword) }
+    }
 
     var body: some View {
         List {
@@ -1028,24 +1037,35 @@ private struct DefaultCategoryPreviewView: View {
                 Text(.categoryDefaultsImpact)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Text(.categoryDefaultsAccountingHint)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section {
-                ForEach(DefaultCategoryCatalog.categories) { node in
-                    DefaultCategoryPreviewRow(node: node)
+                ForEach(matches) { node in
+                    DefaultCategoryPreviewRow(node: node, initiallyExpanded: !keyword.isEmpty)
                 }
-            }
-            Section {
-                Button(action: install) {
-                    Label(.categoryActionInstallDefaults, systemImage: "plus.circle.fill")
-                        .frame(minHeight: 44)
+                if matches.isEmpty {
+                    ContentUnavailableView {
+                        Label(.categoryPickerEmptyTitle, systemImage: "magnifyingglass")
+                    } description: {
+                        Text(.categoryPickerEmptyMessage)
+                    }
                 }
+            } footer: {
+                Text(.categoryDefaultsSearchHint)
             }
+            .id(keyword)
         }
         .navigationTitle(Text(.categoryDefaultsTitle))
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: Text(.categoryPickerSearchPrompt))
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button { dismiss() } label: { Text(.commonActionCancel) }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: install) { Text(.categoryActionInstallFullDefaults) }
             }
         }
         .alert(Text(.categoryErrorUpdateTitle), isPresented: Binding(
@@ -1071,14 +1091,22 @@ private struct DefaultCategoryPreviewView: View {
 
 private struct DefaultCategoryPreviewRow: View {
     let node: CategoryNode
+    let initiallyExpanded: Bool
+    @State private var isExpanded: Bool
+
+    init(node: CategoryNode, initiallyExpanded: Bool = false) {
+        self.node = node
+        self.initiallyExpanded = initiallyExpanded
+        _isExpanded = State(initialValue: initiallyExpanded)
+    }
 
     var body: some View {
         if node.children.isEmpty {
             Text(verbatim: node.name)
         } else {
-            DisclosureGroup {
+            DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(node.children) { child in
-                    DefaultCategoryPreviewRow(node: child)
+                    DefaultCategoryPreviewRow(node: child, initiallyExpanded: initiallyExpanded)
                 }
             } label: {
                 Text(verbatim: node.name)
