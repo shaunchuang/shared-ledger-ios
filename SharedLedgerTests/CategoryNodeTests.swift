@@ -19,6 +19,29 @@ final class CategoryNodeTests: XCTestCase {
         XCTAssertEqual(tree.depth, 3)
     }
 
+    func testEverydayCatalogStartsWithSixMajorCategoriesAndDrivingDetails() throws {
+        let keys: [LedgerStringKey] = [
+            .defaultCategoryFood, .defaultCategoryClothing, .defaultCategoryHome,
+            .defaultCategoryTransport, .defaultCategoryEducation, .defaultCategoryLeisure
+        ]
+        XCTAssertEqual(keys.map { $0.string(locale: Locale(identifier: "zh-Hant")) },
+                       ["食", "衣", "住", "行", "育", "樂"])
+        XCTAssertEqual(Array(DefaultCategoryCatalog.categories.prefix(6)).map(\.name), keys.map { $0.string() })
+        let transport = try XCTUnwrap(DefaultCategoryCatalog.categories.first {
+            $0.name == LedgerStringKey.defaultCategoryTransport.string()
+        })
+        let driving = try XCTUnwrap(transport.children.first {
+            $0.name == LedgerStringKey.defaultCategoryTransportCar.string()
+        })
+        let detailKeys: [LedgerStringKey] = [
+            .defaultCategoryTransportMaintenance, .defaultCategoryTransportCarWash, .defaultCategoryTransportTires
+        ]
+        for key in detailKeys {
+            XCTAssertTrue(driving.children.contains { $0.name == key.string() })
+        }
+        XCTAssertEqual(transport.depth, 3)
+    }
+
     func testContainsFindsNestedCategory() {
         let target = CategoryNode(name: "捷運")
         let tree = CategoryNode(
@@ -1245,6 +1268,59 @@ final class CategoryManagementTests: XCTestCase {
         XCTAssertEqual(repository.categories(in: group).count, afterFirstRun)
     }
 
+    func testAddingDefaultsPreservesExistingEntriesAndDisabledBookBranches() throws {
+        let fixture = try makeFixture()
+        let otherBook = try fixture.books.createBook(from: BookDraft(name: "旅行"), in: fixture.group)
+        let root = try fixture.makeCategory(LedgerStringKey.defaultCategoryTransport.string())
+        let driving = try fixture.categories.createCategory(
+            from: CategoryDraft(name: LedgerStringKey.defaultCategoryTransportCar.string()),
+            in: fixture.group, parent: root
+        )
+        let wash = try fixture.categories.createCategory(
+            from: CategoryDraft(name: LedgerStringKey.defaultCategoryTransportCarWash.string()),
+            in: fixture.group, parent: driving
+        )
+        let originalID = wash.id
+        let entry = try fixture.addExpense(250, category: wash, in: fixture.book)
+        try fixture.categories.setCategory(driving, enabled: false, in: otherBook)
+
+        XCTAssertGreaterThan(try fixture.categories.installDefaultCategories(in: fixture.group), 0)
+        let siblings = fixture.categories.siblings(of: driving, in: fixture.group)
+        let maintenance = try XCTUnwrap(siblings.first {
+            $0.name == LedgerStringKey.defaultCategoryTransportMaintenance.string()
+        })
+        XCTAssertEqual(siblings.filter { $0.name == wash.name }.count, 1)
+        XCTAssertEqual(wash.id, originalID)
+        XCTAssertEqual(entry.category, wash)
+        XCTAssertEqual(entry.amount as Decimal?, 250)
+        XCTAssertEqual(wash.parent, driving)
+        XCTAssertEqual(driving.parent, root)
+        XCTAssertTrue(fixture.categories.isCategoryAvailable(maintenance, in: fixture.book))
+        XCTAssertFalse(fixture.categories.isCategoryAvailable(maintenance, in: otherBook))
+        XCTAssertFalse(fixture.categories.isCategoryAvailable(wash, in: otherBook))
+        XCTAssertEqual(try fixture.categories.installDefaultCategories(in: fixture.group), 0)
+
+        let newEntry = try fixture.addExpense(800, category: maintenance, in: fixture.book)
+        XCTAssertEqual(newEntry.category, maintenance)
+        XCTAssertEqual(newEntry.book, fixture.book)
+    }
+
+    func testAddingEverydayDefaultsKeepsLegacyCategoriesAndTheirHistory() throws {
+        let fixture = try makeFixture()
+        let legacy = try fixture.makeCategory("餐飲")
+        let entry = try fixture.addExpense(100, category: legacy, in: fixture.book)
+        let id = legacy.id
+
+        try fixture.categories.installDefaultCategories(in: fixture.group)
+
+        XCTAssertEqual(legacy.id, id)
+        XCTAssertEqual(legacy.name, "餐飲")
+        XCTAssertNil(legacy.parent)
+        XCTAssertNil(legacy.archivedAt)
+        XCTAssertEqual(entry.category, legacy)
+        XCTAssertTrue(fixture.categories.isCategoryAvailable(legacy, in: fixture.book))
+    }
+
     func testManagementActionsRequireLedgerSettingsPermission() throws {
         let fixture = try makeFixture()
         let source = try fixture.makeCategory("餐飲")
@@ -1404,7 +1480,8 @@ final class CategorySheetRouteTests: XCTestCase {
             CategorySheetRoute.newCategory(parent: food).id,
             CategorySheetRoute.newCategory(parent: travel).id,
             CategorySheetRoute.rename(food).id,
-            CategorySheetRoute.merge(food).id
+            CategorySheetRoute.merge(food).id,
+            CategorySheetRoute.defaults.id
         ]
 
         XCTAssertEqual(Set(ids).count, ids.count)

@@ -27,78 +27,72 @@ struct CategoryNode: Identifiable, Equatable, Sendable {
     }
 }
 
-/// 建立群組時套用的內建分類。
-///
-/// 一個沒有任何分類的新群組，第一筆交易只能記成「未分類」，之後的報表也就沒有東西可以
-/// 拆。這份目錄只是起點：它跟其他分類一樣屬於群組，可以改名、排序、合併或封存，也可以
-/// 在建立群組時整份關掉。層級刻意只做兩層，超過兩層的細分留給使用者自己決定。
+/// 新群組的起始目錄，也能由既有群組主動補入。名稱寫入後就是使用者資料；
+/// 不自動改名、搬移或重分類歷史交易，使用者可繼續在任一層新增子分類。
 enum DefaultCategoryCatalog {
     static let categories: [CategoryNode] = [
-        CategoryNode(
-            name: .defaultCategoryFood,
-            children: [
-                CategoryNode(name: .defaultCategoryFoodMeals),
-                CategoryNode(name: .defaultCategoryFoodDrinks),
-                CategoryNode(name: .defaultCategoryFoodEatingOut)
-            ]
-        ),
-        CategoryNode(
-            name: .defaultCategoryHome,
-            children: [
-                CategoryNode(name: .defaultCategoryHomeRent),
-                CategoryNode(name: .defaultCategoryHomeUtilities),
-                CategoryNode(name: .defaultCategoryHomeTelecom),
-                CategoryNode(name: .defaultCategoryHomeHousehold)
-            ]
-        ),
-        CategoryNode(
-            name: .defaultCategoryTransport,
-            children: [
-                CategoryNode(name: .defaultCategoryTransportPublic),
-                CategoryNode(name: .defaultCategoryTransportTaxi),
-                CategoryNode(name: .defaultCategoryTransportVehicle)
-            ]
-        ),
-        CategoryNode(
-            name: .defaultCategoryEveryday,
-            children: [
-                CategoryNode(name: .defaultCategoryEverydayGoods),
-                CategoryNode(name: .defaultCategoryEverydayClothing),
-                CategoryNode(name: .defaultCategoryEverydayBeauty)
-            ]
-        ),
-        CategoryNode(
-            name: .defaultCategoryHealth,
-            children: [
-                CategoryNode(name: .defaultCategoryHealthMedicine),
-                CategoryNode(name: .defaultCategoryHealthInsurance)
-            ]
-        ),
-        CategoryNode(
-            name: .defaultCategoryLeisure,
-            children: [
-                CategoryNode(name: .defaultCategoryLeisureTravel),
-                CategoryNode(name: .defaultCategoryLeisureSubscriptions),
-                CategoryNode(name: .defaultCategoryLeisureActivities)
-            ]
-        ),
-        CategoryNode(
-            name: .defaultCategoryEducation,
-            children: [
-                CategoryNode(name: .defaultCategoryEducationTuition),
-                CategoryNode(name: .defaultCategoryEducationBooks)
-            ]
-        ),
+        CategoryNode(name: .defaultCategoryFood, children: [
+            CategoryNode(name: .defaultCategoryFoodMeals),
+            CategoryNode(name: .defaultCategoryFoodDrinks),
+            CategoryNode(name: .defaultCategoryFoodGroceries),
+            CategoryNode(name: .defaultCategoryFoodEatingOut)
+        ]),
+        CategoryNode(name: .defaultCategoryClothing, children: [
+            CategoryNode(name: .defaultCategoryEverydayClothing),
+            CategoryNode(name: .defaultCategoryClothingShoes),
+            CategoryNode(name: .defaultCategoryClothingAccessories),
+            CategoryNode(name: .defaultCategoryEverydayBeauty)
+        ]),
+        CategoryNode(name: .defaultCategoryHome, children: [
+            CategoryNode(name: .defaultCategoryHomeRent),
+            CategoryNode(name: .defaultCategoryHomeMortgage),
+            CategoryNode(name: .defaultCategoryHomeFurniture),
+            CategoryNode(name: .defaultCategoryHomeUtilities),
+            CategoryNode(name: .defaultCategoryHomeTelecom),
+            CategoryNode(name: .defaultCategoryHomeHousehold)
+        ]),
+        CategoryNode(name: .defaultCategoryTransport, children: [
+            CategoryNode(name: .defaultCategoryTransportPublic, children: [
+                CategoryNode(name: .defaultCategoryTransportBus),
+                CategoryNode(name: .defaultCategoryTransportMetro),
+                CategoryNode(name: .defaultCategoryTransportTrain)
+            ]),
+            CategoryNode(name: .defaultCategoryTransportTaxi),
+            CategoryNode(name: .defaultCategoryTransportCycling),
+            CategoryNode(name: .defaultCategoryTransportScooter),
+            CategoryNode(name: .defaultCategoryTransportCar, children: [
+                CategoryNode(name: .defaultCategoryTransportFuel),
+                CategoryNode(name: .defaultCategoryTransportParking),
+                CategoryNode(name: .defaultCategoryTransportTolls),
+                CategoryNode(name: .defaultCategoryTransportMaintenance),
+                CategoryNode(name: .defaultCategoryTransportCarWash),
+                CategoryNode(name: .defaultCategoryTransportTires)
+            ])
+        ]),
+        CategoryNode(name: .defaultCategoryEducation, children: [
+            CategoryNode(name: .defaultCategoryEducationTuition),
+            CategoryNode(name: .defaultCategoryEducationTutoring),
+            CategoryNode(name: .defaultCategoryEducationBooks),
+            CategoryNode(name: .defaultCategoryEducationSkills)
+        ]),
+        CategoryNode(name: .defaultCategoryLeisure, children: [
+            CategoryNode(name: .defaultCategoryLeisureMovies),
+            CategoryNode(name: .defaultCategoryLeisureTravel),
+            CategoryNode(name: .defaultCategoryLeisureSports),
+            CategoryNode(name: .defaultCategoryLeisureGames),
+            CategoryNode(name: .defaultCategoryLeisureSubscriptions),
+            CategoryNode(name: .defaultCategoryLeisureActivities)
+        ]),
+        CategoryNode(name: .defaultCategoryHealth, children: [
+            CategoryNode(name: .defaultCategoryHealthMedicine),
+            CategoryNode(name: .defaultCategoryHealthInsurance)
+        ]),
         CategoryNode(name: .defaultCategoryGifts),
-        CategoryNode(
-            name: .defaultCategoryIncome,
-            children: [
-                CategoryNode(name: .defaultCategoryIncomeSalary),
-                CategoryNode(name: .defaultCategoryIncomeBonus),
-                CategoryNode(name: .defaultCategoryIncomeOther)
-            ]
-        ),
+        CategoryNode(name: .defaultCategoryIncome, children: [
+            CategoryNode(name: .defaultCategoryIncomeSalary),
+            CategoryNode(name: .defaultCategoryIncomeBonus),
+            CategoryNode(name: .defaultCategoryIncomeOther)
+        ]),
         CategoryNode(name: .defaultCategoryOther)
     ]
 }
-

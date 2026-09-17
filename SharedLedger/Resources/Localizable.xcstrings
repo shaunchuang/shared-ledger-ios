@@ -1956,6 +1956,108 @@
         }
       }
     },
+    "category.defaults.current": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default categories are up to date"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設分類已齊全"
+          }
+        }
+      }
+    },
+    "category.defaults.impact": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adds missing categories by name and parent. Existing categories and transactions are not renamed, moved or deleted. New categories are enabled in active books; existing disabled choices stay unchanged. Use a category’s action button to add more subcategories."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只補入缺少的同名、同層分類，不會改名、搬移或刪除既有分類與交易。新增分類會套用到啟用中的帳本；既有停用設定維持不變。可以再從分類旁的「⋯」新增子分類。"
+          }
+        }
+      }
+    },
+    "category.defaults.installed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default categories added"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已補入預設分類"
+          }
+        }
+      }
+    },
+    "category.defaults.preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview and add defaults"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預覽與補入預設分類"
+          }
+        }
+      }
+    },
+    "category.defaults.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Food, Clothing, Home, Transport, Education and Leisure, with common subcategories such as Transport › Driving › Maintenance, Car wash and Tires. Health, Income and other categories are included."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "食、衣、住、行、育、樂，附常用細項。例如「行 › 開車 › 保養費、洗車費、換輪胎」。也保留醫療、收入與其他分類。"
+          }
+        }
+      }
+    },
+    "category.defaults.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everyday categories"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生活預設分類"
+          }
+        }
+      }
+    },
     "category.empty.message": {
       "extractionState": "manual",
       "localizations": {
@@ -2469,6 +2571,57 @@
         }
       }
     },
+    "category.picker.empty.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try another search. Available categories follow this book’s settings."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試試其他關鍵字。可用分類由目前帳本的設定決定。"
+          }
+        }
+      }
+    },
+    "category.picker.empty.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching categories"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有符合的分類"
+          }
+        }
+      }
+    },
+    "category.picker.searchPrompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search categories or parent names"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋分類或上層名稱"
+          }
+        }
+      }
+    },
     "category.rename.footer": {
       "extractionState": "manual",
       "localizations": {
@@ -2585,6 +2738,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "分類"
+          }
+        }
+      }
+    },
+    "category.tree.collapse": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse subcategories"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收合子分類"
+          }
+        }
+      }
+    },
+    "category.tree.expand": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand subcategories"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "展開子分類"
           }
         }
       }
@@ -2963,6 +3150,57 @@
         }
       }
     },
+    "defaultCategory.clothing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clothing"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "衣"
+          }
+        }
+      }
+    },
+    "defaultCategory.clothing.accessories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accessories"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配件"
+          }
+        }
+      }
+    },
+    "defaultCategory.clothing.shoes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shoes"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "鞋子"
+          }
+        }
+      }
+    },
     "defaultCategory.education": {
       "extractionState": "manual",
       "localizations": {
@@ -2975,7 +3213,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "教育"
+            "value": "育"
           }
         }
       }
@@ -2986,13 +3224,30 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Books & courses"
+            "value": "Books"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "書籍課程"
+            "value": "書籍"
+          }
+        }
+      }
+    },
+    "defaultCategory.education.skills": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skills and courses"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技能培養"
           }
         }
       }
@@ -3010,6 +3265,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "學費"
+          }
+        }
+      }
+    },
+    "defaultCategory.education.tutoring": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutoring"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "補習"
           }
         }
       }
@@ -3054,13 +3326,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Clothing"
+            "value": "Clothes"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "服飾"
+            "value": "衣服"
           }
         }
       }
@@ -3094,7 +3366,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "餐飲"
+            "value": "食"
           }
         }
       }
@@ -3129,6 +3401,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "外食聚餐"
+          }
+        }
+      }
+    },
+    "defaultCategory.food.groceries": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groceries"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "食品食材"
           }
         }
       }
@@ -3230,7 +3519,24 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "居家"
+            "value": "住"
+          }
+        }
+      }
+    },
+    "defaultCategory.home.furniture": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Furniture"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "家具"
           }
         }
       }
@@ -3252,19 +3558,36 @@
         }
       }
     },
+    "defaultCategory.home.mortgage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mortgage"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "房貸"
+          }
+        }
+      }
+    },
     "defaultCategory.home.rent": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rent & mortgage"
+            "value": "Rent"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "房租房貸"
+            "value": "房租"
           }
         }
       }
@@ -3383,7 +3706,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "娛樂"
+            "value": "樂"
           }
         }
       }
@@ -3401,6 +3724,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "休閒活動"
+          }
+        }
+      }
+    },
+    "defaultCategory.leisure.games": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Games"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遊戲"
+          }
+        }
+      }
+    },
+    "defaultCategory.leisure.movies": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Movies"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電影"
+          }
+        }
+      }
+    },
+    "defaultCategory.leisure.sports": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sports"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "運動"
           }
         }
       }
@@ -3468,7 +3842,177 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "交通"
+            "value": "行"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.bus": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bus"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公車"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.car": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Driving"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開車"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.car.fuel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuel and charging"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加油與充電"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.car.maintenance": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenance"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保養費"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.car.parking": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parking"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停車費"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.car.tires": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tires"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "換輪胎"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.car.tolls": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tolls"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通行費"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.car.wash": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Car wash"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "洗車費"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.cycling": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cycling"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自行車"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.metro": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metro"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捷運"
           }
         }
       }
@@ -3490,6 +4034,23 @@
         }
       }
     },
+    "defaultCategory.transport.scooter": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scooter"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "機車"
+          }
+        }
+      }
+    },
     "defaultCategory.transport.taxi": {
       "extractionState": "manual",
       "localizations": {
@@ -3503,6 +4064,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "計程車"
+          }
+        }
+      }
+    },
+    "defaultCategory.transport.train": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rail"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "火車與高鐵"
           }
         }
       }
@@ -8736,6 +9314,23 @@
         }
       }
     },
+    "phone.onboarding.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a group and book to start tracking. Use it on your own, or invite family and friends later."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先建立群組與帳本，就能開始記帳。你可以自己使用，也可以稍後邀請家人或朋友。"
+          }
+        }
+      }
+    },
     "privacy.action.delete": {
       "extractionState": "manual",
       "localizations": {
@@ -13586,6 +14181,91 @@
           "stringUnit": {
             "state": "translated",
             "value": "交易類型"
+          }
+        }
+      }
+    },
+    "transaction.quickEntry.destination": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to: %1$@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增至：%1$@"
+          }
+        }
+      }
+    },
+    "transaction.quickEntry.expense": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add expense"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記支出"
+          }
+        }
+      }
+    },
+    "transaction.quickEntry.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entries go into this book and default to today."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增至這本帳本，日期預設為今天。"
+          }
+        }
+      }
+    },
+    "transaction.quickEntry.income": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add income"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記收入"
+          }
+        }
+      }
+    },
+    "transaction.quickEntry.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick entry"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速記帳"
           }
         }
       }
