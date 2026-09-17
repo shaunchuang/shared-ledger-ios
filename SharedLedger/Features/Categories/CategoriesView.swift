@@ -92,11 +92,14 @@ enum CategorySheetRoute: Identifiable {
     case newCategory(parent: LedgerCategory?)
     case rename(LedgerCategory)
     case merge(LedgerCategory)
+    case defaults
 
     /// 同一個分類在不同表單、以及不同父分類底下的新增，都要是不同的 identity，
     /// 否則 `.sheet(item:)` 會沿用上一張表單而不是換一張。
     var id: String {
         switch self {
+        case .defaults:
+            return "defaults"
         case let .newCategory(parent):
             guard let parent else { return "new:root" }
             return "new:\(Self.identifier(parent))"
@@ -154,6 +157,7 @@ struct CategoriesView: View {
     @State private var errorMessage: String?
     /// 排序寫在子分類上，父層的 FetchRequest 不會因此重新計算，所以用它強制重畫。
     @State private var revision = 0
+    @State private var defaultsNotice: LedgerStringKey?
 
     init(group: LedgerGroup) {
         self.group = group
@@ -187,15 +191,6 @@ struct CategoriesView: View {
                             actionTitle: canManage ? LedgerStringKey.categoryNewActionAdd : nil,
                             action: canManage ? presentRootCategory : nil
                         )
-
-                        if canManage {
-                            Button(action: installDefaults) {
-                                Label(.categoryActionInstallDefaults, systemImage: "square.grid.2x2.fill")
-                                    .font(.subheadline.weight(.semibold))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(LedgerTheme.primary)
-                        }
                     } else {
                         LedgerCard {
                             VStack(alignment: .leading, spacing: 0) {
@@ -213,6 +208,30 @@ struct CategoriesView: View {
                                 }
                             }
                             .id(revision)
+                        }
+                    }
+
+                    if canManage {
+                        LedgerCard(padding: 16) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(.categoryDefaultsTitle)
+                                    .font(.headline)
+                                Text(.categoryDefaultsSummary)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Button { sheetRoute = .defaults } label: {
+                                    Label(.categoryDefaultsPreview, systemImage: "square.grid.2x2.fill")
+                                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(LedgerTheme.primary)
+                                if let defaultsNotice {
+                                    Label(defaultsNotice, systemImage: "checkmark.circle.fill")
+                                        .font(.footnote)
+                                        .foregroundStyle(LedgerTheme.primary)
+                                }
+                            }
                         }
                     }
 
@@ -239,6 +258,13 @@ struct CategoriesView: View {
         }
         .sheet(item: $sheetRoute) { route in
             switch route {
+            case .defaults:
+                NavigationStack {
+                    DefaultCategoryPreviewView(group: group) { created in
+                        defaultsNotice = created > 0 ? .categoryDefaultsInstalled : .categoryDefaultsCurrent
+                        dismissSheet()
+                    }
+                }
             case let .newCategory(parent):
                 NavigationStack {
                     NewCategoryView(group: group, parent: parent) {
@@ -336,14 +362,6 @@ struct CategoriesView: View {
         do {
             try CategoryRepository().archiveCategory(category)
             revision += 1
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func installDefaults() {
-        do {
-            try CategoryRepository().installDefaultCategories(in: group)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -522,6 +540,7 @@ private struct GroupCategoryTreeRow: View {
     /// 否則在大字級下小到看不見。
     @ScaledMetric(relativeTo: .subheadline) private var depthMarkerScale: CGFloat = 1
     @StateObject private var actionCoordinator = CategoryRowActionCoordinator()
+    @State private var isExpanded = false
 
     private var children: [LedgerCategory] {
         guard let group = category.group else { return [] }
@@ -549,11 +568,22 @@ private struct GroupCategoryTreeRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 5 * depthMarkerScale))
-                    .foregroundStyle(.tertiary)
-                    .opacity(depth > 0 ? 1 : 0)
-                    .accessibilityHidden(true)
+                if !children.isEmpty {
+                    Button { isExpanded.toggle() } label: {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.subheadline.weight(.semibold))
+                            .ledgerTapTarget()
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(isExpanded ? LedgerStringKey.categoryTreeCollapse : .categoryTreeExpand))
+                    .accessibilityValue(Text(verbatim: name))
+                } else {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 5 * depthMarkerScale))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 44)
+                        .accessibilityHidden(true)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: name)
                         .font(.subheadline.weight(depth == 0 ? .semibold : .regular))
@@ -591,21 +621,23 @@ private struct GroupCategoryTreeRow: View {
                     }
                 }
             }
-            .padding(.leading, CGFloat(depth) * 18)
+            .padding(.leading, CGFloat(min(depth, 3)) * 14)
             .padding(.vertical, 10)
 
-            ForEach(children, id: \.objectID) { child in
-                Divider().padding(.leading, CGFloat(depth) * 18 + 15)
-                GroupCategoryTreeRow(
-                    category: child,
-                    depth: depth + 1,
-                    canManage: canManage,
-                    onAddChild: onAddChild,
-                    onRename: onRename,
-                    onMerge: onMerge,
-                    onMove: onMove,
-                    onArchive: onArchive
-                )
+            if isExpanded {
+                ForEach(children, id: \.objectID) { child in
+                    Divider().padding(.leading, CGFloat(min(depth, 3)) * 14 + 15)
+                    GroupCategoryTreeRow(
+                        category: child,
+                        depth: depth + 1,
+                        canManage: canManage,
+                        onAddChild: onAddChild,
+                        onRename: onRename,
+                        onMerge: onMerge,
+                        onMove: onMove,
+                        onArchive: onArchive
+                    )
+                }
             }
         }
     }
@@ -955,11 +987,11 @@ private struct BookCategoryToggleRow: View {
                         .categoryBookReorderAccessibilityLabel.string(arguments: [name])))
                 }
             }
-            .padding(.leading, CGFloat(depth) * 18)
+            .padding(.leading, CGFloat(min(depth, 3)) * 14)
             .padding(.vertical, 6)
 
             ForEach(children, id: \.objectID) { child in
-                Divider().padding(.leading, CGFloat(depth) * 18 + 15)
+                Divider().padding(.leading, CGFloat(min(depth, 3)) * 14 + 15)
                 BookCategoryToggleRow(
                     category: child,
                     book: book,
@@ -979,6 +1011,106 @@ private struct BookCategoryToggleRow: View {
             onUpdated()
         } catch {
             onError(error.localizedDescription)
+        }
+    }
+}
+
+private struct DefaultCategoryPreviewView: View {
+    let group: LedgerGroup
+    let onInstalled: (Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var errorMessage: String?
+    @State private var search = ""
+
+    private var keyword: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var matches: [CategoryNode] {
+        DefaultCategoryCatalog.categories.compactMap { $0.matching(keyword) }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Text(.categoryDefaultsSummary)
+                Text(.categoryDefaultsImpact)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text(.categoryDefaultsAccountingHint)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                ForEach(matches) { node in
+                    DefaultCategoryPreviewRow(node: node, initiallyExpanded: !keyword.isEmpty)
+                }
+                if matches.isEmpty {
+                    ContentUnavailableView {
+                        Label(.categoryPickerEmptyTitle, systemImage: "magnifyingglass")
+                    } description: {
+                        Text(.categoryPickerEmptyMessage)
+                    }
+                }
+            } footer: {
+                Text(.categoryDefaultsSearchHint)
+            }
+            .id(keyword)
+        }
+        .navigationTitle(Text(.categoryDefaultsTitle))
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: Text(.categoryPickerSearchPrompt))
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button { dismiss() } label: { Text(.commonActionCancel) }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: install) { Text(.categoryActionInstallFullDefaults) }
+            }
+        }
+        .alert(Text(.categoryErrorUpdateTitle), isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button(role: .cancel) {} label: { Text(.commonActionOK) }
+        } message: {
+            Text(verbatim: errorMessage ?? LedgerStringKey.commonErrorRetryLater.string())
+        }
+    }
+
+    private func install() {
+        do {
+            let count = try CategoryRepository().installDefaultCategories(in: group)
+            onInstalled(count)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct DefaultCategoryPreviewRow: View {
+    let node: CategoryNode
+    let initiallyExpanded: Bool
+    @State private var isExpanded: Bool
+
+    init(node: CategoryNode, initiallyExpanded: Bool = false) {
+        self.node = node
+        self.initiallyExpanded = initiallyExpanded
+        _isExpanded = State(initialValue: initiallyExpanded)
+    }
+
+    var body: some View {
+        if node.children.isEmpty {
+            Text(verbatim: node.name)
+        } else {
+            DisclosureGroup(isExpanded: $isExpanded) {
+                ForEach(node.children) { child in
+                    DefaultCategoryPreviewRow(node: child, initiallyExpanded: initiallyExpanded)
+                }
+            } label: {
+                Text(verbatim: node.name)
+            }
         }
     }
 }

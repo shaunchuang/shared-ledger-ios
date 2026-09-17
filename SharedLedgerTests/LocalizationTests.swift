@@ -176,7 +176,7 @@ final class LocalizationTests: XCTestCase {
         // 但寫進去的那一刻必須是使用者的語言，而不是永遠的正體中文。
         XCTAssertEqual(
             LedgerStringKey.defaultCategoryFood.string(locale: Locale(identifier: "zh-Hant")),
-            "餐飲"
+            "食"
         )
         XCTAssertEqual(
             LedgerStringKey.defaultCategoryFood.string(locale: Locale(identifier: "en")),
