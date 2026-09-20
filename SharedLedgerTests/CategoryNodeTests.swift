@@ -19,6 +19,83 @@ final class CategoryNodeTests: XCTestCase {
         XCTAssertEqual(tree.depth, 3)
     }
 
+    func testEverydayCatalogStartsWithSixMajorCategoriesAndDrivingDetails() throws {
+        let keys: [LedgerStringKey] = [
+            .defaultCategoryFood, .defaultCategoryClothing, .defaultCategoryHome,
+            .defaultCategoryTransport, .defaultCategoryEducation, .defaultCategoryLeisure
+        ]
+        XCTAssertEqual(keys.map { $0.string(locale: Locale(identifier: "zh-Hant")) },
+                       ["食", "衣", "住", "行", "育", "樂"])
+        XCTAssertEqual(Array(DefaultCategoryCatalog.categories.prefix(6)).map(\.name), keys.map { $0.string() })
+        let transport = try XCTUnwrap(DefaultCategoryCatalog.categories.first {
+            $0.name == LedgerStringKey.defaultCategoryTransport.string()
+        })
+        let driving = try XCTUnwrap(transport.children.first {
+            $0.name == LedgerStringKey.defaultCategoryTransportCar.string()
+        })
+        let detailKeys: [LedgerStringKey] = [
+            .defaultCategoryTransportMaintenance, .defaultCategoryTransportCarWash, .defaultCategoryTransportTires
+        ]
+        for key in detailKeys {
+            XCTAssertTrue(driving.children.contains { $0.name == key.string() })
+        }
+        let maintenance = try XCTUnwrap(driving.children.first {
+            $0.name == LedgerStringKey.defaultCategoryTransportMaintenance.string()
+        })
+        XCTAssertTrue(maintenance.children.contains {
+            $0.name == LedgerStringKey.defaultCategoryTransportCarMaintenanceOil.string()
+        })
+        XCTAssertEqual(transport.depth, 4)
+    }
+
+    func testCatalogCoversTaxesAndLifeStagesWithoutDuplicateSiblingNames() {
+        let rootKeys: [LedgerStringKey] = [
+            .defaultCategoryDaily, .defaultCategoryDigital, .defaultCategoryHealth,
+            .defaultCategorySocialInsurance, .defaultCategoryChildcare, .defaultCategoryCare,
+            .defaultCategoryPets, .defaultCategoryGifts, .defaultCategoryTax, .defaultCategoryFinance
+        ]
+        for key in rootKeys {
+            XCTAssertTrue(DefaultCategoryCatalog.categories.contains { $0.name == key.string() })
+        }
+        var ids = Set<UUID>()
+        func check(_ nodes: [CategoryNode]) {
+            XCTAssertEqual(Set(nodes.map(\.name)).count, nodes.count)
+            for node in nodes {
+                XCTAssertFalse(node.name.isEmpty)
+                XCTAssertTrue(ids.insert(node.id).inserted)
+                check(node.children)
+            }
+        }
+        check(DefaultCategoryCatalog.categories)
+    }
+
+    func testCategorySearchKeepsAncestorsAndMatchingNodeIdentity() throws {
+        let target = CategoryNode(name: "Oil change")
+        let maintenance = CategoryNode(name: "Maintenance", children: [target, CategoryNode(name: "Brakes")])
+        let driving = CategoryNode(name: "Driving", children: [maintenance])
+        let root = CategoryNode(name: "Transport", children: [driving, CategoryNode(name: "Train")])
+
+        let result = try XCTUnwrap(root.matching("  OIL \n"))
+        XCTAssertEqual(result, CategoryNode(id: root.id, name: root.name, children: [
+            CategoryNode(id: driving.id, name: driving.name, children: [
+                CategoryNode(id: maintenance.id, name: maintenance.name, children: [target])
+            ])
+        ]))
+        XCTAssertEqual(root.children.count, 2)
+        XCTAssertEqual(maintenance.children.count, 2)
+    }
+
+    func testCategorySearchPreservesWholeBranchWhenItsNameMatches() {
+        let root = CategoryNode(name: "Taxes", children: [CategoryNode(name: "Property tax")])
+        XCTAssertEqual(root.matching("taxes"), root)
+        XCTAssertEqual(root.matching(" \n"), root)
+    }
+
+    func testCategorySearchReturnsNoUnrelatedBranches() {
+        let root = CategoryNode(name: "Food", children: [CategoryNode(name: "Breakfast")])
+        XCTAssertNil(root.matching("Insurance"))
+    }
+
     func testContainsFindsNestedCategory() {
         let target = CategoryNode(name: "捷運")
         let tree = CategoryNode(
@@ -1216,16 +1293,20 @@ final class CategoryManagementTests: XCTestCase {
         let repository = CategoryRepository(persistence: persistence)
         let book = try XCTUnwrap(BookRepository(persistence: persistence).defaultBook(in: group))
 
-        let roots = repository.siblings(of: nil, in: group)
-        XCTAssertEqual(roots.map { $0.name ?? "" }, DefaultCategoryCatalog.categories.map(\.name))
-        for node in DefaultCategoryCatalog.categories {
-            let category = try XCTUnwrap(roots.first { $0.name == node.name })
-            XCTAssertEqual(
-                repository.siblings(of: category, in: group).map { $0.name ?? "" },
-                node.children.map(\.name)
-            )
-            XCTAssertTrue(repository.isCategoryAvailable(category, in: book))
+        var visitedCount = 0
+        func check(_ nodes: [CategoryNode], parent: LedgerCategory?) throws {
+            let siblings = repository.siblings(of: parent, in: group)
+            XCTAssertEqual(siblings.map { $0.name ?? "" }, nodes.map(\.name))
+            for node in nodes {
+                let category = try XCTUnwrap(siblings.first { $0.name == node.name })
+                XCTAssertEqual(category.parent, parent)
+                XCTAssertTrue(repository.isCategoryAvailable(category, in: book))
+                visitedCount += 1
+                try check(node.children, parent: category)
+            }
         }
+        try check(DefaultCategoryCatalog.categories, parent: nil)
+        XCTAssertEqual(repository.categories(in: group).count, visitedCount)
     }
 
     func testDefaultCatalogCanBeSkippedAndReappliedWithoutDuplicates() throws {
@@ -1243,6 +1324,64 @@ final class CategoryManagementTests: XCTestCase {
         // 重複套用只會沿用同名分類，不會長出第二份目錄。
         XCTAssertEqual(try repository.installDefaultCategories(in: group), 0)
         XCTAssertEqual(repository.categories(in: group).count, afterFirstRun)
+    }
+
+    func testAddingDefaultsPreservesExistingEntriesAndDisabledBookBranches() throws {
+        let fixture = try makeFixture()
+        let otherBook = try fixture.books.createBook(from: BookDraft(name: "旅行"), in: fixture.group)
+        let root = try fixture.makeCategory(LedgerStringKey.defaultCategoryTransport.string())
+        let driving = try fixture.categories.createCategory(
+            from: CategoryDraft(name: LedgerStringKey.defaultCategoryTransportCar.string()),
+            in: fixture.group, parent: root
+        )
+        let wash = try fixture.categories.createCategory(
+            from: CategoryDraft(name: LedgerStringKey.defaultCategoryTransportCarWash.string()),
+            in: fixture.group, parent: driving
+        )
+        let originalID = wash.id
+        let entry = try fixture.addExpense(250, category: wash, in: fixture.book)
+        try fixture.categories.setCategory(driving, enabled: false, in: otherBook)
+
+        XCTAssertGreaterThan(try fixture.categories.installDefaultCategories(in: fixture.group), 0)
+        let siblings = fixture.categories.siblings(of: driving, in: fixture.group)
+        let maintenance = try XCTUnwrap(siblings.first {
+            $0.name == LedgerStringKey.defaultCategoryTransportMaintenance.string()
+        })
+        let oilChange = try XCTUnwrap(fixture.categories.siblings(of: maintenance, in: fixture.group).first {
+            $0.name == LedgerStringKey.defaultCategoryTransportCarMaintenanceOil.string()
+        })
+        XCTAssertEqual(siblings.filter { $0.name == wash.name }.count, 1)
+        XCTAssertEqual(wash.id, originalID)
+        XCTAssertEqual(entry.category, wash)
+        XCTAssertEqual(entry.amount as Decimal?, 250)
+        XCTAssertEqual(wash.parent, driving)
+        XCTAssertEqual(driving.parent, root)
+        XCTAssertTrue(fixture.categories.isCategoryAvailable(maintenance, in: fixture.book))
+        XCTAssertFalse(fixture.categories.isCategoryAvailable(maintenance, in: otherBook))
+        XCTAssertFalse(fixture.categories.isCategoryAvailable(wash, in: otherBook))
+        XCTAssertTrue(fixture.categories.isCategoryAvailable(oilChange, in: fixture.book))
+        XCTAssertFalse(fixture.categories.isCategoryAvailable(oilChange, in: otherBook))
+        XCTAssertEqual(try fixture.categories.installDefaultCategories(in: fixture.group), 0)
+
+        let newEntry = try fixture.addExpense(800, category: oilChange, in: fixture.book)
+        XCTAssertEqual(newEntry.category, oilChange)
+        XCTAssertEqual(newEntry.book, fixture.book)
+    }
+
+    func testAddingEverydayDefaultsKeepsLegacyCategoriesAndTheirHistory() throws {
+        let fixture = try makeFixture()
+        let legacy = try fixture.makeCategory("餐飲")
+        let entry = try fixture.addExpense(100, category: legacy, in: fixture.book)
+        let id = legacy.id
+
+        try fixture.categories.installDefaultCategories(in: fixture.group)
+
+        XCTAssertEqual(legacy.id, id)
+        XCTAssertEqual(legacy.name, "餐飲")
+        XCTAssertNil(legacy.parent)
+        XCTAssertNil(legacy.archivedAt)
+        XCTAssertEqual(entry.category, legacy)
+        XCTAssertTrue(fixture.categories.isCategoryAvailable(legacy, in: fixture.book))
     }
 
     func testManagementActionsRequireLedgerSettingsPermission() throws {
@@ -1404,7 +1543,8 @@ final class CategorySheetRouteTests: XCTestCase {
             CategorySheetRoute.newCategory(parent: food).id,
             CategorySheetRoute.newCategory(parent: travel).id,
             CategorySheetRoute.rename(food).id,
-            CategorySheetRoute.merge(food).id
+            CategorySheetRoute.merge(food).id,
+            CategorySheetRoute.defaults.id
         ]
 
         XCTAssertEqual(Set(ids).count, ids.count)
