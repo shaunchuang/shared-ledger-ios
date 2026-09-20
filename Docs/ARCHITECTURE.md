@@ -233,6 +233,21 @@ V9 一樣沒有新增 record type，只在三個既有 record type 上各加一�
 
 ## 建置與測試
 
+### Apple Watch companion App
+
+- `SharedLedgerWatch` 為單一 target SwiftUI watchOS 10 App，Bundle ID `com.shaunchuang.SharedLedger.watchkitapp`，`WKCompanionAppBundleIdentifier` 指向 `com.shaunchuang.SharedLedger`。iOS App 依賴 Watch target，並將其嵌入 `Watch` 目錄；共用專案既有 Team，仍須取得 Watch App ID 的 provisioning profile。沒有新增 CloudKit container 或資料模型版本。
+- 在 Xcode 選 `SharedLedgerWatch` scheme 可建置 Watch simulator。CI 額外執行 `xcodebuild build -scheme SharedLedgerWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO`，現有 iOS build-for-testing 與 archive 也會建置嵌入的 Watch App。
+- `WatchLedgerMessage` 定義版本化、Codable 的摘要、選項、儲存請求與回覆。`WatchLedgerBridge` 在 AppDelegate 啟動，以 WatchConnectivity `updateApplicationContext` 傳送可覆蓋的最新摘要，以 `sendMessageData`／reply handler 處理明確儲存。單一帳本 context 超過 55 KB 時回傳使用 iPhone 的提示，不靜默截斷選項。
+- Watch 不直接寫入 Core Data。`WatchLedgerService` 在 main actor 重新解析所選帳本、目前成員、全部分攤成員與幣別，並交給既有 `EntryRepository` 驗證帳戶／分類、權限、付款、分攤、金額精度與稽核。view context 有其他待儲存變更時，暫停新的寫入及所有摘要讀取（包含手錶主動 refresh 的回覆），保留帶時間戳記的既有摘要，不儲存或 rollback 使用者的編輯。
+- 每次手錶確認產生 UUID，先原子保存到手錶 Application Support 的 pending 檔案再傳送。iPhone 使用此 UUID 作為 `LedgerEntry.id`，在同一次 `context.save()` 寫入交易、付款、分攤及稽核，讓「儲存成功但回覆遺失」重試仍能查到原結果。Repository 拒絕重複 ID；Watch service 的同 ID／同帳本回覆不再次寫入，後續被作廢也不復活。沒有新增 CloudKit unique constraint。
+- 重試先用獨立的 main-queue context 查核已提交的交易，再檢查 view context 是否忙碌；未儲存的 insert／scope 修改不能冒充或改變成功回執。因此原交易已入帳時，即使 iPhone 有未完成編輯，仍可確認原結果而不碰觸那些編輯。
+- 傳輸、儲存、查詢、未知錯誤、view context 忙碌及尚未確認共享權限都保留 pending；只有相符的 savedID 或已知輸入／權限驗證失敗的 rejectedID 能清除，摘要更新或無關回覆不能清除。手錶顯示待確認，使用者主動重試；不在背景自動提交。明確拒絕後可重新確認新的交易。
+- `WatchLedgerBridge` 的儲存回覆在成功後直接呼叫小工具 coordinator 更新 App Group 快取並要求 WidgetKit reload，不依賴 foreground scene、`onAppear` 或 debounce 通知。回覆成功只代表交易已提交；摘要／小工具更新失敗不能把成功改成拒絕。
+- 只傳送所選帳本的摘要、帳戶／分類名稱與 ID、付款人及分攤成員；不傳備註、其他帳本交易或 CloudKit 憑證。取消選擇或刪除本機個人資料會移除 Watch 選擇，下一次可傳送的 context 清除手錶摘要；離線手錶無法立即撤回先前收到的資料，pending 仍保留以確認既有提交結果。
+- `WatchLedgerTests` 覆蓋重試只建立一筆交易及稽核、作廢後延遲重試、UUID／Decimal 保留、無關回覆、舊摘要排序、非法輸入、帳本／幣別／成員變動、無效帳戶／分類、唯讀、封存及本機重設；亦驗證有未完成編輯時查核已提交交易、未儲存 insert 不算回執、暫時錯誤保留 pending、直接 refresh 不傳未儲存摘要，以及未啟動 scene observers 時儲存仍更新小工具快取。真實 WatchConnectivity 配對驗收見 [MVP.md](MVP.md)。
+
+### iOS 建置
+
 ```bash
 open SharedLedger.xcodeproj
 ```

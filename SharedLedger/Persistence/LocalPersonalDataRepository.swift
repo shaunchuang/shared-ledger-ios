@@ -11,6 +11,7 @@ struct LocalPersonalDataSummary: Equatable, Sendable {
     /// 記著幾個群組最後一次確認到的 iCloud 寫入權限。
     let cachedPermissionCount: Int
     var hasWidgetData: Bool = false
+    var hasWatchData: Bool = false
 
     static let empty = LocalPersonalDataSummary(
         identityMappingCount: 0,
@@ -19,7 +20,7 @@ struct LocalPersonalDataSummary: Equatable, Sendable {
     )
 
     var isEmpty: Bool {
-        identityMappingCount == 0 && !hasNotificationData && cachedPermissionCount == 0 && !hasWidgetData
+        identityMappingCount == 0 && !hasNotificationData && cachedPermissionCount == 0 && !hasWidgetData && !hasWatchData
     }
 }
 
@@ -37,17 +38,20 @@ struct LocalPersonalDataRepository {
     private let notificationStore: LedgerNotificationStore
     private let permissionCache: CloudPermissionCache
     private let widgetStore: LedgerWidgetStore
+    private let watchDefaults: UserDefaults
 
     init(
         persistence: PersistenceController = .shared,
         notificationStore: LedgerNotificationStore = .standard,
         permissionCache: CloudPermissionCache? = nil,
-        widgetStore: LedgerWidgetStore = .shared
+        widgetStore: LedgerWidgetStore = .shared,
+        watchDefaults: UserDefaults = .standard
     ) {
         self.persistence = persistence
         self.notificationStore = notificationStore
         self.permissionCache = permissionCache ?? persistence.cloudPermissionCache
         self.widgetStore = widgetStore
+        self.watchDefaults = watchDefaults
     }
 
     func summary() -> LocalPersonalDataSummary {
@@ -55,7 +59,8 @@ struct LocalPersonalDataRepository {
             identityMappingCount: identities().count,
             hasNotificationData: notificationStore.hasStoredData,
             cachedPermissionCount: permissionCache.storedGroupCount,
-            hasWidgetData: widgetStore.hasStoredData
+            hasWidgetData: widgetStore.hasStoredData,
+            hasWatchData: !(watchDefaults.string(forKey: WatchLedgerService.selectionKey) ?? "").isEmpty
         )
     }
 
@@ -77,6 +82,8 @@ struct LocalPersonalDataRepository {
         notificationStore.reset()
         permissionCache.clearAll()
         try widgetStore.reset()
+        watchDefaults.removeObject(forKey: WatchLedgerService.selectionKey)
+        NotificationCenter.default.post(name: WatchLedgerService.selectionChanged, object: nil)
         WidgetCenter.shared.reloadTimelines(ofKind: LedgerWidgetStore.widgetKind)
     }
 

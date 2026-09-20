@@ -7,6 +7,29 @@ import Foundation
 /// 用列舉而不是字串常數，是為了讓 `Text(.settingsTitle)` 這種寫法在編譯期就擋掉拼錯的鍵，
 /// 而 `CaseIterable` 讓完整性測試不需要另外維護一份清單。
 enum LedgerStringKey: String, CaseIterable, Sendable {
+    // MARK: - Apple Watch
+    case watchTitle = "watch.title"
+    case watchInvalid = "watch.invalid"
+    case watchChanged = "watch.changed"
+    case watchBusy = "watch.busy"
+    case watchSetup = "watch.setup"
+    case watchTooLarge = "watch.tooLarge"
+    case watchDisconnected = "watch.disconnected"
+    case watchPending = "watch.pending"
+    case watchSaved = "watch.saved"
+    case watchRetry = "watch.retry"
+    case watchRefresh = "watch.refresh"
+    case watchBackspace = "watch.backspace"
+    case watchPayer = "watch.payer"
+    case watchEqualSplit = "watch.equalSplit"
+    case watchConfirm = "watch.confirm"
+    case watchBook = "watch.book"
+    case watchNone = "watch.none"
+    case watchStorageError = "watch.storageError"
+    case watchSettingsIntro = "watch.settings.intro"
+    case watchSettingsPrivacy = "watch.settings.privacy"
+    case watchSettingsInstructions = "watch.settings.instructions"
+
     // MARK: - 桌面小工具
     case widgetTitle = "widget.title"
     case widgetDescription = "widget.description"
