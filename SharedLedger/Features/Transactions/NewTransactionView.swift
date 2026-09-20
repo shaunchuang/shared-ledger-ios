@@ -23,6 +23,8 @@ struct NewTransactionView: View {
     @State private var errorMessage: String?
     @FocusState private var focusedField: Field?
     @State private var didPrefill = false
+    @State private var isSelectingCategory = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(
         book: LedgerBook,
@@ -113,7 +115,7 @@ struct NewTransactionView: View {
 
     var body: some View {
         Form {
-            if focusesAmount, accounts.isEmpty, let group = book.group {
+            if accounts.isEmpty, let group = book.group {
                 Section {
                     NavigationLink {
                         AccountsView(group: group)
@@ -124,42 +126,50 @@ struct NewTransactionView: View {
                     Text(.transactionFormAccountsEmpty)
                 }
             }
-            if focusesAmount {
-                Section {
-                    Text(verbatim: "\(book.group?.name ?? "") · \(book.name ?? "")")
-                        .font(.subheadline.weight(.semibold))
-                } header: {
-                    Text(.widgetSettingsBook)
+            Section {
+                Label {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(verbatim: book.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string())
+                            .font(.headline)
+                        Text(verbatim: book.group?.name ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "book.closed.fill")
+                        .foregroundStyle(LedgerTheme.primary)
                 }
+                .accessibilityElement(children: .combine)
+            } header: {
+                Text(.transactionDetailFieldBook)
             }
             Section {
-                Picker(selection: $draft.kind) {
-                    ForEach(EntryKind.userCreatableCases, id: \.self) { kind in
-                        Text(kind.displayNameKey).tag(kind)
-                    }
-                } label: {
-                    Text(.transactionFormFieldKind)
+                if dynamicTypeSize.isAccessibilitySize {
+                    kindPicker.pickerStyle(.menu)
+                } else {
+                    kindPicker.pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
-                .accessibilityLabel(Text(.transactionFormFieldKind))
             }
             .listRowBackground(Color.clear)
 
             Section {
-                HStack {
-                    Text(.transactionFormFieldAmount)
-                    Spacer()
-                    // 貨幣代碼是資料，不翻譯。
-                    Text(verbatim: currencyCode)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    // 標籤留空：欄位名稱已經在同一列的左側，這裡只需要提示輸入格式。
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(.transactionFormFieldAmount)
+                            .font(.subheadline)
+                        Spacer()
+                        Text(verbatim: currencyCode)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
                     TextField("", text: $draft.amountText, prompt: Text(verbatim: "0"))
+                        .font(.largeTitle.weight(.bold).monospacedDigit())
                         .keyboardType(amountKeyboardType)
                         .focused($focusedField, equals: .amount)
-                        .multilineTextAlignment(.trailing)
                         .accessibilityLabel(Text(.transactionFormFieldAmount))
+                        .accessibilityIdentifier("transaction.amount")
                 }
+                .padding(.vertical, 8)
                 DatePicker(selection: $draft.date, displayedComponents: .date) {
                     Text(.transactionFormFieldDate)
                 }
@@ -199,14 +209,28 @@ struct NewTransactionView: View {
                             Text(.transactionFormFieldAccount)
                         }
                     }
-                    Picker(selection: $draft.categoryID) {
-                        Text(.transactionFormCategoryNone).tag(UUID?.none)
-                        ForEach(availableCategories, id: \.objectID) { category in
-                            Text(verbatim: categoryLabel(category)).tag(category.id)
-                        }
+                    Button {
+                        focusedField = nil
+                        isSelectingCategory = true
                     } label: {
-                        Text(.transactionFormFieldCategory)
+                        LedgerAdaptiveStack {
+                            Text(.transactionFormFieldCategory)
+                                .foregroundStyle(.primary)
+                            HStack {
+                                Text(verbatim: selectedCategoryLabel)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .accessibilityHidden(true)
+                            }
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("transaction.category")
                 } header: {
                     Text(.transactionFormSectionAccountAndCategory)
                 }
@@ -330,6 +354,7 @@ struct NewTransactionView: View {
                 : LedgerStringKey.transactionFormTitleEdit
         ))
         .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -354,11 +379,16 @@ struct NewTransactionView: View {
             }
         }
         .task {
-            guard entry == nil, focusesAmount else { return }
-            // Wait for the sheet presentation; cancellation must not focus a
-            // dismissed form or reset any of the user's input.
+            guard entry == nil, focusesAmount, !accounts.isEmpty else { return }
             do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
             focusedField = .amount
+        }
+        .sheet(isPresented: $isSelectingCategory) {
+            NavigationStack {
+                TransactionCategorySelectionView(categories: availableCategories, selection: $draft.categoryID) {
+                    isSelectingCategory = false
+                }
+            }
         }
         .onChange(of: draft.amountText) { oldValue, newValue in
             syncSinglePaymentAmount(oldValue: oldValue, newValue: newValue)
@@ -589,15 +619,22 @@ struct NewTransactionView: View {
         }.reduce(0, +)
     }
 
-    private func categoryLabel(_ category: LedgerCategory) -> String {
-        var depth = 0
-        var current = category.parent
-        while let parent = current {
-            depth += 1
-            current = parent.parent
+    private var kindPicker: some View {
+        Picker(selection: $draft.kind) {
+            ForEach(EntryKind.userCreatableCases, id: \.self) { kind in
+                Text(kind.displayNameKey).tag(kind)
+            }
+        } label: {
+            Text(.transactionFormFieldKind)
         }
-        let prefix = String(repeating: "　", count: depth)
-        return prefix + (category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string())
+        .accessibilityLabel(Text(.transactionFormFieldKind))
+    }
+
+    private var selectedCategoryLabel: String {
+        guard let category = availableCategories.first(where: { $0.id == draft.categoryID }) else {
+            return LedgerStringKey.transactionFormCategoryNone.string()
+        }
+        return transactionCategoryPath(category)
     }
 
     private func save() {
@@ -625,5 +662,148 @@ struct NewTransactionView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+
+/// Capture the destination at the tap, even if a background update changes the selection.
+struct TransactionComposerRequest: Identifiable {
+    let id = UUID()
+    let book: LedgerBook
+    let kind: EntryKind
+}
+
+struct TransactionQuickEntryButtons: View {
+    let onSelect: (EntryKind) -> Void
+
+    var body: some View {
+        LedgerAdaptiveStack(horizontalSpacing: 10) {
+            action(.expense, title: .transactionQuickEntryExpense, tint: LedgerTheme.coral)
+            action(.income, title: .transactionQuickEntryIncome, tint: LedgerTheme.primaryStrong)
+        }
+    }
+
+    private func action(_ kind: EntryKind, title: LedgerStringKey, tint: Color) -> some View {
+        Button { onSelect(kind) } label: {
+            Label(title, systemImage: kind.systemImage)
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .foregroundStyle(tint)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                .contentShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private func transactionCategoryPath(_ category: LedgerCategory) -> String {
+    var names: [String] = []
+    var current: LedgerCategory? = category
+    var visited: Set<NSManagedObjectID> = []
+    while let node = current, visited.insert(node.objectID).inserted {
+        names.append(node.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string())
+        current = node.parent
+    }
+    return names.reversed().joined(separator: " › ")
+}
+
+private struct TransactionCategorySelectionView: View {
+    let categories: [LedgerCategory]
+    @Binding var selection: UUID?
+    let closePicker: () -> Void
+    var parent: LedgerCategory? = nil
+    @State private var search = ""
+
+    private var keyword: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var matches: [LedgerCategory] {
+        if !keyword.isEmpty {
+            return categories.filter { transactionCategoryPath($0).localizedStandardContains(keyword) }
+        }
+        if let parent {
+            return categories.filter { $0.parent?.objectID == parent.objectID }
+        }
+        let availableIDs = Set(categories.map(\.objectID))
+        return categories.filter { category in
+            // An archived selection may be present without its ancestors while editing.
+            guard let parentID = category.parent?.objectID else { return true }
+            return !availableIDs.contains(parentID)
+        }
+    }
+
+    var body: some View {
+        List {
+            if keyword.isEmpty {
+                Button {
+                    selection = parent?.id
+                    closePicker()
+                } label: {
+                    row(parent.map {
+                        LedgerStringKey.categoryPickerUseParent.string(arguments: [
+                            $0.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string()
+                        ])
+                    } ?? LedgerStringKey.transactionFormCategoryNone.string(), selected: selection == parent?.id)
+                }
+                .accessibilityAddTraits(selection == parent?.id ? .isSelected : [])
+            }
+            ForEach(matches, id: \.objectID) { category in
+                if keyword.isEmpty, categories.contains(where: { $0.parent?.objectID == category.objectID }) {
+                    NavigationLink {
+                        TransactionCategorySelectionView(
+                            categories: categories, selection: $selection,
+                            closePicker: closePicker, parent: category
+                        )
+                    } label: {
+                        row(category.name ?? LedgerStringKey.commonPlaceholderUnnamedCategory.string(),
+                            selected: selection == category.id)
+                    }
+                    .accessibilityAddTraits(selection == category.id ? .isSelected : [])
+                } else {
+                    Button {
+                        selection = category.id
+                        closePicker()
+                    } label: {
+                        row(transactionCategoryPath(category), selected: selection == category.id)
+                    }
+                    .accessibilityAddTraits(selection == category.id ? .isSelected : [])
+                }
+            }
+            if matches.isEmpty {
+                ContentUnavailableView {
+                    Label(.categoryPickerEmptyTitle, systemImage: "magnifyingglass")
+                } description: {
+                    Text(.categoryPickerEmptyMessage)
+                }
+            }
+        }
+        .navigationTitle(parent?.name ?? LedgerStringKey.transactionFormFieldCategory.string())
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: Text(.categoryPickerSearchPrompt))
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: closePicker) { Text(.commonActionCancel) }
+            }
+        }
+    }
+
+    private func row(_ title: String, selected: Bool) -> some View {
+        HStack(spacing: 12) {
+            Text(verbatim: title)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if selected {
+                Image(systemName: "checkmark")
+                    .foregroundStyle(LedgerTheme.primary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }

@@ -112,6 +112,36 @@ final class WatchLedgerTests: XCTestCase {
         XCTAssertNil(try f.service.context().snapshot)
     }
 
+    func testFullDefaultCatalogReachesWatchAndSavesFourthLevelCategory() throws {
+        let f = try fixture()
+        let repository = CategoryRepository(persistence: f.persistence)
+        let categories = repository.availableCategories(in: f.book)
+        let bridge = f.bridge()
+        let refresh = bridge.reply(to: WatchLedgerMessage())
+        let context = try XCTUnwrap(refresh.context)
+        XCTAssertNil(refresh.error)
+        XCTAssertTrue(context.canCreate)
+        // The expanded phone catalog must not trigger the bridge's size fallback.
+        XCTAssertEqual(Set(context.categories.map(\.id)), Set(categories.compactMap(\.id)))
+        XCTAssertLessThanOrEqual(try JSONEncoder().encode(context).count, 55_000)
+
+        let oilChange = try XCTUnwrap(categories.first {
+            $0.name == LedgerStringKey.defaultCategoryTransportCarMaintenanceOil.string()
+        })
+        XCTAssertEqual(oilChange.parent?.name, LedgerStringKey.defaultCategoryTransportMaintenance.string())
+        XCTAssertEqual(oilChange.parent?.parent?.name, LedgerStringKey.defaultCategoryTransportCar.string())
+        XCTAssertEqual(oilChange.parent?.parent?.parent?.name, LedgerStringKey.defaultCategoryTransport.string())
+        let request = f.request(categoryID: try XCTUnwrap(oilChange.id))
+        let reply = bridge.reply(to: WatchLedgerMessage(request: request))
+        XCTAssertEqual(reply.savedID, request.id)
+        XCTAssertNil(reply.error)
+        XCTAssertTrue(reply.context?.canCreate == true)
+        let entries = try f.persistence.container.viewContext.fetch(NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry"))
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.category, oilChange)
+        XCTAssertEqual(entries.first?.book, f.book)
+    }
+
     func testRetryIDCannotAcknowledgeAnotherBook() throws {
         let f = try fixture()
         let request = f.request()
