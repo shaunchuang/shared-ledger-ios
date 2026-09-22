@@ -13,6 +13,8 @@ struct RootTabView: View {
     ) private var groups: FetchedResults<LedgerGroup>
 
     @State private var identityRequest: MemberIdentityRequest?
+    @State private var pendingWidgetRoute: LedgerWidgetRoute?
+    @State private var widgetRoute: LedgerWidgetRoute?
 
     private var identitySignature: String {
         groups.map { group in
@@ -58,11 +60,16 @@ struct RootTabView: View {
         .tint(LedgerTheme.primary)
         .toolbarBackground(LedgerTheme.surface.opacity(0.94), for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
-        .onAppear(perform: presentIdentityResolutionIfNeeded)
+        .onAppear(perform: presentNextSheet)
         .onChange(of: identitySignature) { _, _ in
-            presentIdentityResolutionIfNeeded()
+            presentNextSheet()
         }
-        .sheet(item: $identityRequest) { request in
+        .onOpenURL { url in
+            guard let route = LedgerWidgetRoute(url: url), route != widgetRoute else { return }
+            pendingWidgetRoute = route
+            presentNextSheet()
+        }
+        .sheet(item: $identityRequest, onDismiss: presentNextSheet) { request in
             NavigationStack {
                 MemberIdentitySelectionView(group: request.group) {
                     identityRequest = nil
@@ -70,13 +77,32 @@ struct RootTabView: View {
             }
             .interactiveDismissDisabled()
         }
+        .sheet(item: $widgetRoute, onDismiss: presentNextSheet) { route in
+            NavigationStack {
+                switch route {
+                case .settings:
+                    WidgetSettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button { widgetRoute = nil } label: { Text(.commonActionDone) }
+                            }
+                        }
+                case let .newEntry(bookID, kind):
+                    WidgetQuickEntryView(bookID: bookID, kind: kind)
+                }
+            }
+        }
     }
 
-    private func presentIdentityResolutionIfNeeded() {
-        guard identityRequest == nil else { return }
+    private func presentNextSheet() {
+        guard identityRequest == nil, widgetRoute == nil else { return }
         let repository = CurrentMemberIdentityRepository()
-        guard let group = groups.first(where: { repository.needsResolution(for: $0) }) else { return }
-        identityRequest = MemberIdentityRequest(id: group.objectID, group: group)
+        if let group = groups.first(where: { repository.needsResolution(for: $0) }) {
+            identityRequest = MemberIdentityRequest(id: group.objectID, group: group)
+        } else if let pendingWidgetRoute {
+            widgetRoute = pendingWidgetRoute
+            self.pendingWidgetRoute = nil
+        }
     }
 }
 

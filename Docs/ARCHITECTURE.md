@@ -144,6 +144,19 @@ V4 資料修復對每個既有分類採以下規則：
 
 ## Core Data 與 Concurrency
 
+### WidgetKit 與快速記帳
+
+- `SharedLedgerWidgets` 是最低 iOS 17 的 WidgetKit extension，Bundle ID 為 `com.shaunchuang.SharedLedger.Widgets`。App target 依賴並嵌入 `.appex`，現有 scheme 的 build、test 與 archive 都會建置 extension。
+- App 與 extension 共用 `group.com.shaunchuang.SharedLedger` App Group。Apple Developer 帳號必須註冊此群組，並將 App 與 extension 的 App IDs 都加入；在兩個 target 的 Signing & Capabilities 確認同一 Team、App Groups 與更新後的 provisioning profiles。CI 的無簽章 archive 無法驗證此步驟。
+- `LedgerWidgetSnapshotService` 只投影選定帳本的本月收支日彙總，透過 `LedgerWidgetStore` 原子替換 App Group 中的 JSON。金額仍為 `Decimal`，顯示共用 `LedgerCurrency`；不搬移 Core Data stores，不新增 model version，不讓 extension 讀寫 CloudKit 或帳務資料庫。
+- JSON 只包含版本、群組／帳本名稱、帳本 UUID、貨幣、月份、時區、更新時間與每日收支／筆數，不含備註、帳戶、成員或憑證。檔案使用首次解鎖後的資料保護，小工具內容標示 `privacySensitive`；App Group 不可用時顯示未設定狀態，不退回不共享的 defaults。
+- App 前景啟動、view context 儲存、背景資料合併及時區變更時更新；儲存／合併通知合併為一次更新，有未儲存變更時不發布。WidgetKit 排程重讀快取並預載午夜切換，系統決定實際刷新時機。跨月／時區的舊快取不冒充新期間資料。
+- 取消選擇、帳本封存／移除後清除快取；「刪除本機個人資料」亦移除小工具選擇與摘要。暫時讀取失敗保留帶時間戳記的最後成功快取。
+- `sharedledger://new-entry?book=<UUID>&kind=expense|income` 僅開啟草稿；`sharedledger://widget-settings` 開啟小工具設定。`LedgerWidgetRoute` 嚴格解析連結，App 重新驗證該帳本及寫入權限，不以失效的 UUID 自動改記其他帳本。沒有任何 URL 能直接寫入金額或儲存交易。
+- `LedgerWidgetTests` 驗證連結、帳本／日期範圍、作廢／轉帳排除、修改後重算、Decimal 快取、毀損／未支援版本、午夜／月界／夏令時間、封存清除及個人資料重設。主畫面與簽章驗收依 [MVP.md](MVP.md) 的小工具驗收項目執行。
+
+### Context 與權限解析
+
 - `NSManagedObject` 不是 Sendable，不可跨 actor 或 queue 直接傳遞。
 - 不可用 `@unchecked Sendable` 壓掉 `NSManagedObject` 的 concurrency 問題。
 - 畫面使用的 view context 資料以 `@MainActor` 管理。
@@ -219,6 +232,21 @@ V9 一樣沒有新增 record type，只在三個既有 record type 上各加一�
 - 新增第三方分析、crash reporting、廣告、帳號或後端服務前，必須重新稽核資料流、隱私政策與 App Privacy 申報。
 
 ## 建置與測試
+
+### Apple Watch companion App
+
+- `SharedLedgerWatch` 為單一 target SwiftUI watchOS 10 App，Bundle ID `com.shaunchuang.SharedLedger.watchkitapp`，`WKCompanionAppBundleIdentifier` 指向 `com.shaunchuang.SharedLedger`。iOS App 依賴 Watch target，並將其嵌入 `Watch` 目錄；共用專案既有 Team，仍須取得 Watch App ID 的 provisioning profile。沒有新增 CloudKit container 或資料模型版本。
+- 在 Xcode 選 `SharedLedgerWatch` scheme 可建置 Watch simulator。CI 額外執行 `xcodebuild build -scheme SharedLedgerWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO`，現有 iOS build-for-testing 與 archive 也會建置嵌入的 Watch App。
+- `WatchLedgerMessage` 定義版本化、Codable 的摘要、選項、儲存請求與回覆。`WatchLedgerBridge` 在 AppDelegate 啟動，以 WatchConnectivity `updateApplicationContext` 傳送可覆蓋的最新摘要，以 `sendMessageData`／reply handler 處理明確儲存。單一帳本 context 超過 55 KB 時回傳使用 iPhone 的提示，不靜默截斷選項。
+- Watch 不直接寫入 Core Data。`WatchLedgerService` 在 main actor 重新解析所選帳本、目前成員、全部分攤成員與幣別，並交給既有 `EntryRepository` 驗證帳戶／分類、權限、付款、分攤、金額精度與稽核。view context 有其他待儲存變更時，暫停新的寫入及所有摘要讀取（包含手錶主動 refresh 的回覆），保留帶時間戳記的既有摘要，不儲存或 rollback 使用者的編輯。
+- 每次手錶確認產生 UUID，先原子保存到手錶 Application Support 的 pending 檔案再傳送。iPhone 使用此 UUID 作為 `LedgerEntry.id`，在同一次 `context.save()` 寫入交易、付款、分攤及稽核，讓「儲存成功但回覆遺失」重試仍能查到原結果。Repository 拒絕重複 ID；Watch service 的同 ID／同帳本回覆不再次寫入，後續被作廢也不復活。沒有新增 CloudKit unique constraint。
+- 重試先用獨立的 main-queue context 查核已提交的交易，再檢查 view context 是否忙碌；未儲存的 insert／scope 修改不能冒充或改變成功回執。因此原交易已入帳時，即使 iPhone 有未完成編輯，仍可確認原結果而不碰觸那些編輯。
+- 傳輸、儲存、查詢、未知錯誤、view context 忙碌及尚未確認共享權限都保留 pending；只有相符的 savedID 或已知輸入／權限驗證失敗的 rejectedID 能清除，摘要更新或無關回覆不能清除。手錶顯示待確認，使用者主動重試；不在背景自動提交。明確拒絕後可重新確認新的交易。
+- `WatchLedgerBridge` 的儲存回覆在成功後直接呼叫小工具 coordinator 更新 App Group 快取並要求 WidgetKit reload，不依賴 foreground scene、`onAppear` 或 debounce 通知。回覆成功只代表交易已提交；摘要／小工具更新失敗不能把成功改成拒絕。
+- 只傳送所選帳本的摘要、帳戶／分類名稱與 ID、付款人及分攤成員；不傳備註、其他帳本交易或 CloudKit 憑證。取消選擇或刪除本機個人資料會移除 Watch 選擇，下一次可傳送的 context 清除手錶摘要；離線手錶無法立即撤回先前收到的資料，pending 仍保留以確認既有提交結果。
+- `WatchLedgerTests` 覆蓋重試只建立一筆交易及稽核、作廢後延遲重試、UUID／Decimal 保留、無關回覆、舊摘要排序、非法輸入、帳本／幣別／成員變動、無效帳戶／分類、唯讀、封存及本機重設；亦驗證有未完成編輯時查核已提交交易、未儲存 insert 不算回執、暫時錯誤保留 pending、直接 refresh 不傳未儲存摘要，以及未啟動 scene observers 時儲存仍更新小工具快取。真實 WatchConnectivity 配對驗收見 [MVP.md](MVP.md)。
+
+### iOS 建置
 
 ```bash
 open SharedLedger.xcodeproj

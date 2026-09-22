@@ -58,6 +58,29 @@ struct SettingsView: View {
             LedgerCard(padding: 0) {
                 VStack(spacing: 0) {
                     NavigationLink {
+                        WatchSettingsView()
+                    } label: {
+                        SettingRow(title: .watchTitle, detail: .watchSettingsIntro,
+                                   icon: "applewatch", tint: LedgerTheme.primary)
+                    }
+                    .buttonStyle(.plain)
+                    Divider().padding(.leading, 68)
+
+                    NavigationLink {
+                        WidgetSettingsView()
+                    } label: {
+                        SettingRow(
+                            title: .widgetTitle,
+                            detail: .widgetSettingsIntro,
+                            icon: "rectangle.on.rectangle",
+                            tint: LedgerTheme.primary
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider().padding(.leading, 68)
+
+                    NavigationLink {
                         NotificationSettingsView(coordinator: notifications)
                     } label: {
                         NotificationSettingsRow(coordinator: notifications)

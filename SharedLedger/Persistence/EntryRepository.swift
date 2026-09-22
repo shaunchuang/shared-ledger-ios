@@ -81,7 +81,8 @@ struct EntryRepository {
         in book: LedgerBook,
         accounts: [LedgerAccount],
         categories: [LedgerCategory],
-        members: [Member]
+        members: [Member],
+        identifier: UUID? = nil
     ) throws -> LedgerEntry {
         let values = try validatedValues(
             from: draft,
@@ -94,11 +95,16 @@ struct EntryRepository {
             .requireTransactionWrite(in: values.group)
 
         let context = persistence.container.viewContext
+        if let identifier {
+            let existing = NSFetchRequest<LedgerEntry>(entityName: "LedgerEntry")
+            existing.predicate = NSPredicate(format: "id == %@", identifier as CVarArg)
+            guard try context.count(for: existing) == 0 else { throw EntryError.invalidDraft }
+        }
         let now = Date()
         let store = persistence.store(for: book)
         let entry = LedgerEntry(context: context)
         context.assign(entry, to: store)
-        entry.id = UUID()
+        entry.id = identifier ?? UUID()
         entry.createdAt = now
         apply(values, to: entry, updatedAt: now)
         stampRevision(of: entry, with: values, in: store)
