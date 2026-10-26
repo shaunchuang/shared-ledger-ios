@@ -350,6 +350,9 @@ final class PersistenceController {
     func prepareShare(for group: LedgerGroup) async throws -> (CKShare, CKContainer) {
         let shareTitle = group.name ?? LedgerStringKey.groupShareDefaultTitle.string()
         let objectID = group.objectID
+        // An in-memory UI test store has nothing to share, and an unsigned CI build
+        // is killed by CloudKit as soon as it creates a container.
+        guard !Self.isRunningUITests else { throw SharingError.noICloudAccount }
         let cloudContainer = CKContainer(identifier: Self.cloudKitContainerIdentifier)
 
         switch try await accountStatus(for: cloudContainer) {

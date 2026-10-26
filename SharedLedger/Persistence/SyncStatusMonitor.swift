@@ -42,6 +42,9 @@ final class SyncStatusMonitor: ObservableObject {
     ) {
         self.container = container
         self.accountStatusProvider = accountStatusProvider ?? {
+            // CI builds the UI tests unsigned, and CloudKit kills a process that has
+            // no iCloud entitlement the moment it creates a container.
+            guard !PersistenceController.isRunningUITests else { return .noAccount }
             let container = CKContainer(
                 identifier: PersistenceController.cloudKitContainerIdentifier
             )
