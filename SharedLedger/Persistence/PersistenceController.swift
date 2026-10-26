@@ -9,10 +9,22 @@ final class PersistenceController {
     /// `assertionFailure`, which traps before any test can run. Tests build their
     /// own `PersistenceController(inMemory: true)`, so the shared instance only has
     /// to launch cleanly here.
-    static let shared = PersistenceController(inMemory: isRunningTests)
+    ///
+    /// UI tests drive a separate app process that has no XCTest configuration, so
+    /// they opt in with the `-ui-testing` launch argument. Each launch then starts
+    /// from an empty store regardless of what the simulator's iCloud account holds.
+    static let shared = PersistenceController(inMemory: isRunningTests || isRunningUITests)
 
     private static var isRunningTests: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    static var isRunningUITests: Bool {
+        #if DEBUG
+        CommandLine.arguments.contains("-ui-testing")
+        #else
+        false
+        #endif
     }
     /// 這個 App 的 CloudKit 容器。同步狀態監看也要問同一個容器的帳號狀態，
     /// 所以識別碼在這裡只保留一份。

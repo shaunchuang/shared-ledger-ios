@@ -374,6 +374,7 @@ struct GroupDetailView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("groupDetail.accounts")
                     Divider().padding(.leading, 68)
                     NavigationLink {
                         CategoriesView(group: group)

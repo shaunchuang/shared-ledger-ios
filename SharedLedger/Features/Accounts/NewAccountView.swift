@@ -18,6 +18,7 @@ struct NewAccountView: View {
             Section {
                 TextField("", text: $draft.name, prompt: Text(.accountNewNamePlaceholder))
                     .accessibilityLabel(Text(.accountNewSectionName))
+                    .accessibilityIdentifier("newAccount.name")
             } header: {
                 Text(.accountNewSectionName)
             }
@@ -63,6 +64,7 @@ struct NewAccountView: View {
                 Button(action: createAccount) {
                     Text(.commonActionAdd)
                 }
+                .accessibilityIdentifier("newAccount.save")
                 .disabled(!draft.canCreate)
             }
         }
