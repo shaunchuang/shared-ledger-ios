@@ -698,6 +698,7 @@ struct TransactionQuickEntryButtons: View {
                 .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("quickEntry.\(kind.rawValue)")
     }
 }
 

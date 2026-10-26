@@ -22,11 +22,10 @@ final class CoreFlowUITests: XCTestCase {
         let tabBar = app.tabBars.firstMatch
         tabBar.buttons.element(boundBy: 1).tap()
 
-        let addEntry = app.buttons["transactions.add"]
-        XCTAssertTrue(addEntry.waitForExistence(timeout: 10))
-        addEntry.tap()
-        let addExpense = app.buttons["transactions.add.expense"]
-        XCTAssertTrue(addExpense.waitForExistence(timeout: 5))
+        // The quick-entry button under the list, not the toolbar "+" menu: on the
+        // iOS 18 simulator CI uses, XCTest cannot compute a hit point for that menu.
+        let addExpense = app.buttons["quickEntry.expense"]
+        XCTAssertTrue(addExpense.waitForExistence(timeout: 10))
         addExpense.tap()
 
         let amount = app.textFields["transaction.amount"]
@@ -36,7 +35,7 @@ final class CoreFlowUITests: XCTestCase {
 
         let save = app.buttons["transaction.save"]
         XCTAssertTrue(save.isEnabled)
-        save.tap()
+        tap(save)
 
         // The list was empty before, so any row showing the amount is the new entry.
         XCTAssertTrue(
@@ -97,5 +96,15 @@ final class CoreFlowUITests: XCTestCase {
 
         app.buttons["newAccount.save"].tap()
         XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
+    }
+
+    /// Toolbar buttons can exist with no hit point on older simulators; tapping
+    /// the element's centre still reaches them.
+    private func tap(_ element: XCUIElement) {
+        if element.isHittable {
+            element.tap()
+        } else {
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
     }
 }
