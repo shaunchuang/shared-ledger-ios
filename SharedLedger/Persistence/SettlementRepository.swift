@@ -69,14 +69,13 @@ struct SettlementRepository {
     func snapshot(in book: LedgerBook) throws -> SettlementSnapshot {
         guard let group = book.group else { throw RepositoryError.missingGroup }
         let currencyCode = LedgerCurrency.normalizedCode(group.currencyCode)
-        let voidedEntryIDs = EntryRepository(persistence: persistence).voidedEntryIDs(in: group)
         let entries = book.entries as? Set<LedgerEntry> ?? []
 
         var transactions: [SettlementTransactionInput] = []
         var skippedEntryCount = 0
 
         for entry in entries {
-            guard entry.id.map({ !voidedEntryIDs.contains($0) }) ?? true,
+            guard entry.voidedAt == nil,
                   let rawKind = entry.kind,
                   let kind = EntryKind(rawValue: rawKind),
                   kind == .expense || kind == .income else {
@@ -311,10 +310,9 @@ struct SettlementRepository {
         context.assign(audit, to: persistence.store(for: book))
         audit.id = UUID()
         audit.action = action
-        audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
-            .currentMember(in: group)?
-            .displayName
-            ?? LedgerStringKey.defaultMemberCurrentUser.string()
+        audit.recordActor(
+            CurrentMemberIdentityRepository(persistence: persistence).currentMember(in: group)
+        )
         audit.createdAt = date
         audit.summary = payload.encodedString() ?? "結算紀錄"
         audit.group = group

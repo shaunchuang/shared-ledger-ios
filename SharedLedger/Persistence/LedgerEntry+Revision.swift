@@ -63,8 +63,8 @@ extension LedgerEntry {
         EntryKind(rawValue: kind ?? "") ?? .expense
     }
 
-    /// - Parameter isVoided: 由呼叫端提供，因為作廢狀態存在群組的稽核紀錄裡，
-    ///   逐筆交易去查會把整份稽核紀錄讀進記憶體。
+    /// - Parameter isVoided: 仍由呼叫端提供而不是直接讀 `voidedAt`，因為衝突掃描要能
+    ///   對還沒寫進 store 的假想狀態求值，測試也才給得出這個輸入。
     func consistency(isVoided: Bool) -> EntryConsistency {
         EntryConsistency.evaluate(
             kind: entryKind,

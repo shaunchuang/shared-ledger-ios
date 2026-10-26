@@ -5,6 +5,8 @@ import XCTest
 final class LedgerNotificationPlannerTests: XCTestCase {
     private let groupID = UUID()
     private let bookID = UUID()
+    /// 這個群組裡「目前這位使用者」對應的成員。
+    private let currentMemberID = UUID()
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     fileprivate static let zhHant = Locale(identifier: "zh-Hant")
@@ -47,11 +49,45 @@ final class LedgerNotificationPlannerTests: XCTestCase {
     func testOwnActionsAreNotNotified() {
         // 自己按下儲存的當下就知道發生了什麼，再送一則通知只是噪音。
         let plan = LedgerNotificationPlanner.plan(
-            inputs(events: [makeEvent(actor: "小明")])
+            inputs(events: [makeEvent(actorMemberID: currentMemberID, actor: "小明")])
         )
 
         XCTAssertTrue(plan.requests.isEmpty)
         XCTAssertEqual(plan.digest.handledEventIDs.count, 1)
+    }
+
+    func testASameNamedMemberStillGetsNotified() {
+        // 群組裡有兩位「小明」時，另一位小明記的帳仍然要通知。V10 之前這個判斷只有
+        // 名稱可比，這一則會被當成使用者自己的操作而靜音。
+        let plan = LedgerNotificationPlanner.plan(
+            inputs(events: [makeEvent(actorMemberID: UUID(), actor: "小明")])
+        )
+
+        XCTAssertEqual(plan.requests.count, 1)
+    }
+
+    func testARenamedCurrentMemberDoesNotNotifyThemselves() {
+        // 使用者把自己的顯示名稱改掉之後，稽核事件上留的是改名前的名稱快照。
+        // 認識別碼就不受影響；只認名稱的話，使用者會開始收到自己每一筆操作的通知。
+        let plan = LedgerNotificationPlanner.plan(
+            inputs(events: [makeEvent(actorMemberID: currentMemberID, actor: "改名前的小明")])
+        )
+
+        XCTAssertTrue(plan.requests.isEmpty)
+    }
+
+    func testEventsWithoutAnActorIDStillFallBackToTheName() {
+        // V10 之前寫下的事件、以及還沒更新的裝置寫出來的事件沒有 actorMemberID。
+        // 把「沒有識別碼」當成「不是我做的」，會讓使用者收到自己每一筆舊操作的通知。
+        let own = LedgerNotificationPlanner.plan(
+            inputs(events: [makeEvent(actor: "小明")])
+        )
+        XCTAssertTrue(own.requests.isEmpty)
+
+        let other = LedgerNotificationPlanner.plan(
+            inputs(events: [makeEvent(actor: "小美")])
+        )
+        XCTAssertEqual(other.requests.count, 1)
     }
 
     func testStaleEventsAreNotNotified() {
@@ -319,6 +355,7 @@ final class LedgerNotificationPlannerTests: XCTestCase {
         LedgerNotificationPlanner.Inputs(
             events: events,
             settlements: settlements,
+            currentActorIDs: [groupID: currentMemberID],
             currentActorNames: [groupID: "小明"],
             preferences: preferences,
             authorization: authorization,
@@ -330,8 +367,10 @@ final class LedgerNotificationPlannerTests: XCTestCase {
         )
     }
 
+    /// - Parameter actorMemberID: `nil` 代表 V10 之前、或還沒更新的裝置寫下的事件。
     private func makeEvent(
         action: String = "transaction.updated",
+        actorMemberID: UUID? = nil,
         actor: String = "小美",
         minutesAgo: Double = 1
     ) -> LedgerAuditEventSummary {
@@ -340,6 +379,7 @@ final class LedgerNotificationPlannerTests: XCTestCase {
             groupID: groupID,
             groupName: "家庭",
             action: action,
+            actorMemberID: actorMemberID,
             actorDisplayName: actor,
             createdAt: now.addingTimeInterval(-minutesAgo * 60)
         )
