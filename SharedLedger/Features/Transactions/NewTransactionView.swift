@@ -344,6 +344,7 @@ struct NewTransactionView: View {
                 .focused($focusedField, equals: .note)
                 .lineLimit(2...4)
                 .accessibilityLabel(Text(.transactionFormSectionNote))
+                .accessibilityIdentifier("transaction.note")
             } header: {
                 Text(.transactionFormSectionNote)
             }
@@ -369,6 +370,7 @@ struct NewTransactionView: View {
                 Button(action: save) {
                     Text(.commonActionSave)
                 }
+                .accessibilityIdentifier("transaction.save")
                 .disabled(!draft.canSave)
             }
         }
@@ -696,6 +698,7 @@ struct TransactionQuickEntryButtons: View {
                 .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("quickEntry.\(kind.rawValue)")
     }
 }
 

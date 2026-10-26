@@ -70,6 +70,7 @@ struct GroupsView: View {
                     .fontWeight(.bold)
             }
             .accessibilityLabel(Text(.groupActionCreate))
+            .accessibilityIdentifier("groups.create")
         }
         .sheet(isPresented: $isCreatingGroup) {
             NavigationStack {

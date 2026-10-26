@@ -141,6 +141,8 @@
 		E47E129169B7E58734F4237B /* LedgerFormatters.swift */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000087; };
 		31CFC00A0131DF57B550EF40 /* Localizable.xcstrings */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000089; };
 		7413E4103DECEDC03DD5A905 /* Embed Watch app */ = {isa = PBXBuildFile; fileRef = EAAF391102C9058484BE18EF; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C0DE0000000000000000A001 /* AppLaunchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000A002 /* AppLaunchUITests.swift */; };
+		C0DE0000000000000000A00D /* CoreFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE0000000000000000A00E /* CoreFlowUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -158,6 +160,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 0B68D88DD6ABB2F515D11DA4;
 			remoteInfo = SharedLedgerWatch;
+		};
+		C0DE0000000000000000A003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8F43C949A922257A42D8BCFD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 873C1CC67E5BEF41C2DCF1B2;
+			remoteInfo = SharedLedger;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -311,6 +320,9 @@
 		83DC04AE0F6F60E18E79F4C8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		7278BB7444DADA8B38D1FA83 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets.xcassets"; sourceTree = "<group>"; };
 		EAAF391102C9058484BE18EF /* SharedLedgerWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SharedLedgerWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0DE0000000000000000A002 /* AppLaunchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLaunchUITests.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000A00E /* CoreFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreFlowUITests.swift; sourceTree = "<group>"; };
+		C0DE0000000000000000A004 /* SharedLedgerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SharedLedgerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -455,6 +467,7 @@
 				E0D6C6E9E06A32EF668A45E2 /* SharedLedgerWidgets */,
 				08F98D4249EBB6434B4A4747 /* SharedLedger */,
 				C9861B46C98168FDEDFBB2DD /* SharedLedgerTests */,
+				C0DE0000000000000000A005 /* SharedLedgerUITests */,
 				8AE7FC6EE131B3B423168477 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -481,6 +494,7 @@
 				60C909BD9FD755C72759330B /* SharedLedgerWidgets.appex */,
 				1EB2692318D6DD111B869EF4 /* SharedLedger.app */,
 				B96365B99D5F8B14F65FD5FF /* SharedLedgerTests.xctest */,
+				C0DE0000000000000000A004 /* SharedLedgerUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -592,6 +606,15 @@
 			path = SharedLedgerWatch;
 			sourceTree = "<group>";
 		};
+		C0DE0000000000000000A005 /* SharedLedgerUITests */ = {
+			isa = PBXGroup;
+			children = (
+				C0DE0000000000000000A002 /* AppLaunchUITests.swift */,
+				C0DE0000000000000000A00E /* CoreFlowUITests.swift */,
+			);
+			path = SharedLedgerUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -657,6 +680,24 @@
 			productReference = EAAF391102C9058484BE18EF;
 			productType = "com.apple.product-type.application";
 		};
+		C0DE0000000000000000A006 /* SharedLedgerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0DE0000000000000000A00A /* Build configuration list for PBXNativeTarget "SharedLedgerUITests" */;
+			buildPhases = (
+				C0DE0000000000000000A007 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C0DE0000000000000000A008 /* PBXTargetDependency */,
+			);
+			name = SharedLedgerUITests;
+			packageProductDependencies = (
+			);
+			productName = SharedLedgerUITests;
+			productReference = C0DE0000000000000000A004 /* SharedLedgerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -672,6 +713,10 @@
 					C99D62B4D29AAC13A1054CC9 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
+					};
+					C0DE0000000000000000A006 = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = 873C1CC67E5BEF41C2DCF1B2;
 					};
 				};
 			};
@@ -694,6 +739,7 @@
 				2321AA17FF92354376004665 /* SharedLedgerWidgets */,
 				873C1CC67E5BEF41C2DCF1B2 /* SharedLedger */,
 				C99D62B4D29AAC13A1054CC9 /* SharedLedgerTests */,
+				C0DE0000000000000000A006 /* SharedLedgerUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -883,6 +929,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0DE0000000000000000A007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0DE0000000000000000A001 /* AppLaunchUITests.swift in Sources */,
+				C0DE0000000000000000A00D /* CoreFlowUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -896,6 +951,11 @@
 			isa = PBXTargetDependency;
 			target = 0B68D88DD6ABB2F515D11DA4;
 			targetProxy = F028CF15A9D5209E864980B1;
+		};
+		C0DE0000000000000000A008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 873C1CC67E5BEF41C2DCF1B2 /* SharedLedger */;
+			targetProxy = C0DE0000000000000000A003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1215,6 +1275,38 @@
 			};
 			name = Release;
 		};
+		C0DE0000000000000000A00B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.shaunchuang.SharedLedgerUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SharedLedger;
+			};
+			name = Debug;
+		};
+		C0DE0000000000000000A00C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.shaunchuang.SharedLedgerUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SharedLedger;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1249,6 +1341,15 @@
 		A76DB58F474FBE0EBBB64A80 /* Watch Configurations */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (1B73956122E7E24C3135B65D, 5E983B07162742F61B71DC18, );
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C0DE0000000000000000A00A /* Build configuration list for PBXNativeTarget "SharedLedgerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0DE0000000000000000A00B /* Debug */,
+				C0DE0000000000000000A00C /* Release */,
+			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};

@@ -142,6 +142,7 @@ struct AccountsView: View {
                         .fontWeight(.bold)
                 }
                 .accessibilityLabel(Text(.accountNewTitle))
+                .accessibilityIdentifier("accounts.add")
             }
         }
         .sheet(isPresented: $isPresentingNewAccount) {
