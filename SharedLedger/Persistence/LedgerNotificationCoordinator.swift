@@ -136,11 +136,13 @@ final class LedgerNotificationCoordinator: ObservableObject {
 
         let now = Date()
         let digest = store.loadDigest()
+        let actors = currentActors()
         let plan = LedgerNotificationPlanner.plan(
             LedgerNotificationPlanner.Inputs(
                 events: recentAuditEvents(now: now),
                 settlements: settlementReminders(now: now),
-                currentActorNames: currentActorNames(),
+                currentActorIDs: actors.ids,
+                currentActorNames: actors.names,
                 preferences: preferences,
                 authorization: authorization,
                 digest: digest,
@@ -181,6 +183,7 @@ final class LedgerNotificationCoordinator: ObservableObject {
                 groupID: groupID,
                 groupName: group.name ?? LedgerStringKey.commonPlaceholderUnnamedGroup.string(),
                 action: action,
+                actorMemberID: event.actorMemberID,
                 actorDisplayName: event.actorDisplayName
                     ?? LedgerStringKey.defaultMemberGroupMember.string(),
                 createdAt: createdAt
@@ -253,18 +256,24 @@ final class LedgerNotificationCoordinator: ObservableObject {
         }
     }
 
-    private func currentActorNames() -> [UUID: String] {
+    /// 每個群組裡「目前這位使用者」是哪一位成員。
+    ///
+    /// 識別碼與名稱一起收：planner 優先用識別碼判斷「這是不是我做的」，名稱只在事件
+    /// 沒有識別碼（V10 之前或還沒更新的裝置寫的）時當退路。
+    private func currentActors() -> (ids: [UUID: UUID], names: [UUID: String]) {
         let request = NSFetchRequest<LedgerGroup>(entityName: "LedgerGroup")
         let groups = (try? persistence.container.viewContext.fetch(request)) ?? []
         let identities = CurrentMemberIdentityRepository(persistence: persistence)
 
+        var ids: [UUID: UUID] = [:]
         var names: [UUID: String] = [:]
         for group in groups {
             guard let groupID = group.id,
-                  let name = identities.currentMember(in: group)?.displayName
+                  let member = identities.currentMember(in: group)
             else { continue }
-            names[groupID] = name
+            ids[groupID] = member.id
+            names[groupID] = member.displayName
         }
-        return names
+        return (ids, names)
     }
 }

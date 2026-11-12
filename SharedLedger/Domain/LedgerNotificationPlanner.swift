@@ -51,7 +51,10 @@ enum LedgerNotificationPlanner {
     struct Inputs {
         var events: [LedgerAuditEventSummary]
         var settlements: [LedgerSettlementReminder]
+        /// 各群組裡「目前這位使用者」的成員識別碼，key 是 `groupID`。
+        var currentActorIDs: [UUID: UUID]
         /// 各群組裡「目前這位使用者」的顯示名稱，key 是 `groupID`。
+        /// 只在事件沒有帶成員識別碼時才派上用場，見 `isOwnAction`。
         var currentActorNames: [UUID: String]
         var preferences: LedgerNotificationPreferences
         var authorization: LedgerNotificationAuthorization
@@ -61,6 +64,7 @@ enum LedgerNotificationPlanner {
         init(
             events: [LedgerAuditEventSummary] = [],
             settlements: [LedgerSettlementReminder] = [],
+            currentActorIDs: [UUID: UUID] = [:],
             currentActorNames: [UUID: String] = [:],
             preferences: LedgerNotificationPreferences = .default,
             authorization: LedgerNotificationAuthorization = .authorized,
@@ -69,6 +73,7 @@ enum LedgerNotificationPlanner {
         ) {
             self.events = events
             self.settlements = settlements
+            self.currentActorIDs = currentActorIDs
             self.currentActorNames = currentActorNames
             self.preferences = preferences
             self.authorization = authorization
@@ -116,7 +121,7 @@ enum LedgerNotificationPlanner {
                   let category = event.category,
                   inputs.preferences.isEnabled(category),
                   let body = event.notificationBody,
-                  !isOwnAction(event, currentActorNames: inputs.currentActorNames)
+                  !isOwnAction(event, in: inputs)
             else { continue }
 
             requests.append(
@@ -189,14 +194,21 @@ enum LedgerNotificationPlanner {
 
     /// 自己做的事不通知。
     ///
-    /// `AuditEvent` 只記得下顯示名稱，所以比對也只能用名稱。代價是同一個群組裡有兩位
-    /// 同名成員時會互相蓋掉對方的通知；相對於「使用者每記一筆帳就收到自己的通知」，
-    /// 這個代價明顯小得多。
+    /// 事件帶得出成員識別碼時就只認識別碼：同一個群組裡兩位同名成員不會再互相蓋掉對方
+    /// 的通知，成員改名之後也不會突然開始收到自己每一筆操作的通知。此時名稱一律不看
+    /// ——識別碼已經明確回答了「是不是我」，再拿名稱補一次只會把同名的問題放回來。
+    ///
+    /// 只有事件沒有識別碼時才退回名稱比對：V10 之前寫下的事件，以及還沒更新的裝置寫出
+    /// 來的事件，都不會有 `actorMemberID`。把「沒有識別碼」當成「不是我做的」，會讓那些
+    /// 事件反過來變成使用者自己操作的通知，比同名誤判更吵。
     private static func isOwnAction(
         _ event: LedgerAuditEventSummary,
-        currentActorNames: [UUID: String]
+        in inputs: Inputs
     ) -> Bool {
-        guard let name = currentActorNames[event.groupID] else { return false }
+        if let actorMemberID = event.actorMemberID {
+            return inputs.currentActorIDs[event.groupID] == actorMemberID
+        }
+        guard let name = inputs.currentActorNames[event.groupID] else { return false }
         return name == event.actorDisplayName
     }
 

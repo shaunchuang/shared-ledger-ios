@@ -473,6 +473,8 @@ final class PersistenceController {
                     try await EntryRepository(persistence: self)
                         .migrateLegacyPayments(in: writableGroupIDs)
                     try await EntryRepository(persistence: self)
+                        .backfillVoidedEntries(in: writableGroupIDs)
+                    try await EntryRepository(persistence: self)
                         .discardSupersededChildren(in: writableGroupIDs)
                 } catch {
                     assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
@@ -481,7 +483,7 @@ final class PersistenceController {
                 // A CloudKit import posts remote-change notifications in bursts, and
                 // every one of them sets `shouldRepeatDataRepair`. Without this pause
                 // the loop runs a whole pass — a group fetch plus a share lookup per
-                // group, then four full-table scans — back to back for as long as the
+                // group, then five full-table scans — back to back for as long as the
                 // sync lasts, and because it all runs on the main actor the UI never
                 // gets a turn: tapping a tab does nothing until the sync settles.
                 // Waiting lets the rest of the burst collapse into the single pass
