@@ -155,6 +155,7 @@ struct SettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("settings.groupManagement")
             }
         }
     }

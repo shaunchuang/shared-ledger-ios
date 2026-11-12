@@ -230,6 +230,7 @@ private struct BookTransactionsView: View {
                             Button { presentComposer(kind) } label: {
                                 Label(kind.displayNameKey, systemImage: kind.systemImage)
                             }
+                            .accessibilityIdentifier("transactions.add.\(kind.rawValue)")
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -237,6 +238,7 @@ private struct BookTransactionsView: View {
                             .ledgerTapTarget()
                     }
                     .accessibilityLabel(Text(.transactionActionAdd))
+                    .accessibilityIdentifier("transactions.add")
                 }
             }
         }
