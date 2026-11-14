@@ -9,10 +9,22 @@ final class PersistenceController {
     /// `assertionFailure`, which traps before any test can run. Tests build their
     /// own `PersistenceController(inMemory: true)`, so the shared instance only has
     /// to launch cleanly here.
-    static let shared = PersistenceController(inMemory: isRunningTests)
+    ///
+    /// UI tests drive a separate app process that has no XCTest configuration, so
+    /// they opt in with the `-ui-testing` launch argument. Each launch then starts
+    /// from an empty store regardless of what the simulator's iCloud account holds.
+    static let shared = PersistenceController(inMemory: isRunningTests || isRunningUITests)
 
     private static var isRunningTests: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    static var isRunningUITests: Bool {
+        #if DEBUG
+        CommandLine.arguments.contains("-ui-testing")
+        #else
+        false
+        #endif
     }
     /// 這個 App 的 CloudKit 容器。同步狀態監看也要問同一個容器的帳號狀態，
     /// 所以識別碼在這裡只保留一份。
@@ -338,6 +350,9 @@ final class PersistenceController {
     func prepareShare(for group: LedgerGroup) async throws -> (CKShare, CKContainer) {
         let shareTitle = group.name ?? LedgerStringKey.groupShareDefaultTitle.string()
         let objectID = group.objectID
+        // An in-memory UI test store has nothing to share, and an unsigned CI build
+        // is killed by CloudKit as soon as it creates a container.
+        guard !Self.isRunningUITests else { throw SharingError.noICloudAccount }
         let cloudContainer = CKContainer(identifier: Self.cloudKitContainerIdentifier)
 
         switch try await accountStatus(for: cloudContainer) {
@@ -473,6 +488,8 @@ final class PersistenceController {
                     try await EntryRepository(persistence: self)
                         .migrateLegacyPayments(in: writableGroupIDs)
                     try await EntryRepository(persistence: self)
+                        .backfillVoidedEntries(in: writableGroupIDs)
+                    try await EntryRepository(persistence: self)
                         .discardSupersededChildren(in: writableGroupIDs)
                 } catch {
                     assertionFailure("Unable to repair migrated ledger data: \(error.localizedDescription)")
@@ -481,7 +498,7 @@ final class PersistenceController {
                 // A CloudKit import posts remote-change notifications in bursts, and
                 // every one of them sets `shouldRepeatDataRepair`. Without this pause
                 // the loop runs a whole pass — a group fetch plus a share lookup per
-                // group, then four full-table scans — back to back for as long as the
+                // group, then five full-table scans — back to back for as long as the
                 // sync lasts, and because it all runs on the main actor the UI never
                 // gets a turn: tapping a tab does nothing until the sync settles.
                 // Waiting lets the rest of the burst collapse into the single pass

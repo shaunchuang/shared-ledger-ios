@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // 明確註冊 remote notification，避免出現
         // "BUG IN CLIENT OF CLOUDKIT: ... 'remote-notification' background mode"
         // 而導致共享帳本無法即時同步。
+        WatchLedgerBridge.shared.start()
         application.registerForRemoteNotifications()
         return true
     }

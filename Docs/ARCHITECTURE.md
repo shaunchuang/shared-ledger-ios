@@ -129,8 +129,9 @@ View 不直接包含同步、結算或複雜帳務計算；可測試的領域規
 | V7 | 新增 `EntryPayment`、`LedgerEntry.splitMode`、`EntrySplit.inputValue` 與 `Member.archivedAt` | 以 lightweight migration 建立欄位與 entity；啟動及 remote change 後，將仍只有 legacy `payer` 的既有交易冪等轉成一筆全額付款，不改寫既有 split amount |
 | V8 | 在 shared `Member` 新增 optional `cloudParticipantID`，保存該成員對應的 `CKShare.Participant.participantID` | 以 lightweight migration 新增單一 optional String 欄位；既有成員維持 `nil`，下次在有效 CKShare 上認領或加入時才綁定 participant。此欄位是 share-local 識別碼，不取代 private-only 的 `LocalMemberIdentity` |
 | V9 | 新增 `LedgerEntry.revisionID` 與 `EntryPayment`／`EntrySplit` 的 `entryRevisionID`，標記每一筆明細屬於哪一次交易寫入 | 以 lightweight migration 新增三個 optional UUID 欄位；既有交易與明細都維持 `nil`，不做回填。`nil == nil` 代表舊明細仍屬於交易目前這一版，因此升級不改變任何既有金額、分攤或結算結果 |
+| V10 | 新增 `LedgerEntry.voidedAt` 與 `AuditEvent.actorMemberID`，把作廢狀態與「誰做的」從稽核字串裡拿出來變成欄位 | 以 lightweight migration 新增兩個 optional 欄位；升級本身不回填，改由背景修復 `EntryRepository.backfillVoidedEntries(in:)` 依既有 `transaction.voided` 稽核事件補上 `voidedAt`（時間取自稽核事件，不是修復當下）。這個修復掛在每次遠端變更後的迴圈上而非只跑一次，因為混合版本會持續產生同樣的資料 |
 
-V1→V2→V3→V4→V5→V6→V7→V8→V9 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。V8 只在 `Member` 加一個 optional String，因此 lightweight migration 可自動推得；升級後的既有成員 `cloudParticipantID` 為 `nil`，不做任何猜測式回填，必須等到該成員在真實 CKShare 上完成認領或加入，才由 `GroupRepository` 綁定當下已接受的 participant ID。`SharedLedgerTests/CloudParticipantModelMigrationTests` 驗證 V7→V8 可推導 mapping、V8 除該欄位外沒有其他 schema 漂移、既有 V7 store 升級後資料保留且 `cloudParticipantID` 為 `nil`，以及 `LocalMemberIdentity` 仍只屬於 private configuration。 V9 同樣只加 optional 欄位，`SharedLedgerTests/EntryRevisionModelMigrationTests` 驗證 V8→V9 可推導 mapping、除這三個欄位外沒有其他漂移、既有 store 升級後 revision 為 `nil` 且原有明細仍算數。
+V1→V2→V3→V4→V5→V6→V7→V8→V9→V10 採分階段 migration。V2 先建立帳本與可選 `book` 關聯，以程式回填既有分類與交易；V3 再移除帳戶與帳本的關聯，帳戶既有 `group` 關聯成為唯一 scope。V4 將分類的 `group` 關聯提升為權威 scope，加入 assignment 但暫時保留 legacy `category.book`，避免在 automatic lightweight migration 後失去原帳本資訊。V5 移除 shared `Member` 上的裝置使用者旗標，改用 private-only identity mapping；此 mapping 沒有 managed object relationship，因此不會跨 private／shared store 建立關聯。V6 為群組加入非 optional `currencyCode` 與 `TWD` schema 預設，讓 lightweight migration 可回填舊群組；新群組仍由建立者明確選擇或採裝置地區預設。V7 讓 lightweight migration 先建立付款與分攤欄位，再由 `EntryRepository` 依舊 `payer` 建立 payment，重複執行不新增重複付款。V8 只在 `Member` 加一個 optional String，因此 lightweight migration 可自動推得；升級後的既有成員 `cloudParticipantID` 為 `nil`，不做任何猜測式回填，必須等到該成員在真實 CKShare 上完成認領或加入，才由 `GroupRepository` 綁定當下已接受的 participant ID。`SharedLedgerTests/CloudParticipantModelMigrationTests` 驗證 V7→V8 可推導 mapping、V8 除該欄位外沒有其他 schema 漂移、既有 V7 store 升級後資料保留且 `cloudParticipantID` 為 `nil`，以及 `LocalMemberIdentity` 仍只屬於 private configuration。 V9 同樣只加 optional 欄位，`SharedLedgerTests/EntryRevisionModelMigrationTests` 驗證 V8→V9 可推導 mapping、除這三個欄位外沒有其他漂移、既有 store 升級後 revision 為 `nil` 且原有明細仍算數。V10 一樣只加 optional 欄位，`SharedLedgerTests/VoidedEntryModelMigrationTests` 驗證 V9→V10 可推導 mapping、除這兩個欄位外沒有其他漂移、既有 store 升級後兩個欄位都是 `nil` 且作廢稽核的 summary 快照完整保留，以及回填能只憑稽核事件標記作廢、重跑不改變作廢時間、沒有作廢稽核的交易不受影響。
 
 V4 資料修復對每個既有分類採以下規則：
 
@@ -144,6 +145,19 @@ V4 資料修復對每個既有分類採以下規則：
 
 ## Core Data 與 Concurrency
 
+### WidgetKit 與快速記帳
+
+- `SharedLedgerWidgets` 是最低 iOS 17 的 WidgetKit extension，Bundle ID 為 `com.shaunchuang.SharedLedger.Widgets`。App target 依賴並嵌入 `.appex`，現有 scheme 的 build、test 與 archive 都會建置 extension。
+- App 與 extension 共用 `group.com.shaunchuang.SharedLedger` App Group。Apple Developer 帳號必須註冊此群組，並將 App 與 extension 的 App IDs 都加入；在兩個 target 的 Signing & Capabilities 確認同一 Team、App Groups 與更新後的 provisioning profiles。CI 的無簽章 archive 無法驗證此步驟。
+- `LedgerWidgetSnapshotService` 只投影選定帳本的本月收支日彙總，透過 `LedgerWidgetStore` 原子替換 App Group 中的 JSON。金額仍為 `Decimal`，顯示共用 `LedgerCurrency`；不搬移 Core Data stores，不新增 model version，不讓 extension 讀寫 CloudKit 或帳務資料庫。
+- JSON 只包含版本、群組／帳本名稱、帳本 UUID、貨幣、月份、時區、更新時間與每日收支／筆數，不含備註、帳戶、成員或憑證。檔案使用首次解鎖後的資料保護，小工具內容標示 `privacySensitive`；App Group 不可用時顯示未設定狀態，不退回不共享的 defaults。
+- App 前景啟動、view context 儲存、背景資料合併及時區變更時更新；儲存／合併通知合併為一次更新，有未儲存變更時不發布。WidgetKit 排程重讀快取並預載午夜切換，系統決定實際刷新時機。跨月／時區的舊快取不冒充新期間資料。
+- 取消選擇、帳本封存／移除後清除快取；「刪除本機個人資料」亦移除小工具選擇與摘要。暫時讀取失敗保留帶時間戳記的最後成功快取。
+- `sharedledger://new-entry?book=<UUID>&kind=expense|income` 僅開啟草稿；`sharedledger://widget-settings` 開啟小工具設定。`LedgerWidgetRoute` 嚴格解析連結，App 重新驗證該帳本及寫入權限，不以失效的 UUID 自動改記其他帳本。沒有任何 URL 能直接寫入金額或儲存交易。
+- `LedgerWidgetTests` 驗證連結、帳本／日期範圍、作廢／轉帳排除、修改後重算、Decimal 快取、毀損／未支援版本、午夜／月界／夏令時間、封存清除及個人資料重設。主畫面與簽章驗收依 [MVP.md](MVP.md) 的小工具驗收項目執行。
+
+### Context 與權限解析
+
 - `NSManagedObject` 不是 Sendable，不可跨 actor 或 queue 直接傳遞。
 - 不可用 `@unchecked Sendable` 壓掉 `NSManagedObject` 的 concurrency 問題。
 - 畫面使用的 view context 資料以 `@MainActor` 管理。
@@ -151,8 +165,6 @@ V4 資料修復對每個既有分類採以下規則：
 - `NSPersistentHistoryTrackingKey` 與 remote change notifications 必須保持啟用。
 - Merge policy、衝突決策與稽核記錄必須一致，不可只依畫面最後顯示結果推測同步成功。
 - 衝突策略分兩層：欄位層沿用 `NSMergeByPropertyObjectTrumpMergePolicy`，本機剛寫入的值勝過 store 裡的舊值；物件層由交易 revision 決定，一筆交易的付款與分攤永遠整組採用或整組捨棄，不逐筆合併。無法判定的情況（明細還沒到齊、合計與金額對不起來）一律不進結算，並由 `EntryConflictScanner` 列在 iCloud 同步頁，讓使用者知道哪一筆需要重新編輯。
-
-畫面不可在 `body` 裡解析有效權限或加總餘額。共享群組每解析一次權限就同步呼叫一次 `fetchShares`，同步佔住 store 時這個呼叫會卡住主執行緒；而 `body` 每次合併變更都會重跑，一次 pass 又常常重複問同一個問題，於是畫面直接凍住。做法是把答案存進 `@State`（權限用 `PermissionAccess`，一個畫面問多個問題時先 `permission(in:)` 再用 `restriction(_:for:)` 推導），在 `onAppear` 與相關物件變更時各解析一次。變更過濾一律用 `ContextChangeObserver.touches(_:_:)`：它只看物件型別、不讀屬性，對已刪除或失效的 managed object 讀關聯會丟 `NSObjectInaccessibleException`，Swift 的 `catch` 攔不住。
 
 `PersistenceController.prepareShare` 應在 closure 外先讀取分享標題並標記 `@MainActor`，不可在 `@Sendable` closure 捕捉 `LedgerGroup`。
 
@@ -212,6 +224,20 @@ V9 一樣沒有新增 record type，只在三個既有 record type 上各加一�
 
 未部署就送版時，Production 的 mirroring delegate 會以 `CKError "Invalid Arguments" (12/2006)` 失敗。特別注意混合版本的情況：尚未更新的舊版裝置不認得 revision 欄位，它覆寫交易 record 時可能把 `revisionID` 清成 `nil`，此時只有同樣沒有 revision 的明細算數，行為退回 V9 之前的樣子——會少算，但不會把兩次編輯的明細混著算。
 
+#### V10 部署檢查表（未完成前不得送出含 V10 的建置版本）
+
+V10 一樣沒有新增 record type，只在兩個既有 record type 上各加一個欄位：`CD_LedgerEntry.CD_voidedAt`（Date／Timestamp, optional）與 `CD_AuditEvent.CD_actorMemberID`（UUID／String, optional）。
+
+1. 在已登入 iCloud 的裝置或模擬器上，以 Debug 組態、啟動參數 `-initialize-cloudkit-schema` 執行一次 App，把 V10 寫入 Development schema，完成後移除該參數。
+2. CloudKit Console → `iCloud.com.shaunchuang.SharedLedger` → Development → Schema → Record Types，確認上述兩個欄位都存在。
+3. 執行「Deploy Schema Changes…」部署到 Production，並在 Production 重新確認兩個欄位。
+4. 部署完成後才建立 TestFlight／App Store 建置版本。
+
+混合版本在這一版的行為是設計好的、可收斂的，不是待修的缺口：
+
+- **作廢。** 舊版裝置作廢一筆交易時只寫得出 `transaction.voided` 稽核事件與歸零的金額，寫不出 `voidedAt`。新版裝置同步到之後，由 `backfillVoidedEntries(in:)` 依稽核事件補上——所以那個修復掛在每次遠端變更後的迴圈上，不是只在升級時跑一次。收斂之前的空窗期只影響畫面上的「已作廢」標示：金額已經隨交易 record 歸零，餘額、報表與結算都已經不算它。反過來，舊版裝置永遠讀不到 `voidedAt`，它看到的仍是稽核紀錄那條路，行為不變。
+- **通知。** 舊版裝置寫的稽核事件沒有 `actorMemberID`，`LedgerNotificationPlanner` 對這種事件會退回顯示名稱比對，也就是 V10 之前的行為（同名成員可能互相蓋掉通知）。帶得出識別碼的事件則只認識別碼。
+
 ## 聯絡人與隱私
 
 - 只使用系統聯絡人選擇器處理使用者主動選取的聯絡人。
@@ -221,6 +247,21 @@ V9 一樣沒有新增 record type，只在三個既有 record type 上各加一�
 - 新增第三方分析、crash reporting、廣告、帳號或後端服務前，必須重新稽核資料流、隱私政策與 App Privacy 申報。
 
 ## 建置與測試
+
+### Apple Watch companion App
+
+- `SharedLedgerWatch` 為單一 target SwiftUI watchOS 10 App，Bundle ID `com.shaunchuang.SharedLedger.watchkitapp`，`WKCompanionAppBundleIdentifier` 指向 `com.shaunchuang.SharedLedger`。iOS App 依賴 Watch target，並將其嵌入 `Watch` 目錄；共用專案既有 Team，仍須取得 Watch App ID 的 provisioning profile。沒有新增 CloudKit container 或資料模型版本。
+- 在 Xcode 選 `SharedLedgerWatch` scheme 可建置 Watch simulator。CI 額外執行 `xcodebuild build -scheme SharedLedgerWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO`，現有 iOS build-for-testing 與 archive 也會建置嵌入的 Watch App。
+- `WatchLedgerMessage` 定義版本化、Codable 的摘要、選項、儲存請求與回覆。`WatchLedgerBridge` 在 AppDelegate 啟動，以 WatchConnectivity `updateApplicationContext` 傳送可覆蓋的最新摘要，以 `sendMessageData`／reply handler 處理明確儲存。單一帳本 context 超過 55 KB 時回傳使用 iPhone 的提示，不靜默截斷選項。
+- Watch 不直接寫入 Core Data。`WatchLedgerService` 在 main actor 重新解析所選帳本、目前成員、全部分攤成員與幣別，並交給既有 `EntryRepository` 驗證帳戶／分類、權限、付款、分攤、金額精度與稽核。view context 有其他待儲存變更時，暫停新的寫入及所有摘要讀取（包含手錶主動 refresh 的回覆），保留帶時間戳記的既有摘要，不儲存或 rollback 使用者的編輯。
+- 每次手錶確認產生 UUID，先原子保存到手錶 Application Support 的 pending 檔案再傳送。iPhone 使用此 UUID 作為 `LedgerEntry.id`，在同一次 `context.save()` 寫入交易、付款、分攤及稽核，讓「儲存成功但回覆遺失」重試仍能查到原結果。Repository 拒絕重複 ID；Watch service 的同 ID／同帳本回覆不再次寫入，後續被作廢也不復活。沒有新增 CloudKit unique constraint。
+- 重試先用獨立的 main-queue context 查核已提交的交易，再檢查 view context 是否忙碌；未儲存的 insert／scope 修改不能冒充或改變成功回執。因此原交易已入帳時，即使 iPhone 有未完成編輯，仍可確認原結果而不碰觸那些編輯。
+- 傳輸、儲存、查詢、未知錯誤、view context 忙碌及尚未確認共享權限都保留 pending；只有相符的 savedID 或已知輸入／權限驗證失敗的 rejectedID 能清除，摘要更新或無關回覆不能清除。手錶顯示待確認，使用者主動重試；不在背景自動提交。明確拒絕後可重新確認新的交易。
+- `WatchLedgerBridge` 的儲存回覆在成功後直接呼叫小工具 coordinator 更新 App Group 快取並要求 WidgetKit reload，不依賴 foreground scene、`onAppear` 或 debounce 通知。回覆成功只代表交易已提交；摘要／小工具更新失敗不能把成功改成拒絕。
+- 只傳送所選帳本的摘要、帳戶／分類名稱與 ID、付款人及分攤成員；不傳備註、其他帳本交易或 CloudKit 憑證。取消選擇或刪除本機個人資料會移除 Watch 選擇，下一次可傳送的 context 清除手錶摘要；離線手錶無法立即撤回先前收到的資料，pending 仍保留以確認既有提交結果。
+- `WatchLedgerTests` 覆蓋重試只建立一筆交易及稽核、作廢後延遲重試、UUID／Decimal 保留、無關回覆、舊摘要排序、非法輸入、帳本／幣別／成員變動、無效帳戶／分類、唯讀、封存及本機重設；亦驗證有未完成編輯時查核已提交交易、未儲存 insert 不算回執、暫時錯誤保留 pending、直接 refresh 不傳未儲存摘要，以及未啟動 scene observers 時儲存仍更新小工具快取。真實 WatchConnectivity 配對驗收見 [MVP.md](MVP.md)。
+
+### iOS 建置
 
 ```bash
 open SharedLedger.xcodeproj

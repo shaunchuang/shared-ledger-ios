@@ -8,6 +8,7 @@ struct TransactionsView: View {
     ) private var groups: FetchedResults<LedgerGroup>
 
     @State private var selectedGroupID: NSManagedObjectID?
+    @State private var isCreatingGroup = false
 
     private var selectedGroup: LedgerGroup? {
         if let selectedGroupID, let match = groups.first(where: { $0.objectID == selectedGroupID }) {
@@ -31,7 +32,9 @@ struct TransactionsView: View {
                     LedgerEmptyState(
                         systemImage: "person.3",
                         title: .transactionEmptyNoGroupTitle,
-                        message: .transactionEmptyNoGroupMessage
+                        message: .phoneOnboardingMessage,
+                        actionTitle: .groupActionCreate,
+                        action: { isCreatingGroup = true }
                     )
                     .padding(.horizontal, LedgerTheme.pagePadding)
                     .padding(.top, 24)
@@ -39,7 +42,40 @@ struct TransactionsView: View {
             }
         }
         .navigationTitle(Text(.transactionTitle))
+        .sheet(isPresented: $isCreatingGroup) {
+            NavigationStack {
+                CreateGroupView { group in
+                    selectedGroupID = group.objectID
+                    isCreatingGroup = false
+                }
+            }
+        }
     }
+}
+
+/// Whether this device may add or change transactions in a group, and how to explain
+/// it when it may not.
+///
+/// Resolving it walks the current member identity and, for a shared group, makes a
+/// synchronous `fetchShares` call into the CloudKit mirroring metadata. The screens
+/// below therefore cache it in `@State` and refresh it when the data behind it
+/// changes, instead of recomputing it on every `body` pass.
+struct TransactionWriteAccess {
+    /// Writes are refused until the first resolution, and nothing is explained yet:
+    /// a notice for a state nobody has checked would flash the wrong message on the
+    /// frame before `onAppear` runs.
+    static let unresolved = TransactionWriteAccess(restriction: .missingCurrentMember, isResolved: false)
+
+    let restriction: PermissionError?
+    let isResolved: Bool
+
+    init(restriction: PermissionError?, isResolved: Bool = true) {
+        self.restriction = restriction
+        self.isResolved = isResolved
+    }
+
+    var canWrite: Bool { isResolved && restriction == nil }
+    var noticeMessage: String? { isResolved ? restriction?.errorDescription : nil }
 }
 
 private struct BookTransactionsView: View {
@@ -81,6 +117,7 @@ private struct BookTransactionsView: View {
     @Binding var selectedGroupID: NSManagedObjectID?
 
     @Environment(\.managedObjectContext) private var context
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// 候選交易以群組為範圍取一次，帳本範圍與其他條件都交給搜尋服務收斂。範圍可以
     /// 在單一帳本與跨帳本之間切換，逐帳本的 fetch 會在每次切換時重建整個請求。
@@ -91,9 +128,9 @@ private struct BookTransactionsView: View {
     @State private var scope: ReportBookScope = .currentBook
     @State private var selectedCustomBookIDs: Set<UUID> = []
     @State private var result = TransactionSearchResult.empty
-    @State private var isPresentingNewEntry = false
+    @State private var composer: TransactionComposerRequest?
     @State private var isPresentingFilters = false
-    @State private var writeAccess = PermissionAccess.unresolved
+    @State private var writeAccess = TransactionWriteAccess.unresolved
 
     init(
         group: LedgerGroup,
@@ -127,7 +164,7 @@ private struct BookTransactionsView: View {
     /// The repositories refuse the write with the same `PermissionError` this
     /// resolves, so the entry point and the save path can never disagree.
     private func reloadWriteAccess() {
-        writeAccess = PermissionAccess(
+        writeAccess = TransactionWriteAccess(
             restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
         )
     }
@@ -144,29 +181,28 @@ private struct BookTransactionsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        TransactionResultListView(
+            result: result,
+            currencyCode: currencyCode,
+            isFiltered: !query.isEmpty,
+            showsBookName: scope != .currentBook,
+            hasSearchableBooks: !result.includedBookIDs.isEmpty,
+            writeAccess: writeAccess,
+            onAddFirst: { presentComposer(.expense) },
+            onClearFilters: { query = TransactionQuery() }
+        ) {
             header
-            if selectedBook != nil || scope != .currentBook {
-                TransactionResultListView(
-                    result: result,
-                    currencyCode: currencyCode,
-                    isFiltered: !query.isEmpty,
-                    showsBookName: scope != .currentBook,
-                    hasSearchableBooks: !result.includedBookIDs.isEmpty,
-                    writeAccess: writeAccess
-                ) {
-                    isPresentingNewEntry = true
-                }
-            } else {
-                ScrollView {
-                    LedgerEmptyState(
-                        systemImage: "book.closed",
-                        title: .transactionEmptyPreparingBookTitle,
-                        message: .transactionEmptyPreparingBookMessage
-                    )
+            // Keep large text actions in the scrollable content so the dock
+            // cannot consume the entire screen at accessibility sizes.
+            if dynamicTypeSize.isAccessibilitySize {
+                quickEntryBar
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                quickEntryBar
                     .padding(.horizontal, LedgerTheme.pagePadding)
-                    .padding(.top, 24)
-                }
+                    .background(LedgerTheme.surface)
             }
         }
         .searchable(
@@ -187,28 +223,33 @@ private struct BookTransactionsView: View {
                 }
                 .accessibilityLabel(Text(verbatim: filterAccessibilityLabel))
             }
-            if selectedBook != nil, writeAccess.isAllowed {
+            if selectedBook != nil, writeAccess.canWrite {
                 ToolbarItem {
-                    Button {
-                        isPresentingNewEntry = true
+                    Menu {
+                        ForEach(EntryKind.userCreatableCases, id: \.self) { kind in
+                            Button { presentComposer(kind) } label: {
+                                Label(kind.displayNameKey, systemImage: kind.systemImage)
+                            }
+                            .accessibilityIdentifier("transactions.add.\(kind.rawValue)")
+                        }
                     } label: {
                         Image(systemName: "plus")
                             .fontWeight(.bold)
+                            .ledgerTapTarget()
                     }
                     .accessibilityLabel(Text(.transactionActionAdd))
+                    .accessibilityIdentifier("transactions.add")
                 }
             }
         }
-        .sheet(isPresented: $isPresentingNewEntry) {
-            if let selectedBook {
-                NavigationStack {
-                    NewTransactionView(book: selectedBook) {
-                        isPresentingNewEntry = false
-                    }
+        .sheet(item: $composer) { request in
+            NavigationStack {
+                NewTransactionView(book: request.book, initialKind: request.kind, focusesAmount: true) {
+                    composer = nil
                 }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
             }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isPresentingFilters) {
             NavigationStack {
@@ -254,6 +295,27 @@ private struct BookTransactionsView: View {
         }
     }
 
+    private func presentComposer(_ kind: EntryKind) {
+        guard writeAccess.canWrite, let selectedBook, selectedBook.archivedAt == nil else { return }
+        composer = TransactionComposerRequest(book: selectedBook, kind: kind)
+    }
+
+    @ViewBuilder
+    private var quickEntryBar: some View {
+        if let selectedBook, writeAccess.canWrite {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(verbatim: LedgerStringKey.transactionQuickEntryDestination.string(arguments: [
+                    selectedBook.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
+                ]))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                TransactionQuickEntryButtons(onSelect: presentComposer)
+            }
+            .padding(.vertical, 12)
+        }
+    }
+
     /// 結果是快取的，不是 computed property：每次計算都要再查一次群組的作廢稽核
     /// 事件，做成 computed property 等於每次 render 都重跑一次完整搜尋。
     private func reloadResult() {
@@ -284,7 +346,7 @@ private struct BookTransactionsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
+            LedgerAdaptiveStack {
                 if groups.count > 1 {
                     Menu {
                         ForEach(groups, id: \.objectID) { candidate in
@@ -319,8 +381,6 @@ private struct BookTransactionsView: View {
                     .foregroundStyle(.secondary)
                 }
 
-                Spacer(minLength: 8)
-
                 if let selectedBook {
                     let selectedBookName = selectedBook.name
                         ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
@@ -350,26 +410,31 @@ private struct BookTransactionsView: View {
                 }
             }
 
-            Picker(selection: kindFilter) {
-                ForEach(Filter.allCases) { item in
-                    Text(item.titleKey).tag(item)
-                }
-            } label: {
-                Text(.transactionKindFilterTitle)
+            if dynamicTypeSize.isAccessibilitySize {
+                kindPicker.pickerStyle(.menu)
+            } else {
+                kindPicker.pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
-            .accessibilityLabel(Text(.transactionKindFilterTitle))
 
             scopeSummary
         }
-        .padding(.horizontal, LedgerTheme.pagePadding)
-        .padding(.top, 12)
+    }
+
+    private var kindPicker: some View {
+        Picker(selection: kindFilter) {
+            ForEach(Filter.allCases) { item in
+                Text(item.titleKey).tag(item)
+            }
+        } label: {
+            Text(.transactionKindFilterTitle)
+        }
+        .accessibilityLabel(Text(.transactionKindFilterTitle))
     }
 
     /// 每個搜尋結果都必須說得出自己的範圍與筆數，使用者才知道現在看到的是全部
     /// 交易，還是被條件收斂過的一部分。
     private var scopeSummary: some View {
-        HStack(spacing: 8) {
+        LedgerAdaptiveStack {
             Label {
                 Text(verbatim: scopeLabel)
             } icon: {
@@ -377,9 +442,8 @@ private struct BookTransactionsView: View {
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
-            .lineLimit(1)
-
-            Spacer(minLength: 8)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if query.isEmpty {
                 Text(verbatim: LedgerStringKey.transactionResultCount.string(
@@ -401,6 +465,8 @@ private struct BookTransactionsView: View {
                 }
                 .font(.caption.weight(.semibold))
                 .buttonStyle(.borderless)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
         }
         // 範圍與筆數合起來才是一句話；「清除」保留成自己的按鈕，否則 VoiceOver
@@ -426,13 +492,15 @@ private struct BookTransactionsView: View {
     private func selectorLabel(_ title: String, systemImage: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: systemImage)
-            Text(title)
-                .lineLimit(1)
+            Text(verbatim: title)
+                .fixedSize(horizontal: false, vertical: true)
             Image(systemName: "chevron.up.chevron.down")
                 .font(.caption2.weight(.bold))
         }
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(LedgerTheme.primary)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func select(_ book: LedgerBook) {
@@ -452,7 +520,7 @@ private struct BookTransactionsView: View {
 
 /// 依月份分組的搜尋結果。純呈現：結果由呼叫端快取並在資料變更時重算，這裡不再
 /// 自行查詢，才不會讓每次 render 都重跑一次搜尋。
-private struct TransactionResultListView: View {
+private struct TransactionResultListView<Header: View>: View {
     let result: TransactionSearchResult
     let currencyCode: String
     /// 有沒有套用關鍵字或篩選。空結果的說法完全不同：一個是「還沒有交易」，
@@ -460,21 +528,24 @@ private struct TransactionResultListView: View {
     let isFiltered: Bool
     let showsBookName: Bool
     let hasSearchableBooks: Bool
-    let writeAccess: PermissionAccess
+    let writeAccess: TransactionWriteAccess
     let onAddFirst: () -> Void
+    let onClearFilters: () -> Void
+    @ViewBuilder let header: () -> Header
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// 三欄合計在最大字級改成直排，分隔線也要跟著換方向。
     @ScaledMetric(relativeTo: .subheadline) private var totalsDividerHeight: CGFloat = 30
 
     private var addAction: (() -> Void)? {
-        guard writeAccess.isAllowed, !isFiltered else { return nil }
+        guard writeAccess.canWrite, !isFiltered else { return nil }
         return onAddFirst
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
+                header()
                 if let message = writeAccess.noticeMessage {
                     LedgerNotice(message: message)
                 }
@@ -509,6 +580,7 @@ private struct TransactionResultListView: View {
             .padding(.top, 16)
             .padding(.bottom, 28)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private var matchTotals: some View {
@@ -570,13 +642,15 @@ private struct TransactionResultListView: View {
             LedgerEmptyState(
                 systemImage: "magnifyingglass",
                 title: .transactionEmptyNoMatchTitle,
-                message: Text(verbatim: noMatchMessage)
+                message: Text(verbatim: noMatchMessage),
+                actionTitle: .transactionResultClear,
+                action: onClearFilters
             )
         } else {
             LedgerEmptyState(
                 systemImage: "receipt",
                 title: .transactionEmptyNoneTitle,
-                message: writeAccess.isAllowed
+                message: writeAccess.canWrite
                     ? LedgerStringKey.transactionEmptyNoneMessageWritable
                     : LedgerStringKey.transactionEmptyNoneMessageReadOnly,
                 actionTitle: addAction == nil ? nil : LedgerStringKey.transactionActionAdd,
@@ -710,12 +784,13 @@ struct TransactionDetailView: View {
     @State private var isEditing = false
     @State private var showVoidConfirmation = false
     @State private var errorMessage: String?
-    /// Both of these reach outside the entry to resolve — `isVoided` fetches the
-    /// group's void audits, and the write access makes a synchronous `fetchShares`
-    /// call — and `body` reads each of them several times per pass. They are resolved
-    /// once per change instead of once per read.
+    /// The write access reaches outside the entry to resolve — a synchronous
+    /// `fetchShares` call — and `body` reads it several times per pass, so it is
+    /// resolved once per change instead of once per read. `isVoided` is now a plain
+    /// read of `entry.voidedAt`, but it stays cached alongside it so both halves of
+    /// the screen's status refresh from the same notification.
     @State private var isVoided = false
-    @State private var writeAccess = PermissionAccess.unresolved
+    @State private var writeAccess = TransactionWriteAccess.unresolved
 
     private var repository: EntryRepository { EntryRepository() }
 
@@ -747,7 +822,7 @@ struct TransactionDetailView: View {
             return
         }
         isVoided = repository.isVoided(entry)
-        writeAccess = PermissionAccess(
+        writeAccess = TransactionWriteAccess(
             restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
         )
     }
@@ -867,7 +942,7 @@ struct TransactionDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     }
-                } else if writeAccess.isAllowed {
+                } else if writeAccess.canWrite {
                     Section {
                         Button(role: .destructive) {
                             showVoidConfirmation = true
@@ -889,13 +964,23 @@ struct TransactionDetailView: View {
                 object: context
             )
         ) { notification in
-            guard ContextChangeObserver.touches(notification, .auditLog, .groupPermissions) else {
+            // `.entryDetails` covers the entry itself: since V10 the voided flag lives
+            // on `LedgerEntry.voidedAt`, so a void this screen did not perform arrives
+            // as a change to the entry rather than to the audit log. `.auditLog` stays
+            // because the pre-void snapshot shown above still comes from the audit
+            // payload.
+            guard ContextChangeObserver.touches(
+                notification,
+                .entryDetails,
+                .auditLog,
+                .groupPermissions
+            ) else {
                 return
             }
             reloadStatus()
         }
         .toolbar {
-            if !isVoided, entry.book?.archivedAt == nil, writeAccess.isAllowed {
+            if !isVoided, entry.book?.archivedAt == nil, writeAccess.canWrite {
                 Button {
                     isEditing = true
                 } label: {

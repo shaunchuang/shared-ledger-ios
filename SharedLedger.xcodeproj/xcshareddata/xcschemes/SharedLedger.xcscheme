@@ -48,6 +48,17 @@
                ReferencedContainer = "container:SharedLedger.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C0DE0000000000000000A006"
+               BuildableName = "SharedLedgerUITests.xctest"
+               BlueprintName = "SharedLedgerUITests"
+               ReferencedContainer = "container:SharedLedger.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

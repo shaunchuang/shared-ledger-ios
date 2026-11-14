@@ -39,6 +39,15 @@ jobs:
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
           xcrun simctl list devices available | grep "$udid"
 
+      - name: Build watchOS simulator app
+        run: >-
+          xcodebuild build
+          -project SharedLedger.xcodeproj
+          -scheme SharedLedgerWatch
+          -destination 'generic/platform=watchOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/WatchDerivedData"
+          CODE_SIGNING_ALLOWED=NO
+
       - name: Build app and tests
         run: >-
           xcodebuild build-for-testing

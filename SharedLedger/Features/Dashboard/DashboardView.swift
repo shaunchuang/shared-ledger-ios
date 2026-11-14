@@ -8,6 +8,7 @@ struct DashboardView: View {
     ) private var groups: FetchedResults<LedgerGroup>
 
     @State private var selectedGroupID: NSManagedObjectID?
+    @State private var isCreatingGroup = false
 
     private var selectedGroup: LedgerGroup? {
         if let selectedGroupID,
@@ -32,7 +33,9 @@ struct DashboardView: View {
                     LedgerEmptyState(
                         systemImage: "chart.pie",
                         title: .reportEmptyNoGroupTitle,
-                        message: .reportEmptyNoGroupMessage
+                        message: .phoneOnboardingMessage,
+                        actionTitle: .groupActionCreate,
+                        action: { isCreatingGroup = true }
                     )
                     .padding(.horizontal, LedgerTheme.pagePadding)
                     .padding(.top, 24)
@@ -41,6 +44,14 @@ struct DashboardView: View {
         }
         .navigationTitle(Text(.reportTitle))
         .navigationBarTitleDisplayMode(.large)
+        .sheet(isPresented: $isCreatingGroup) {
+            NavigationStack {
+                CreateGroupView { group in
+                    selectedGroupID = group.objectID
+                    isCreatingGroup = false
+                }
+            }
+        }
     }
 }
 
@@ -57,6 +68,8 @@ private struct GroupDashboardView: View {
     @State private var selectedCustomBookIDs: Set<UUID> = []
     @State private var isPresentingBookSelection = false
     @State private var snapshot = GroupReportSnapshot.empty
+    @State private var writeAccess = TransactionWriteAccess.unresolved
+    @State private var composer: TransactionComposerRequest?
 
     /// SwiftUI 的 `.system(size:)` 是固定字級，完全不理會 Dynamic Type：這張卡片
     /// 最重要的那個數字，原本在最大字級下和旁邊的說明一樣大。`@ScaledMetric` 讓它
@@ -138,6 +151,7 @@ private struct GroupDashboardView: View {
         ScrollView {
             LazyVStack(spacing: 18) {
                 welcomeHeader
+                quickEntryCard
                 periodAndScopeCard
                 expenseHero
                 metricGrid
@@ -160,6 +174,7 @@ private struct GroupDashboardView: View {
         }
         .onAppear {
             normalizeSelections()
+            reloadWriteAccess()
             reloadSnapshot()
         }
         .onChange(of: activeBooks.count) { _, _ in
@@ -179,11 +194,76 @@ private struct GroupDashboardView: View {
                 for: .NSManagedObjectContextObjectsDidChange,
                 object: context
             )
-        ) { _ in
+        ) { notification in
+            if ContextChangeObserver.touches(notification, .groupPermissions) {
+                reloadWriteAccess()
+            }
             reloadSnapshot()
         }
         .sheet(isPresented: $isPresentingBookSelection) {
             customBookSelectionSheet
+        }
+        .sheet(item: $composer) { request in
+            NavigationStack {
+                NewTransactionView(book: request.book, initialKind: request.kind, focusesAmount: true) {
+                    composer = nil
+                }
+            }
+        }
+    }
+
+    private func reloadWriteAccess() {
+        writeAccess = TransactionWriteAccess(
+            restriction: EffectivePermissionRepository().transactionWriteRestriction(in: group)
+        )
+    }
+
+    @ViewBuilder
+    private var quickEntryCard: some View {
+        if let selectedBook, writeAccess.canWrite {
+            LedgerCard(padding: 16) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(.transactionQuickEntryTitle)
+                        .font(.headline)
+                    Menu {
+                        ForEach(activeBooks, id: \.objectID) { book in
+                            Button { select(book) } label: {
+                                let name = book.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()
+                                if book == selectedBook {
+                                    Label { Text(verbatim: name) } icon: { Image(systemName: "checkmark") }
+                                } else {
+                                    Text(verbatim: name)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Label {
+                                Text(verbatim: selectedBook.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string())
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } icon: {
+                                Image(systemName: "book.closed.fill")
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2.weight(.bold))
+                                .accessibilityHidden(true)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(Text(.transactionBookPickerAccessibilityLabel))
+                    .accessibilityValue(Text(verbatim: selectedBook.name ?? LedgerStringKey.commonPlaceholderUnnamedBook.string()))
+                    Text(.transactionQuickEntryHint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TransactionQuickEntryButtons { kind in
+                        composer = TransactionComposerRequest(book: selectedBook, kind: kind)
+                    }
+                }
+            }
+        } else if let message = writeAccess.noticeMessage {
+            LedgerNotice(message: message)
         }
     }
 

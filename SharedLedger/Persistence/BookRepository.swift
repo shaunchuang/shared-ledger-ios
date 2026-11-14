@@ -270,7 +270,12 @@ struct BookRepository {
                     context.assign(audit, to: store)
                     audit.id = UUID()
                     audit.action = "book.migrated"
-                    audit.actorDisplayName = LedgerStringKey.defaultActorMigration.string()
+                    // 資料修復不是任何一位成員做的，所以沒有 actorMemberID：這則事件
+                    // 不該被任何人的裝置當成「自己的操作」而靜音。
+                    audit.recordActor(
+                        nil,
+                        fallbackName: LedgerStringKey.defaultActorMigration.string()
+                    )
                     audit.createdAt = now
                     audit.summary = "為既有群組建立預設帳本「\(BookDraft.defaultName)」"
                     audit.group = group
@@ -372,10 +377,9 @@ struct BookRepository {
         context.assign(audit, to: store)
         audit.id = UUID()
         audit.action = action
-        audit.actorDisplayName = CurrentMemberIdentityRepository(persistence: persistence)
-            .currentMember(in: group)?
-            .displayName
-            ?? LedgerStringKey.defaultMemberCurrentUser.string()
+        audit.recordActor(
+            CurrentMemberIdentityRepository(persistence: persistence).currentMember(in: group)
+        )
         audit.createdAt = Date()
         audit.summary = summary
         audit.group = group

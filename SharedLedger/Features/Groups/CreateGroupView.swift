@@ -36,6 +36,7 @@ struct CreateGroupView: View {
                     )
                     .textInputAutocapitalization(.words)
                     .accessibilityLabel(Text(.groupFieldName))
+                    .accessibilityIdentifier("createGroup.name")
                 }
                 HStack(spacing: 13) {
                     LedgerIconBadge(systemImage: "person.crop.circle.fill", tint: .blue)
@@ -45,6 +46,7 @@ struct CreateGroupView: View {
                         prompt: Text(.memberIdentityDisplayNamePlaceholder)
                     )
                     .accessibilityLabel(Text(.memberIdentityDisplayNamePlaceholder))
+                    .accessibilityIdentifier("createGroup.ownerName")
                 }
                 Picker(selection: $draft.currencyCode) {
                     ForEach(LedgerCurrency.supportedCodes, id: \.self) { code in
@@ -130,6 +132,7 @@ struct CreateGroupView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(LedgerPrimaryButtonStyle())
+            .accessibilityIdentifier("createGroup.submit")
             .disabled(!draft.canCreate)
             .opacity(draft.canCreate ? 1 : 0.48)
             .padding(.horizontal, LedgerTheme.pagePadding)
